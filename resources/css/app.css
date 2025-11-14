@@ -1,0 +1,323 @@
+@import 'admin-lte/dist/css/adminlte.min.css';
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* Other styles omitted for brevity */
+
+/* Existing styles for process-preview */
+.process-preview {
+    min-height: 100vh;
+    background: url('/images/process-bg.png') no-repeat center center;
+    background-size: cover;
+    background-attachment: fixed;
+}
+
+/* Other styles omitted for brevity */
+
+@import 'admin-lte/dist/css/adminlte.min.css';
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+.login-background {
+    min-height: 100vh;
+    background: url('/images/bg.png') no-repeat center center;
+    background-size: cover;
+    background-attachment: fixed;
+}
+
+.login-overlay {
+    background-color: rgba(255, 255, 255, 0.85);
+    border-radius: 1.5rem;
+    box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.1);
+}
+
+.login-overlay .card {
+    border-radius: 1rem;
+}
+
+.dashboard-divider {
+    height: 4px;
+    /* background: linear-gradient(90deg, #6f2cff 0%, #6f2cff 50%, transparent 50%); */
+}
+
+.dashboard-card {
+    background-color: #e0e0e0;
+    border-radius: 1rem;
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 320px;
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-card-body {
+    width: 100%;
+    text-align: center;
+}
+
+.dashboard-card-title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 2.5rem;
+}
+
+.dashboard-card-description {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 2.5rem;
+}
+
+.dashboard-card .btn {
+    min-width: 160px;
+    border-radius: 0.25rem;
+}
+
+.main-footer {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    background: #fff;
+    border-top: 1px solid #eee;
+    z-index: 100;
+}
+
+.dashboard-card {
+    transition: transform 0.2s cubic-bezier(.4, 2, .3, 1), box-shadow 0.2s cubic-bezier(.4, 2, .3, 1);
+}
+
+.dashboard-card:hover {
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 2rem 3rem rgba(111, 44, 255, 0.12), 0 0.5rem 1rem rgba(0, 0, 0, 0.08);
+    z-index: 2;
+}
+
+.dashboard-card:hover .dashboard-card-title {
+    color: #6f2cff;
+}
+
+.content-wrapper {
+    padding: 29px 29px 120px 29px !important;
+    background-color: #f8f9fc;
+}
+
+.process-upload-card {
+    border: 1px solid #e4e4e4;
+    border-radius: 1.25rem;
+}
+
+.process-upload-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 1.25rem;
+    border: 1px solid #d7d7d7;
+    background: #f7f7f7;
+}
+
+.process-upload-title {
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.process-stepper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.navbar .process-stepper {
+    margin-right: 10px;
+}
+
+.navbar .process-step {
+    width: 20px;
+    height: 20px;
+}
+
+/* .navbar .process-step:not(:first-child)::before {
+    width: 35px;
+    left: -40px;
+} */
+
+.process-step {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #d2d2d2;
+    position: relative;
+}
+
+/* .process-step:not(:first-child)::before {
+    content: '';
+    position: absolute;
+    width: 44px;
+    height: 3px;
+    background: #d2d2d2;
+    left: -50px;
+    top: 50%;
+    transform: translateY(-50%);
+} */
+
+.process-step.active {
+    background: #6f2cff;
+}
+
+.process-step.active::before {
+    background: #6f2cff;
+}
+
+.process-step.completed {
+    background: #bba8ff;
+}
+
+.process-step.completed::before {
+    background: #bba8ff;
+}
+
+.process-dropzone {
+    border: 2px dashed #cecece;
+    border-radius: 1.25rem;
+    padding: 3rem 1rem;
+    background: #f4f4f4;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.process-dropzone:hover {
+    border-color: #6f2cff;
+    background: #f0eaff;
+}
+
+.process-dropzone.is-dragover {
+    border-color: #6f2cff;
+    background: #ede4ff;
+    transform: translateY(-2px);
+}
+
+.process-dropzone-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.process-guidelines {
+    border: 1px dashed #cfcfcf;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background: #fafafa;
+}
+
+.process-guidelines-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.process-guidelines ul {
+    padding-left: 1.25rem;
+    color: #555;
+    line-height: 1.5;
+}
+
+.process-preview-title {
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.process-summary-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    background: #ffffff;
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.process-summary-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6c757d;
+}
+
+.process-summary-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+.process-table-container {
+    border: 1px solid #e4e4e4;
+    border-radius: 1.25rem;
+    background: #ffffff;
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.05);
+    padding: 1rem;
+}
+
+.process-table thead th {
+    background: #f6f4ff;
+    font-weight: 600;
+    border-bottom: 2px solid #e0defc;
+}
+
+.process-table tbody td {
+    vertical-align: middle;
+}
+
+@media (max-width: 767.98px) {
+    .process-upload-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 1rem;
+    }
+
+    .process-upload-title {
+        font-size: 1.5rem;
+    }
+
+    .process-stepper {
+        gap: 16px;
+    }
+
+    .process-step:not(:first-child)::before {
+        width: 36px;
+        left: -40px;
+    }
+
+    .navbar .process-stepper {
+        display: none;
+    }
+}

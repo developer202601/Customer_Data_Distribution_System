@@ -3,35 +3,37 @@
 @section('title', 'Login')
 
 @section('content')
-<div class="content login-background d-flex align-items-center justify-content-center">
-    <div class="container login-overlay my-auto p-4 p-md-5">
-        <div class="row align-items-center g-4 g-lg-5">
-            <div class="col-md-8 d-flex flex-column justify-content-center p-3 p-md-4">
-                <h1>Welcome</h1>
-                <p class="mb-4">
-                    This system streamlines your workflow, automates data validation, and applies business rules for fast, accurate results.
-                </p>
-            </div>
-            <div class="col-md-4 d-flex flex-column justify-content-center">
-                <div class="card shadow-sm border-0">
-                    <div class="card-body login-card-body p-4">
-                        <p class="login-box-msg h5 mb-4">Login</p>
-
-                        <form action="{{ route('login.perform') }}" method="post">
-                            @csrf
-                            <div class="form-group mb-3">
-                                <label for="username" class="form-label">Username</label>
-                                <input type="text" name="username" id="username" value="{{ old('username') }}" class="form-control @error('username') is-invalid @enderror" placeholder="Enter 6-digit username" maxlength="6">
-                                @error('username')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-block">Login</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
+<section class="content login-page">
+    <div class="login-page__panel login-page__panel--visual">
+        <div class="login-page__visual-inner">
+            <span class="login-page__eyebrow">Customer Data Distribution System</span>
+            <h1>Secure delivery for your customers</h1>
+            <p>
+                This is the customer data distribution system that keeps every client package verified, tracked, and compliant.
+            </p>
+            <p class="login-page__visual-note">Trusted dashboards, concise alerts, zero guesswork.</p>
         </div>
     </div>
-</div>
+    <div class="login-page__panel login-page__panel--form">
+        <div class="login-card shadow-sm">
+            <div class="login-card__header">
+                <p class="text-uppercase mb-1">Secure Access</p>
+                <h2>Customer Portal Login</h2>
+                <p class="text-muted">Access your distribution feeds and delivery approvals.</p>
+            </div>
+            <form action="{{ route('login.perform') }}" method="post">
+                @csrf
+                <div class="form-group mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" name="username" id="username" value="{{ old('username') }}" class="form-control @error('username') is-invalid @enderror" placeholder="Enter 6-digit username" maxlength="6">
+                    @error('username')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+                <button type="submit" class="btn btn-primary btn-block w-100">Continue</button>
+                <p class="login-card__hint mt-3">Having trouble? <a href="#">Contact support</a></p>
+            </form>
+        </div>
+    </div>
+</section>
 @endsection

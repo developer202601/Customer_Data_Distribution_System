@@ -11,6 +11,16 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
+/* Prevent small layout overflows and ensure height calculations are reliable */
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 /* Other styles omitted for brevity */
 
 /* Existing styles for process-preview */
@@ -23,35 +33,30 @@
 
 /* Other styles omitted for brevity */
 
-@import 'admin-lte/dist/css/adminlte.min.css';
-@import 'tailwindcss';
-
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-@source '../**/*.blade.php';
-@source '../**/*.js';
-
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
-}
-
-.login-background {
-    min-height: 100vh;
-    background: url('/images/bg.png') no-repeat center center;
-    background-size: cover;
-    background-attachment: fixed;
-}
-
 .guest-content {
     padding: 0 !important;
-    display: flex;
-    align-items: stretch;
 }
 
 body.guest-layout,
-body.guest-layout .wrapper {
+body.guest-layout .wrapper,
+body.guest-layout .guest-content {
     min-height: 100vh;
+}
+
+body.guest-layout {
+    background-color: #f5f7fb;
+    color: #0f1b3d;
+    overflow: hidden;
+}
+
+body.guest-layout .main-header {
+    background: #ffffff;
+    border-bottom: 1px solid #e0e7f1;
+    box-shadow: 0 4px 10px rgba(11, 29, 73, 0.04);
+    padding: 0.75rem 0 !important;
+    min-height: 72px !important;
+    display: flex;
+    align-items: center;
 }
 
 body.guest-layout .wrapper {
@@ -60,17 +65,216 @@ body.guest-layout .wrapper {
 }
 
 body.guest-layout .guest-content {
-    flex: 1;
-    background-color: #f8f9fc;
+    /* flex: 1; */
+    padding: 0;
+    background-color: #f5f7fb;
+    display: flex;
+    flex-direction: column;
 }
 
 body.guest-layout .guest-content .content {
     width: 100%;
+    /* flex: 1; */
+    display: flex;
 }
 
-body.guest-layout .guest-content .login-background {
+.login-page {
+    /* subtract header height so panels don't overflow the viewport */
+    min-height: calc(100vh - 72px);
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.login-page__panel {
+    flex: 1;
     min-height: 100%;
-    padding: clamp(1.5rem, 3vw, 4rem) 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Remove extra bottom padding on content-wrapper for guest pages to avoid scroll */
+body.guest-layout .content-wrapper {
+    padding: 0 !important;
+}
+
+.login-page__panel--visual {
+    background: #ffffff;
+    background-image: url('/images/bg.png');
+    background-size: cover;
+    background-position: center;
+    color: #03142a;
+    border-right: 1px solid #e7ecf4;
+}
+
+.login-page__visual-inner {
+    /* max-width: 520px; */
+    padding: clamp(2rem, 4vw, 3.5rem);
+    background: rgba(255, 255, 255, 0.9);
+    /* border-radius: 32px;
+    box-shadow: 0 2rem 3rem rgba(7, 31, 76, 0.08);
+    border: 1px solid rgba(15, 27, 61, 0.05); */
+}
+
+.login-page__eyebrow {
+    display: block;
+    font-size: 0.75rem;
+    letter-spacing: 0.35rem;
+    text-transform: uppercase;
+    color: #7a869c;
+    margin-bottom: 1rem;
+}
+
+.login-page__visual-inner h1 {
+    font-size: clamp(2.5rem, 3vw, 3.6rem);
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #03142a;
+}
+
+.login-page__visual-inner p {
+    color: #03142a;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.login-page__visual-note {
+    margin-top: 1rem;
+    font-weight: 600;
+}
+
+.login-page__panel--form {
+    background: #f5f7fb;
+    /* padding: clamp(2rem, 5vw, 4.5rem); */
+}
+
+.login-card {
+    width: min(420px, 100%);
+    background: #ffffff;
+    border-radius: 32px;
+    padding: clamp(2rem, 4vw, 3rem);
+    box-shadow: 0 1.5rem 3rem rgba(15, 27, 61, 0.08);
+    color: #0f1b3d;
+
+/* Keep any overflow inside the panels so the body never scrolls */
+.login-page__panel {
+    overflow: auto;
+}
+
+    border: 1px solid rgba(15, 27, 61, 0.07);
+}
+
+.login-card__header h2 {
+    margin-bottom: 0.25rem;
+}
+
+.login-card__header p {
+    color: rgba(15, 27, 61, 0.65);
+    margin-bottom: 1.5rem;
+}
+
+.login-card__google {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: 20px;
+    background: #f1f5ff;
+    border: 1px solid #d9e2ff;
+}
+
+.login-card__google-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4285f4, #0f5ad9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    box-shadow: 0 0.5rem 1rem rgba(2, 0, 45, 0.3);
+}
+
+.login-card__google strong {
+    display: block;
+}
+
+.login-card__google p {
+    margin: 0;
+    color: rgba(15, 27, 61, 0.65);
+    font-size: 0.9rem;
+}
+
+.login-card__divider {
+    margin: 1.5rem 0;
+    text-align: center;
+    font-size: 0.9rem;
+    letter-spacing: 0.3rem;
+    text-transform: uppercase;
+    color: rgba(15, 27, 61, 0.45);
+    position: relative;
+}
+
+.login-card__divider::before,
+.login-card__divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: rgba(15, 27, 61, 0.1);
+}
+
+.login-card__divider::before {
+    left: 0;
+}
+
+.login-card__divider::after {
+    right: 0;
+}
+
+.login-card__divider span {
+    padding: 0 0.5rem;
+}
+
+.login-card__hint {
+    color: rgba(15, 27, 61, 0.7);
+    font-size: 0.9rem;
+}
+
+.login-card__hint a {
+    color: #0073ff;
+    text-decoration: none;
+}
+
+.btn-block {
+    border-radius: 999px;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+}
+
+@media (max-width: 1199.98px) {
+    .login-page {
+        flex-direction: column;
+    }
+
+    .login-page__panel--visual {
+        min-height: 240px;
+    }
+}
+
+@media (min-width: 768px) {
+    .login-page {
+        flex-direction: row;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .login-card {
+        border-radius: 24px;
+    }
 }
 
 .login-overlay {

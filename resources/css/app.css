@@ -168,7 +168,36 @@ body.guest-layout .content-wrapper {
 .dashboard-content {
     background: #f5f7fb;
     min-height: calc(100vh - 72px);
-    padding: clamp(2rem, 4vw, 4rem) 0;
+    padding: clamp(2rem, 2vw, 4rem) 0;
+}
+
+/* Prevent page-level scrolling on the dashboard page while allowing internal scrolling
+   inside the centered container. This keeps the header/nav fixed and removes body
+   scrollbars for a cleaner, app-like view. */
+.dashboard-content {
+    /* Account for layout wrapper paddings (29px top + 120px bottom) and header (72px)
+       so the dashboard area fits inside the viewport without causing body scroll. */
+    height: calc(100vh - 72px - 29px - 120px);
+    min-height: unset;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-container {
+    flex: 1 1 auto;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Hide the visible scrollbar but keep scrolling functional (mouse wheel / touch) */
+.dashboard-container {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+.dashboard-container::-webkit-scrollbar {
+    width: 0; /* Chrome/Safari/WebKit */
+    height: 0;
 }
 
 .dashboard-container {
@@ -233,6 +262,57 @@ body.guest-layout .content-wrapper {
 
 .dashboard-grid {
     margin-top: clamp(2rem, 4vw, 3rem);
+}
+
+.dashboard-section-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: clamp(0.75rem, 2vw, 1.25rem);
+    align-items: center;
+    text-align: center;
+}
+
+.dashboard-section-header h2 {
+    font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+    color: #03142a;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.1;
+}
+
+.dashboard-section-header p {
+    margin: 0;
+    color: rgba(15, 27, 61, 0.65);
+    font-size: 1.02rem;
+    font-weight: 600;
+}
+
+/* Anchor-style cards: make the whole card clickable and preserve visual styling */
+.dashboard-card {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+}
+
+.dashboard-card:focus {
+    outline: none;
+}
+
+.dashboard-card:focus-visible {
+    box-shadow: 0 0 0 4px rgba(43, 59, 144, 0.12);
+}
+
+.dashboard-card-action {
+    /* make the visual CTA inert so the anchor handles clicks */
+    pointer-events: none;
+}
+
+@media (max-width: 767.98px) {
+    .dashboard-card {
+        transform: none !important;
+        box-shadow: 0 1rem 2rem rgba(15,27,61,0.06) !important;
+    }
 }
 
 .login-card__header h2 {
@@ -443,7 +523,7 @@ body.guest-layout .content-wrapper {
 }
 
 .content-wrapper {
-    padding: 29px 29px 120px 29px !important;
+    padding: 29px 29px 29px 29px !important;
     background-color: #f8f9fc;
 }
 

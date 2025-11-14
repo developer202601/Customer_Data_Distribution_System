@@ -12,36 +12,6 @@
 
 @section('content')
 <div class="content dashboard-content">
-    <div class="container-fluid dashboard-container">
-        <!-- <div class="dashboard-hero shadow-sm">
-            <div class="dashboard-hero__text">
-                <span class="dashboard-eyebrow">Executive Summary</span>
-                <h1>Customer Data Distribution System</h1>
-                <p>SLT currently relies on manual Excel-based processes to segment customer data. This dashboard aligns with the new login experience—calm, bright, and focused on clarity.</p>
-                <div class="dashboard-hero__cta">
-                    <a href="{{ route('process.upload.create') }}" class="btn btn-primary">Process a New Run</a>
-                    <a href="#" class="btn btn-outline-secondary">Review Past Outputs</a>
-                </div>
-            </div>
-            <div class="dashboard-hero__notes">
-                <div>
-                    <h3>Business Need</h3>
-                    <p>Automate uploads, filtering, and distribution of customer lists with reliable, auditable outcomes.</p>
-                </div>
-                <div>
-                    <h3>High-Level Solution</h3>
-                    <p>Internal tool that ingests Excel files, applies business rules, classifies VIPs, and exports per segment.</p>
-                </div>
-                <div>
-                    <h3>Benefits</h3>
-                    <ul>
-                        <li>Faster processing & consistent segmentation</li>
-                        <li>Reduced manual workload & rework</li>
-                        <li>Traceable, auditable runs</li>
-                    </ul>
-                </div>
-            </div>
-        </div> -->
 
         <div class="dashboard-section-header mb-3">
             <h2 class="h4 mb-0">Choose an option below</h2>
@@ -66,6 +36,5 @@
                 </a>
             </div>
         </div>
-    </div>
 </div>
 @endsection

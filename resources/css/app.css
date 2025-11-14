@@ -157,13 +157,82 @@ body.guest-layout .content-wrapper {
     padding: clamp(2rem, 4vw, 3rem);
     box-shadow: 0 1.5rem 3rem rgba(15, 27, 61, 0.08);
     color: #0f1b3d;
+    border: 1px solid rgba(15, 27, 61, 0.07);
+}
 
 /* Keep any overflow inside the panels so the body never scrolls */
 .login-page__panel {
     overflow: auto;
 }
 
+.dashboard-content {
+    background: #f5f7fb;
+    min-height: calc(100vh - 72px);
+    padding: clamp(2rem, 4vw, 4rem) 0;
+}
+
+.dashboard-container {
+    max-width: 1320px;
+    margin: 0 auto;
+}
+
+.dashboard-hero {
+    background: #ffffff;
+    border-radius: 32px;
+    padding: clamp(2rem, 4vw, 3.5rem);
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(1.5rem, 3vw, 2.5rem);
     border: 1px solid rgba(15, 27, 61, 0.07);
+}
+
+.dashboard-hero__text {
+    flex: 2 1 360px;
+}
+
+.dashboard-hero__notes {
+    flex: 1.2 1 280px;
+    display: grid;
+    gap: 1.25rem;
+}
+
+.dashboard-hero__notes > div {
+    border-radius: 24px;
+    border: 1px solid rgba(15, 27, 61, 0.08);
+    background: #f8faff;
+    padding: 1.25rem;
+}
+
+.dashboard-hero__notes h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.dashboard-eyebrow,
+.dashboard-card-eyebrow {
+    display: inline-block;
+    letter-spacing: 0.25rem;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    color: #7a869c;
+    margin-bottom: 0.75rem;
+}
+
+.dashboard-hero h1 {
+    font-size: clamp(2.25rem, 4vw, 3.25rem);
+    margin-bottom: 1rem;
+    color: #03142a;
+}
+
+.dashboard-hero__cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.dashboard-grid {
+    margin-top: clamp(2rem, 4vw, 3rem);
 }
 
 .login-card__header h2 {
@@ -292,15 +361,17 @@ body.guest-layout .content-wrapper {
     /* background: linear-gradient(90deg, #6f2cff 0%, #6f2cff 50%, transparent 50%); */
 }
 
+
 .dashboard-card {
-    background-color: #e0e0e0;
-    border-radius: 1rem;
-    padding: 2rem;
+    background: #ffffff;
+    border-radius: 28px;
+    padding: clamp(1.75rem, 3vw, 2.5rem);
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 320px;
-    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(15, 27, 61, 0.06);
+    box-shadow: 0 1.25rem 2.5rem rgba(15, 27, 61, 0.08);
 }
 
 .dashboard-card-body {
@@ -315,14 +386,25 @@ body.guest-layout .content-wrapper {
 }
 
 .dashboard-card-description {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 2.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    color: rgba(15, 27, 61, 0.75);
+    margin-bottom: 2rem;
 }
 
 .dashboard-card .btn {
     min-width: 160px;
     border-radius: 0.25rem;
+}
+
+@media (max-width: 991.98px) {
+    .dashboard-hero {
+        flex-direction: column;
+    }
+
+    .dashboard-hero__notes {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
 }
 
 .main-footer {
@@ -336,17 +418,28 @@ body.guest-layout .content-wrapper {
 }
 
 .dashboard-card {
-    transition: transform 0.2s cubic-bezier(.4, 2, .3, 1), box-shadow 0.2s cubic-bezier(.4, 2, .3, 1);
+    /* slightly longer duration and easing-out for smoother stop */
+    transition: transform 300ms cubic-bezier(.22,.9,.35,1),
+                box-shadow 300ms cubic-bezier(.22,.9,.35,1),
+                border-color 200ms ease,
+                background-color 200ms ease;
+    transform: translateY(0) scale(1);
+    will-change: transform, box-shadow;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
 }
 
-.dashboard-card:hover {
-    transform: translateY(-8px) scale(1.03);
-    box-shadow: 0 2rem 3rem rgba(111, 44, 255, 0.12), 0 0.5rem 1rem rgba(0, 0, 0, 0.08);
-    z-index: 2;
+.dashboard-card:hover,
+.dashboard-card:focus-within {
+    /* smaller lift and scale for a gentler release */
+    transform: translateY(-3px) scale(1.015);
+    box-shadow: 0 10px 24px rgba(15, 27, 61, 0.07);
+    border-color: rgba(15, 27, 61, 0.08);
 }
 
-.dashboard-card:hover .dashboard-card-title {
-    color: #6f2cff;
+.dashboard-card:hover .dashboard-card-title,
+.dashboard-card:focus-within .dashboard-card-title {
+    color: #2b3b90;
 }
 
 .content-wrapper {

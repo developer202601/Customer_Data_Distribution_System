@@ -11,17 +11,17 @@
 @endsection
 
 @section('content')
-<div class="content py-4">
-    <div class="container-fluid">
-        <div class="dashboard-divider mb-4"></div>
-        <div class="row g-4">
+<div class="content dashboard-content">
+    <div class="container-fluid dashboard-container">
+        <div class="dashboard-grid row g-4">
             <div class="col-lg-6">
                 <div class="dashboard-card h-100">
                     <div class="dashboard-card-body">
+                        <!-- <p class="dashboard-card-eyebrow">Operational Objective</p> -->
                         <h2 class="dashboard-card-title">View Past Reports</h2>
                         <p class="dashboard-card-description">Browse and download previously generated output files for quick reference.</p>
                         <div class="text-end">
-                            <a href="#" class="btn btn-outline-dark">View</a>
+                            <a href="#" class="btn btn-outline-dark">Open Archive</a>
                         </div>
                     </div>
                 </div>
@@ -29,10 +29,11 @@
             <div class="col-lg-6">
                 <div class="dashboard-card h-100">
                     <div class="dashboard-card-body">
+                        <!-- <p class="dashboard-card-eyebrow">Operational Objective</p> -->
                         <h2 class="dashboard-card-title">Process New Excel File</h2>
                         <p class="dashboard-card-description">Upload the latest Excel inputs to validate data and run automated workflows.</p>
                         <div class="text-end">
-                            <a href="{{ route('process.upload.create') }}" class="btn btn-outline-dark">Upload</a>
+                            <a href="{{ route('process.upload.create') }}" class="btn btn-outline-dark">Start Upload</a>
                         </div>
                     </div>
                 </div>

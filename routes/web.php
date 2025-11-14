@@ -10,6 +10,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::get('/process/upload/preview', [ProcessFileController::class, 'preview'])->name('process.upload.preview');
+    Route::get('/process/upload/vip', [ProcessFileController::class, 'vip'])->name('process.upload.vip');
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });

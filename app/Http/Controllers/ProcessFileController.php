@@ -62,7 +62,7 @@ class ProcessFileController extends Controller
     private const FILTER_MEDIUM_VALUES = ['COPPER', 'FTTH'];
     private const FILTER_STATUS_VALUE = 'OK';
     private const FILTER_MIN_ARREARS = 2400;
-    private const VIP_SEGMENT_TOKEN = 'VIP';
+    private const PREVIEW_ROW_LIMIT = 10;
 
     public function create(): View
     {
@@ -158,54 +158,78 @@ class ProcessFileController extends Controller
 
     public function preview(Request $request): View|RedirectResponse
     {
-        $path = session('process.upload.path');
+        return $this->renderFilteredView($request, false);
+    }
 
-        if (! $path) {
-            return redirect()
-                ->route('process.upload.create')
-                ->with('status', 'Upload a file to see the filtered results.');
+    public function vip(Request $request): View|RedirectResponse
+    {
+        return $this->renderFilteredView($request, true);
+    }
+
+    public function exportVip(Request $request): StreamedResponse|RedirectResponse
+    {
+        $dataset = $this->prepareVipExportRows($request);
+
+        if ($dataset instanceof RedirectResponse) {
+            return $dataset;
         }
 
-        if (! Storage::exists($path)) {
-            session()->forget('process.upload.path');
-            session()->forget('process.upload.filename');
+        $headers = $dataset['headers'];
+        $filteredRows = $dataset['rows'];
 
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => 'The uploaded file is no longer available. Please upload it again.']);
+        $exportSpreadsheet = new Spreadsheet();
+        $sheet = $exportSpreadsheet->getActiveSheet();
+
+        $headerLabels = ['Excel Row'];
+        foreach ($headers as $meta) {
+            $headerLabels[] = $meta['label'];
         }
 
-        try {
-            $spreadsheet = IOFactory::load(Storage::path($path));
-        } catch (Throwable $exception) {
-            session()->forget('process.upload.path');
-            session()->forget('process.upload.filename');
+        $sheet->fromArray($headerLabels, null, 'A1');
 
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => 'Unable to read the stored Excel file. Please upload it again.']);
+        $rowPointer = 2;
+        foreach ($filteredRows as $rowIndex => $row) {
+            $rowValues = [$rowIndex];
+            foreach ($headers as $letter => $meta) {
+                $rowValues[] = $row[$letter] ?? '';
+            }
+
+            $sheet->fromArray($rowValues, null, 'A' . $rowPointer);
+            $rowPointer++;
         }
 
-        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
-
-        if (count($rows) < 2) {
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => 'The stored spreadsheet does not contain enough data to display.']);
+        if ($rowPointer === 2) {
+            $sheet->fromArray([], null, 'A2');
         }
 
-        [$headers, $dataRows] = $this->separateHeaderAndRows($rows);
+        $downloadName = $this->buildVipFilename('xlsx');
 
-        if (empty($headers)) {
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => 'Unable to locate the header row in the stored spreadsheet.']);
+        return response()->streamDownload(function () use ($exportSpreadsheet) {
+            $writer = new Xlsx($exportSpreadsheet);
+            $writer->save('php://output');
+        }, $downloadName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+
+    private function renderFilteredView(Request $request, bool $forceVip): View|RedirectResponse
+    {
+        $dataset = $this->loadSpreadsheetOrRedirect(
+            $forceVip ? 'Upload a file to review VIP records.' : 'Upload a file to see the filtered results.',
+            'The stored spreadsheet does not contain enough data to display.'
+        );
+
+        if ($dataset instanceof RedirectResponse) {
+            return $dataset;
         }
+
+        [$headers, $dataRows] = $dataset;
 
         $headerMap = $this->buildHeaderMap($headers);
         $filteredRows = $this->filterRows($dataRows, $headers);
 
-        $vipApplied = $request->boolean('vip');
+        $vipApplied = $forceVip || $request->boolean('vip');
 
         if ($vipApplied) {
             $filteredRows = $this->filterVipRows($filteredRows, $headerMap);
@@ -220,8 +244,14 @@ class ProcessFileController extends Controller
             $displayRows = $this->searchRows($filteredRows, $headerMap, $searchTerm);
             $limited = false;
         } else {
-            $limited = count($filteredRows) > 10;
-            $displayRows = $limited ? array_slice($filteredRows, 0, 10, true) : $filteredRows;
+            $limit = $vipApplied ? null : self::PREVIEW_ROW_LIMIT;
+            if ($limit !== null && count($filteredRows) > $limit) {
+                $displayRows = array_slice($filteredRows, 0, $limit, true);
+                $limited = true;
+            } else {
+                $displayRows = $filteredRows;
+                $limited = false;
+            }
         }
 
         $dataRowCount = 0;
@@ -252,14 +282,14 @@ class ProcessFileController extends Controller
         ]);
     }
 
-    public function exportVip(Request $request): StreamedResponse|RedirectResponse
+    private function loadSpreadsheetOrRedirect(string $missingUploadStatus, string $insufficientDataMessage): array|RedirectResponse
     {
         $path = session('process.upload.path');
 
         if (! $path) {
             return redirect()
                 ->route('process.upload.create')
-                ->with('status', 'Upload a file to export VIP records.');
+                ->with('status', $missingUploadStatus);
         }
 
         if (! Storage::exists($path)) {
@@ -287,7 +317,7 @@ class ProcessFileController extends Controller
         if (count($rows) < 2) {
             return redirect()
                 ->route('process.upload.create')
-                ->withErrors(['upload' => 'The stored spreadsheet does not contain enough data to export.']);
+                ->withErrors(['upload' => $insufficientDataMessage]);
         }
 
         [$headers, $dataRows] = $this->separateHeaderAndRows($rows);
@@ -298,50 +328,44 @@ class ProcessFileController extends Controller
                 ->withErrors(['upload' => 'Unable to locate the header row in the stored spreadsheet.']);
         }
 
+        return [$headers, $dataRows];
+    }
+
+    private function prepareVipExportRows(Request $request): array|RedirectResponse
+    {
+        $dataset = $this->loadSpreadsheetOrRedirect(
+            'Upload a file to export VIP records.',
+            'The stored spreadsheet does not contain enough data to export.'
+        );
+
+        if ($dataset instanceof RedirectResponse) {
+            return $dataset;
+        }
+
+        [$headers, $dataRows] = $dataset;
+
         $headerMap = $this->buildHeaderMap($headers);
         $filteredRows = $this->filterRows($dataRows, $headers);
         $filteredRows = $this->filterVipRows($filteredRows, $headerMap);
 
         $searchTerm = trim((string) $request->query('search', ''));
+
         if ($searchTerm !== '') {
             $filteredRows = $this->searchRows($filteredRows, $headerMap, $searchTerm);
         }
 
-        $exportSpreadsheet = new Spreadsheet();
-        $sheet = $exportSpreadsheet->getActiveSheet();
+        return [
+            'headers' => $headers,
+            'rows' => $filteredRows,
+        ];
+    }
 
-        $headerLabels = ['Excel Row'];
-        foreach ($headers as $meta) {
-            $headerLabels[] = $meta['label'];
-        }
-
-        $sheet->fromArray($headerLabels, null, 'A1');
-
-        $rowPointer = 2;
-        foreach ($filteredRows as $rowIndex => $row) {
-            $rowValues = [$rowIndex];
-            foreach ($headers as $letter => $meta) {
-                $rowValues[] = $row[$letter] ?? '';
-            }
-
-            $sheet->fromArray($rowValues, null, 'A' . $rowPointer);
-            $rowPointer++;
-        }
-
-        // Include at least the header row even if no VIP records matched.
-        if ($rowPointer === 2) {
-            $sheet->fromArray([], null, 'A2');
-        }
-
+    private function buildVipFilename(string $extension): string
+    {
         $filename = pathinfo((string) session('process.upload.filename'), PATHINFO_FILENAME);
-        $downloadName = $filename !== '' ? $filename . '_vip.xlsx' : 'vip-records.xlsx';
+        $downloadName = $filename !== '' ? $filename . '_vip' : 'vip-records';
 
-        return response()->streamDownload(function () use ($exportSpreadsheet) {
-            $writer = new Xlsx($exportSpreadsheet);
-            $writer->save('php://output');
-        }, $downloadName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        return $downloadName . '.' . $extension;
     }
 
     private function separateHeaderAndRows(array $rows): array
@@ -475,25 +499,36 @@ class ProcessFileController extends Controller
 
     private function filterVipRows(array $rows, array $headerMap): array
     {
-        if (! isset($headerMap['CUSTOMER_SEGMENT'])) {
-            return [];
-        }
-
         $results = [];
 
         foreach ($rows as $rowIndex => $columns) {
-            $segment = $this->getColumnValue($columns, $headerMap, 'CUSTOMER_SEGMENT');
+            $creditClass = $this->getColumnValue($columns, $headerMap, 'CREDIT_CLASS_NAME');
 
-            if ($segment === '') {
+            if ($creditClass === '') {
+                $creditClass = $this->getColumnValue($columns, $headerMap, 'CUSTOMER_SEGMENT');
+            }
+
+            if ($creditClass === '') {
                 continue;
             }
 
-            if (stripos($segment, self::VIP_SEGMENT_TOKEN) !== false) {
+            if ($this->isVipCreditClass($creditClass)) {
                 $results[$rowIndex] = $columns;
             }
         }
 
         return $results;
+    }
+
+    private function isVipCreditClass(string $value): bool
+    {
+        $candidate = trim($value);
+
+        if ($candidate === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/^VIP(\s*-\s*.+)?$/i', $candidate);
     }
 
     private function searchRows(array $rows, array $headerMap, string $term): array

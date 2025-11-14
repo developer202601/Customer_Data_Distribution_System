@@ -22,21 +22,24 @@
     <div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
-                <h1 class="process-preview-title mb-2">Filtered Results</h1>
+                <h1 class="process-preview-title mb-2">{{ $vipApplied ? 'VIP Records' : 'Filtered Results' }}</h1>
                 <p class="text-muted mb-1">
+                    @if($vipApplied)
+                    The list below contains the subset of filtered rows where <strong>CREDIT_CLASS_NAME</strong> starts with <strong>VIP</strong> (for example, "VIP" or "VIP - Gold").
+                    @else
                     The dataset has been filtered to include only records where the medium is <strong>Copper</strong> or <strong>FTTH</strong>, the latest product status is <strong>OK</strong>, and the arrears value is greater than <strong>2400</strong>.
+                    @endif
                 </p>
                 @if($filename)
                 <p class="text-muted mb-0">Source file: <strong>{{ $filename }}</strong></p>
                 @endif
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <a href="{{ route('process.upload.create') }}" class="btn btn-outline-secondary">Back</a>
+                <a href="{{ $vipApplied ? route('process.upload.preview') : route('process.upload.create') }}" class="btn btn-outline-secondary">Back</a>
                 @if($vipApplied)
-                <a href="{{ route('process.upload.preview', array_filter(['search' => $searchTerm ?: null])) }}" class="btn btn-outline-secondary">All records</a>
-                <a href="{{ route('process.upload.export', array_filter(['vip' => 1, 'search' => $searchTerm ?: null])) }}" class="btn btn-dark">Export VIP</a>
+                <a href="{{ route('process.upload.export', array_filter(['vip' => 1, 'search' => $searchTerm ?: null])) }}" class="btn btn-dark">Export VIP Excel</a>
                 @else
-                <a href="{{ route('process.upload.preview', array_filter(['vip' => 1, 'search' => $searchTerm ?: null])) }}" class="btn btn-outline-secondary">VIP records</a>
+                <a href="{{ route('process.upload.vip', array_filter(['search' => $searchTerm ?: null])) }}" class="btn btn-dark">VIP records</a>
                 @endif
             </div>
         </div>

@@ -8,10 +8,10 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="hold-transition layout-top-nav">
+<body class="hold-transition layout-top-nav guest-layout">
     <div class="wrapper">
         @include('partials.navbar')
-        <div class="content-wrapper">
+        <div class="content-wrapper guest-content">
             @yield('content')
         </div>
     </div>

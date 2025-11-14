@@ -43,6 +43,36 @@
     background-attachment: fixed;
 }
 
+.guest-content {
+    padding: 0 !important;
+    display: flex;
+    align-items: stretch;
+}
+
+body.guest-layout,
+body.guest-layout .wrapper {
+    min-height: 100vh;
+}
+
+body.guest-layout .wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+body.guest-layout .guest-content {
+    flex: 1;
+    background-color: #f8f9fc;
+}
+
+body.guest-layout .guest-content .content {
+    width: 100%;
+}
+
+body.guest-layout .guest-content .login-background {
+    min-height: 100%;
+    padding: clamp(1.5rem, 3vw, 4rem) 0;
+}
+
 .login-overlay {
     background-color: rgba(255, 255, 255, 0.85);
     border-radius: 1.5rem;

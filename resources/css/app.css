@@ -123,6 +123,53 @@ body.guest-layout {
     font-size: 1rem;
 }
 
+.page-loader__progress,
+.page-loader__percentage,
+.page-loader__rows,
+.page-loader__message {
+    display: none;
+}
+
+.page-loader__progress {
+    width: 180px;
+    height: 6px;
+    background: #e6ecf4;
+    border-radius: 999px;
+    margin-top: 0.35rem;
+    overflow: hidden;
+}
+
+.page-loader__progress-bar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #00b4eb, #1bb80f);
+    border-radius: inherit;
+    transition: width 200ms ease;
+}
+
+.page-loader__percentage,
+.page-loader__rows,
+.page-loader__message {
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    color: #03142a;
+}
+
+.page-loader__rows {
+    font-weight: 500;
+}
+
+.page-loader__message {
+    opacity: 0.75;
+}
+
+.page-loader--show-progress .page-loader__progress,
+.page-loader--show-progress .page-loader__percentage,
+.page-loader--show-progress .page-loader__rows,
+.page-loader--show-progress .page-loader__message {
+    display: block;
+}
+
 @keyframes page-loader-spin {
     from { transform: rotate(0); }
     to { transform: rotate(360deg); }

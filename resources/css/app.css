@@ -25,10 +25,13 @@ html, body {
 
 /* Existing styles for process-preview */
 .process-preview {
+    background: rgb(255, 255, 255) !important; 
     min-height: 100vh;
     background: url('/images/process-bg.png') no-repeat center center;
     background-size: cover;
     background-attachment: fixed;
+    border: 1px solid #e4e4e4;
+    border-radius: 1.25rem;
 }
 
 /* Other styles omitted for brevity */
@@ -161,6 +164,9 @@ body.guest-layout .guest-content .content {
     width: 100%;
     flex-direction: row;
     align-items: stretch;
+    background-image: url('../images/login-bg.png');
+    background-size: cover;
+    background-position: center;
 }
 
 .login-page__panel {
@@ -177,10 +183,10 @@ body.guest-layout .content-wrapper {
 }
 
 .login-page__panel--visual {
-    background: #ffffff;
-    background-image: url('/images/bg.png');
+    background: #ffffffcc;
+    /* background-image: url('../images/bg-1.jpg');
     background-size: cover;
-    background-position: center;
+    background-position: center; */
     color: #03142a;
     border-right: 1px solid #e7ecf4;
 }
@@ -189,6 +195,8 @@ body.guest-layout .content-wrapper {
     /* max-width: 520px; */
     padding: clamp(2rem, 4vw, 3.5rem);
     background: rgba(255, 255, 255, 0.9);
+    border-radius: 32px;
+    margin: 20px;
     /* border-radius: 32px;
     box-shadow: 0 2rem 3rem rgba(7, 31, 76, 0.08);
     border: 1px solid rgba(15, 27, 61, 0.05); */
@@ -222,13 +230,13 @@ body.guest-layout .content-wrapper {
 }
 
 .login-page__panel--form {
-    background: #f5f7fb;
+    /* background: #f5f7fb; */
     /* padding: clamp(2rem, 5vw, 4.5rem); */
 }
 
 .login-card {
     width: min(420px, 100%);
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 32px;
     padding: clamp(2rem, 4vw, 3rem);
     box-shadow: 0 1.5rem 3rem rgba(15, 27, 61, 0.08);
@@ -242,12 +250,13 @@ body.guest-layout .content-wrapper {
 }
 
 .dashboard-content {
-    background: #f5f7fb;
+    background: rgba(255, 255, 255, 0.97);
     padding: clamp(2rem, 2vw, 4rem) 45px;
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     overflow: hidden; /* prevent body/page scroll; container will scroll */
+    border-radius: 32px;
 }
 
 .dashboard-container {
@@ -591,7 +600,9 @@ body.guest-layout .content-wrapper {
 
 .content-wrapper {
     padding: 29px 29px 29px 29px !important;
-    background-color: #f8f9fc;
+    background-image: url('../images/contentwrap-bg.png');
+    background-size: cover;
+    background-position: center;
     display: flex;
     flex-direction: column;
     /* min-height: 100vh; */

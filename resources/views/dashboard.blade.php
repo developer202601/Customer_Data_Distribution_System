@@ -13,7 +13,7 @@
 @section('content')
 <div class="content dashboard-content">
 
-        <div class="dashboard-section-header mb-3">
+        <div class="dashboard-section-header mb-3 mt-3">
             <h2 class="h4 mb-0">Choose an option below</h2>
             <p class="text-muted mb-0">Start a new processing run or review previously generated outputs.</p>
         </div>

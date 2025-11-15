@@ -18,7 +18,7 @@
 @endsection
 
 @section('content')
-<div class="process-preview py-4">
+<div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>

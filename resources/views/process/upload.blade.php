@@ -19,6 +19,7 @@
 
 @section('content')
 <div class="process-upload py-4">
+    @include('partials.process-toast', ['title' => 'Upload complete'])
     <div class="container-fluid">
         <form action="{{ route('process.upload.store') }}" method="post" enctype="multipart/form-data">
             @csrf
@@ -44,12 +45,6 @@
                         <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Back</a>
                         <button type="submit" class="btn btn-dark px-4">Submit</button>
                     </div>
-
-                    @if(session('status'))
-                    <div class="alert alert-success mt-4 mb-0" role="alert">
-                        {{ session('status') }}
-                    </div>
-                    @endif
 
                     @if($errors->any())
                     <div class="alert alert-danger mt-4 mb-0" role="alert">

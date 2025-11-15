@@ -44,11 +44,7 @@
             </div>
         </div>
 
-        @if(session('status'))
-        <div class="alert alert-success" role="alert">
-            {{ session('status') }}
-        </div>
-        @endif
+        @include('partials.process-toast', ['title' => 'Upload complete'])
 
         <div class="row g-3 process-summary-row mb-4">
             <div class="col-md-4">

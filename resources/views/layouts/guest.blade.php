@@ -9,6 +9,7 @@
 </head>
 
 <body class="hold-transition layout-top-nav guest-layout">
+    @include('partials.page-loader')
     <div class="wrapper">
         @include('partials.navbar')
         <div class="content-wrapper guest-content">

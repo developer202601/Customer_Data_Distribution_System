@@ -9,6 +9,7 @@
 </head>
 
 <body class="hold-transition sidebar-mini">
+    @include('partials.page-loader')
     <div class="wrapper">
 
         <!-- Navbar -->
@@ -32,6 +33,8 @@
         </footer>
     </div>
     <!-- ./wrapper -->
+
+    @stack('scripts')
 </body>
 
 </html>

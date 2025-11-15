@@ -768,13 +768,13 @@ body.guest-layout .content-wrapper {
 }
 
 .process-dropzone:hover {
-    border-color: #6f2cff;
-    background: #f0eaff;
+    border-color: #1bb80f33;
+    background: #1bb80f22;
 }
 
 .process-dropzone.is-dragover {
-    border-color: #6f2cff;
-    background: #ede4ff;
+    border-color: #1bb80f33;
+    background: #1bb80f22;
     transform: translateY(-2px);
 }
 
@@ -852,7 +852,7 @@ body.guest-layout .content-wrapper {
 }
 
 .process-table thead th {
-    background: #f6f4ff;
+    background: #1bb80f33;
     font-weight: 600;
     border-bottom: 2px solid #e0defc;
 }

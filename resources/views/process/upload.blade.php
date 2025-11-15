@@ -64,9 +64,9 @@
                             <p class="text-muted mb-0" id="process-dropzone-helper">Only .xlsx files are supported.</p>
                         </div>
                     </div>
-                    @error('upload')
+                    <!-- @error('upload')
                     <small class="text-danger d-block mt-2">{{ $message }}</small>
-                    @enderror
+                    @enderror -->
 
                     <div class="process-guidelines mt-4">
                         <h2 class="process-guidelines-title">File requirements</h2>

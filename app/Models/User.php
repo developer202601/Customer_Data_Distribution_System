@@ -14,11 +14,21 @@ class User extends Model
      */
     public $timestamps = false;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'username',
         'admin_prev',
     ];
 
+    /**
+     * The attributes that should be casted to native types.
+     *
+     * @var array<string, string>
+     */
     protected $casts = [
         'admin_prev' => 'boolean',
     ];

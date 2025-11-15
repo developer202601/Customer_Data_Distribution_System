@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Imports\FileDataImport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use PhpOffice\PhpSpreadsheet\IOFactory;
+use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -14,6 +15,12 @@ use Throwable;
 
 class ProcessFileController extends Controller
 {
+    public function __construct()
+    {
+        ini_set('memory_limit', '1024M');
+        ini_set('max_execution_time', 300);
+    }
+
     private const EXPECTED_COLUMNS = [
         'RUN_DATE',
         'REGION',
@@ -78,14 +85,13 @@ class ProcessFileController extends Controller
         $file = $request->file('upload');
 
         try {
-            $spreadsheet = IOFactory::load($file->getRealPath());
+            $sheets = Excel::toArray(new FileDataImport(), $file);
+            $rows = $sheets[0] ?? [];
         } catch (Throwable $exception) {
             return back()->withErrors([
                 'upload' => 'Unable to read the Excel file. Please verify the file is not corrupted and try again.',
             ]);
         }
-
-        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
 
         if (count($rows) < 2) {
             return back()->withErrors([
@@ -111,49 +117,57 @@ class ProcessFileController extends Controller
         }
 
         $errors = [];
+        $filteredRows = [];
+        $totalRows = 0;
 
         foreach ($dataRows as $rowIndex => $columns) {
-            if (! $this->rowHasData($columns)) {
+            if (!$this->rowHasData($columns)) {
                 continue;
             }
+            $totalRows++;
 
+            $passesValidation = true;
             foreach ($headers as $columnLetter => $headerMeta) {
                 $normalised = $headerMeta['normalised'];
-
-                if (! in_array($normalised, self::EXPECTED_COLUMNS, true)) {
+                if (!in_array($normalised, self::EXPECTED_COLUMNS, true)) {
                     continue;
                 }
 
                 $value = $columns[$columnLetter] ?? null;
-                $isOptional = in_array($normalised, self::OPTIONAL_COLUMNS, true);
-
-                if ($this->isEmpty($value)) {
-                    if ($isOptional) {
-                        continue;
-                    }
-
+                if ($this->isEmpty($value) && !in_array($normalised, self::OPTIONAL_COLUMNS, true)) {
                     $errors[] = sprintf('Row %d: "%s" cannot be empty.', $rowIndex, $headerMeta['label']);
-                    continue;
+                    $passesValidation = false;
                 }
 
-                if ($normalised === 'LATEST_BILL_MNY' && ! $this->isValidLatestBill($value)) {
+                if ($normalised === 'LATEST_BILL_MNY' && !$this->isValidLatestBill($value)) {
                     $errors[] = sprintf('Row %d: "%s" must contain a numeric amount or "-".', $rowIndex, $headerMeta['label']);
+                    $passesValidation = false;
                 }
+            }
+
+            if ($passesValidation && $this->passesFilters($columns, $headers)) {
+                $filteredRows[$rowIndex] = $columns;
             }
         }
 
-        if (! empty($errors)) {
+        if (!empty($errors)) {
             return back()->withErrors($errors);
         }
 
         $storedPath = $file->store('uploads');
+        $processedData = [
+            'headers' => $headers,
+            'rows' => $filteredRows,
+            'total_rows' => $totalRows,
+            'original_filename' => $file->getClientOriginalName(),
+        ];
 
         session()->put('process.upload.path', $storedPath);
-        session()->put('process.upload.filename', $file->getClientOriginalName());
+        session()->put('process.upload.data', $processedData);
 
         return redirect()
             ->route('process.upload.preview')
-            ->with('status', 'File uploaded and validated successfully.');
+            ->with('status', 'File uploaded and processed successfully.');
     }
 
     public function preview(Request $request): View|RedirectResponse
@@ -215,20 +229,20 @@ class ProcessFileController extends Controller
 
     private function renderFilteredView(Request $request, bool $forceVip): View|RedirectResponse
     {
-        $dataset = $this->loadSpreadsheetOrRedirect(
-            $forceVip ? 'Upload a file to review VIP records.' : 'Upload a file to see the filtered results.',
-            'The stored spreadsheet does not contain enough data to display.'
+        $dataset = $this->loadProcessedDataOrRedirect(
+            $forceVip ? 'Upload a file to review VIP records.' : 'Upload a file to see the filtered results.'
         );
 
         if ($dataset instanceof RedirectResponse) {
             return $dataset;
         }
 
-        [$headers, $dataRows] = $dataset;
+        $headers = $dataset['headers'];
+        $filteredRows = $dataset['rows'];
+        $dataRowCount = $dataset['total_rows'];
+        $filename = $dataset['original_filename'];
 
         $headerMap = $this->buildHeaderMap($headers);
-        $filteredRows = $this->filterRows($dataRows, $headers);
-
         $vipApplied = $forceVip || $request->boolean('vip');
 
         if ($vipApplied) {
@@ -254,14 +268,6 @@ class ProcessFileController extends Controller
             }
         }
 
-        $dataRowCount = 0;
-
-        foreach ($dataRows as $columns) {
-            if ($this->rowHasData($columns)) {
-                $dataRowCount++;
-            }
-        }
-
         $summary = [
             'total_rows' => $dataRowCount,
             'filtered_rows' => $filteredCount,
@@ -272,7 +278,7 @@ class ProcessFileController extends Controller
             'headers' => $headers,
             'filteredRows' => $displayRows,
             'summary' => $summary,
-            'filename' => session('process.upload.filename'),
+            'filename' => $filename,
             'searchTerm' => $searchTerm,
             'searchApplied' => $searchApplied,
             'filteredCount' => $filteredCount,
@@ -282,70 +288,35 @@ class ProcessFileController extends Controller
         ]);
     }
 
-    private function loadSpreadsheetOrRedirect(string $missingUploadStatus, string $insufficientDataMessage): array|RedirectResponse
+    private function loadProcessedDataOrRedirect(string $missingUploadStatus): array|RedirectResponse
     {
         $path = session('process.upload.path');
+        $data = session('process.upload.data');
 
-        if (! $path) {
+        if (!$path || !$data || !Storage::exists($path)) {
+            session()->forget(['process.upload.path', 'process.upload.data']);
             return redirect()
                 ->route('process.upload.create')
                 ->with('status', $missingUploadStatus);
         }
 
-        if (! Storage::exists($path)) {
-            session()->forget('process.upload.path');
-            session()->forget('process.upload.filename');
-
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => 'The uploaded file is no longer available. Please upload it again.']);
-        }
-
-        try {
-            $spreadsheet = IOFactory::load(Storage::path($path));
-        } catch (Throwable $exception) {
-            session()->forget('process.upload.path');
-            session()->forget('process.upload.filename');
-
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => 'Unable to read the stored Excel file. Please upload it again.']);
-        }
-
-        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
-
-        if (count($rows) < 2) {
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => $insufficientDataMessage]);
-        }
-
-        [$headers, $dataRows] = $this->separateHeaderAndRows($rows);
-
-        if (empty($headers)) {
-            return redirect()
-                ->route('process.upload.create')
-                ->withErrors(['upload' => 'Unable to locate the header row in the stored spreadsheet.']);
-        }
-
-        return [$headers, $dataRows];
+        return $data;
     }
 
     private function prepareVipExportRows(Request $request): array|RedirectResponse
     {
-        $dataset = $this->loadSpreadsheetOrRedirect(
-            'Upload a file to export VIP records.',
-            'The stored spreadsheet does not contain enough data to export.'
+        $dataset = $this->loadProcessedDataOrRedirect(
+            'Upload a file to export VIP records.'
         );
 
         if ($dataset instanceof RedirectResponse) {
             return $dataset;
         }
 
-        [$headers, $dataRows] = $dataset;
+        $headers = $dataset['headers'];
+        $filteredRows = $dataset['rows'];
 
         $headerMap = $this->buildHeaderMap($headers);
-        $filteredRows = $this->filterRows($dataRows, $headers);
         $filteredRows = $this->filterVipRows($filteredRows, $headerMap);
 
         $searchTerm = trim((string) $request->query('search', ''));
@@ -357,15 +328,14 @@ class ProcessFileController extends Controller
         return [
             'headers' => $headers,
             'rows' => $filteredRows,
+            'filename' => $dataset['original_filename'],
         ];
     }
 
     private function buildVipFilename(string $extension): string
     {
-        $filename = pathinfo((string) session('process.upload.filename'), PATHINFO_FILENAME);
-        $downloadName = $filename !== '' ? $filename . '_vip' : 'vip-records';
-
-        return $downloadName . '.' . $extension;
+        $filename = pathinfo((string) session('process.upload.data.original_filename', 'vip-records'), PATHINFO_FILENAME);
+        return $filename . '_vip.' . $extension;
     }
 
     private function separateHeaderAndRows(array $rows): array
@@ -466,6 +436,28 @@ class ProcessFileController extends Controller
         return $map;
     }
 
+    private function passesFilters(array $columns, array $headers): bool
+    {
+        $headerMap = $this->buildHeaderMap($headers);
+
+        $medium = strtoupper($this->getColumnValue($columns, $headerMap, 'MEDIUM'));
+        if (! in_array($medium, self::FILTER_MEDIUM_VALUES, true)) {
+            return false;
+        }
+
+        $status = strtoupper($this->getColumnValue($columns, $headerMap, 'LATEST_PRODUCT_STATUS'));
+        if ($status !== self::FILTER_STATUS_VALUE) {
+            return false;
+        }
+
+        $arrears = $this->parseNumeric($this->getColumnValue($columns, $headerMap, 'NEW_ARREARS_20251022'));
+        if ($arrears <= self::FILTER_MIN_ARREARS) {
+            return false;
+        }
+
+        return true;
+    }
+
     private function filterRows(array $rows, array $headers): array
     {
         $headerMap = $this->buildHeaderMap($headers);
@@ -476,22 +468,9 @@ class ProcessFileController extends Controller
                 continue;
             }
 
-            $medium = strtoupper($this->getColumnValue($columns, $headerMap, 'MEDIUM'));
-            if (! in_array($medium, self::FILTER_MEDIUM_VALUES, true)) {
-                continue;
+            if ($this->passesFilters($columns, $headers)) {
+                $results[$rowIndex] = $columns;
             }
-
-            $status = strtoupper($this->getColumnValue($columns, $headerMap, 'LATEST_PRODUCT_STATUS'));
-            if ($status !== self::FILTER_STATUS_VALUE) {
-                continue;
-            }
-
-            $arrears = $this->parseNumeric($this->getColumnValue($columns, $headerMap, 'NEW_ARREARS_20251022'));
-            if ($arrears <= self::FILTER_MIN_ARREARS) {
-                continue;
-            }
-
-            $results[$rowIndex] = $columns;
         }
 
         return $results;

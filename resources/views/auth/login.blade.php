@@ -4,7 +4,7 @@
 
 @section('content')
 <section class="content login-page">
-    <div class="login-page__panel login-page__panel--visual">
+    <div class="login-page__panel login-page__panel--visual" style="background-image: url('/images/login-network.svg'); background-size: cover; background-position: center;">
         <div class="login-page__visual-inner">
             <span class="login-page__eyebrow">Customer Data Distribution System</span>
             <h1>Secure delivery for your customers</h1>

@@ -101,21 +101,41 @@ body.guest-layout .content-wrapper {
 }
 
 .login-page__panel--visual {
-    background: #ffffff;
-    background-image: url('/images/bg.png');
+    position: relative;
+    background-color: #041837;
+    color: #f2f6ff;
+    border-right: 1px solid rgba(231, 236, 244, 0.3);
+    overflow: hidden;
+}
+
+.login-page__panel--visual::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url('/images/login-network.svg');
     background-size: cover;
     background-position: center;
-    color: #03142a;
-    border-right: 1px solid #e7ecf4;
+    opacity: 0.95;
+}
+
+.login-page__panel--visual::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(8, 203, 255, 0.25), rgba(4, 24, 55, 0.85));
+    mix-blend-mode: screen;
 }
 
 .login-page__visual-inner {
     /* max-width: 520px; */
     padding: clamp(2rem, 4vw, 3.5rem);
-    background: rgba(255, 255, 255, 0.9);
-    /* border-radius: 32px;
-    box-shadow: 0 2rem 3rem rgba(7, 31, 76, 0.08);
-    border: 1px solid rgba(15, 27, 61, 0.05); */
+    background: rgba(4, 12, 31, 0.65);
+    border-radius: 32px;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(102, 248, 255, 0.2);
+    color: #f2f6ff;
+    position: relative;
+    z-index: 1;
 }
 
 .login-page__eyebrow {
@@ -131,11 +151,11 @@ body.guest-layout .content-wrapper {
     font-size: clamp(2.5rem, 3vw, 3.6rem);
     font-weight: 600;
     margin-bottom: 1rem;
-    color: #03142a;
+    color: #f6fbff;
 }
 
 .login-page__visual-inner p {
-    color: #03142a;
+    color: rgba(237, 244, 255, 0.85);
     font-size: 1rem;
     line-height: 1.6;
 }
@@ -148,6 +168,34 @@ body.guest-layout .content-wrapper {
 .login-page__panel--form {
     background: #f5f7fb;
     /* padding: clamp(2rem, 5vw, 4.5rem); */
+}
+
+.login-page__panel--form {
+    position: relative;
+    overflow: hidden;
+}
+
+.login-page__panel--form::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -8%;
+    width: 85%;
+    height: 110%;
+    transform: translateY(-50%);
+    background-image: url('/images/login-network.svg');
+    background-repeat: no-repeat;
+    background-position: center right;
+    background-size: contain;
+    opacity: 0.06;
+    filter: blur(6px) saturate(0.9) contrast(0.95);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.login-card {
+    position: relative;
+    z-index: 1;
 }
 
 .login-card {
@@ -163,6 +211,10 @@ body.guest-layout .content-wrapper {
 /* Keep any overflow inside the panels so the body never scrolls */
 .login-page__panel {
     overflow: auto;
+}
+
+.login-page__panel--visual {
+    overflow: hidden;
 }
 
 

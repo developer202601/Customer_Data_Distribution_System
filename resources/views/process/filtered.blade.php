@@ -18,7 +18,7 @@
 @endsection
 
 @section('content')
-<div class="process-preview py-4">
+<div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
@@ -44,11 +44,7 @@
             </div>
         </div>
 
-        @if(session('status'))
-        <div class="alert alert-success" role="alert">
-            {{ session('status') }}
-        </div>
-        @endif
+        @include('partials.process-toast', ['title' => 'Upload complete'])
 
         <div class="row g-3 process-summary-row mb-4">
             <div class="col-md-4">

@@ -56,7 +56,7 @@ class ProcessExcelCoordinator implements ShouldQueue
 
         $workbookPath = Storage::path($this->storedPath);
         $reader = IOFactory::createReader('Xlsx');
-        $reader->setReadDataOnly(true);
+        $reader->setReadDataOnly(false);
 
         $worksheetInfo = $reader->listWorksheetInfo($workbookPath);
         $activeSheet = Arr::first($worksheetInfo);
@@ -158,7 +158,7 @@ class ProcessExcelCoordinator implements ShouldQueue
     private function loadHeaderRow(string $workbookPath): array
     {
         $reader = IOFactory::createReader('Xlsx');
-        $reader->setReadDataOnly(true);
+        $reader->setReadDataOnly(false);
         $reader->setReadFilter(new ChunkReadFilter(1, 1));
 
         $spreadsheet = $reader->load($workbookPath);

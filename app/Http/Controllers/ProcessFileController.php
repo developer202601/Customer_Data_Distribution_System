@@ -11,10 +11,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class ProcessFileController extends Controller
 {
@@ -84,15 +86,26 @@ class ProcessFileController extends Controller
 	public function store(Request $request): RedirectResponse|JsonResponse
 	{
 		$request->validate([
-			'upload' => 'required|file|mimes:xlsx',
+			'upload' => 'required|file|mimes:zip',
 		]);
 
 		$file = $request->file('upload');
 		$token = (string) Str::uuid();
-		$storedPath = $file->storeAs('uploads', $token . '.xlsx');
+		$archivePath = $file->storeAs('uploads', $token . '.zip');
 		$originalName = $file->getClientOriginalName();
 
-		$this->initialiseProgressState($token, $storedPath, $originalName);
+		try {
+			$storedPath = $this->extractWorkbookFromArchive($archivePath, $token);
+		} catch (\RuntimeException $exception) {
+			Storage::delete($archivePath);
+			Storage::delete('uploads/' . $token . '.xlsx');
+
+			throw ValidationException::withMessages([
+				'upload' => $exception->getMessage(),
+			]);
+		}
+
+		$this->initialiseProgressState($token, $storedPath, $originalName, $archivePath);
 
 		ProcessExcelCoordinator::dispatch($token, $storedPath, $originalName);
 
@@ -327,13 +340,14 @@ class ProcessFileController extends Controller
 		return $filename . '_vip.' . $extension;
 	}
 
-	private function initialiseProgressState(string $token, string $storedPath, string $originalName): void
+	private function initialiseProgressState(string $token, string $storedPath, string $originalName, ?string $archivePath = null): void
 	{
 		Cache::put($this->progressCacheKey($token), [
 			'status' => 'queued',
 			'progress' => 0,
 			'message' => 'Waiting for an available worker…',
 			'uploaded_path' => $storedPath,
+			'archive_path' => $archivePath,
 			'original_filename' => $originalName,
 			'processed_rows' => 0,
 			'total_rows' => null,
@@ -399,6 +413,74 @@ class ProcessFileController extends Controller
 
 		return redirect()->route('process.upload.preview')
 			->with('status', 'File uploaded and processed successfully.');
+	}
+
+	private function extractWorkbookFromArchive(string $archivePath, string $token): string
+	{
+		$absoluteArchivePath = Storage::path($archivePath);
+		$zip = new ZipArchive();
+
+		if ($zip->open($absoluteArchivePath) !== true) {
+			throw new \RuntimeException('Unable to open the uploaded ZIP file. Please try again.');
+		}
+
+		try {
+			$entryName = $this->locateExcelEntry($zip);
+			$targetRelativePath = 'uploads/' . $token . '.xlsx';
+			$targetAbsolutePath = Storage::path($targetRelativePath);
+			$targetDirectory = dirname($targetAbsolutePath);
+
+			if (! is_dir($targetDirectory)) {
+				mkdir($targetDirectory, 0755, true);
+			}
+
+			$sourceStream = $zip->getStream($entryName);
+			if (! $sourceStream) {
+				throw new \RuntimeException('Unable to read the Excel workbook inside the ZIP file.');
+			}
+
+			$targetHandle = fopen($targetAbsolutePath, 'wb');
+			if (! $targetHandle) {
+				fclose($sourceStream);
+				throw new \RuntimeException('Unable to store the extracted Excel workbook.');
+			}
+
+			stream_copy_to_stream($sourceStream, $targetHandle);
+			fclose($sourceStream);
+			fclose($targetHandle);
+
+			return $targetRelativePath;
+		} finally {
+			$zip->close();
+		}
+	}
+
+	private function locateExcelEntry(ZipArchive $zip): string
+	{
+		$entries = [];
+
+		for ($index = 0; $index < $zip->numFiles; $index++) {
+			$stat = $zip->statIndex($index);
+			$name = $stat['name'] ?? '';
+
+			if ($name === '' || str_ends_with($name, '/')) {
+				continue;
+			}
+
+			if (str_ends_with(strtolower($name), '.xlsx')) {
+				$entries[] = $name;
+			}
+		}
+
+		if (empty($entries)) {
+			throw new \RuntimeException('The ZIP file must contain exactly one Excel (.xlsx) workbook. None were found.');
+		}
+
+		if (count($entries) > 1) {
+			throw new \RuntimeException('The ZIP file must contain exactly one Excel (.xlsx) workbook.');
+		}
+
+		return $entries[0];
 	}
 }
 

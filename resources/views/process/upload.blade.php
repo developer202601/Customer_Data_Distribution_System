@@ -43,7 +43,7 @@
                             </span> -->
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload Here</h1>
-                                <p class="text-muted mb-0">We currently accept Microsoft Excel (.xlsx) files only.</p>
+                                <p class="text-muted mb-0">Upload a ZIP file that contains a single Microsoft Excel (.xlsx) workbook.</p>
                             </div>
                         </div>
                     </div>
@@ -67,10 +67,10 @@
                     </div>
 
                     <div class="process-dropzone mt-4" id="process-dropzone">
-                        <input type="file" class="visually-hidden" id="upload" name="upload" accept=".xlsx">
+                        <input type="file" class="visually-hidden" id="upload" name="upload" accept=".zip">
                         <div class="process-dropzone-content text-center">
                             <p class="process-dropzone-title mb-1">Drag and drop file or click to browse</p>
-                            <p class="text-muted mb-0" id="process-dropzone-helper">Only .xlsx files are supported.</p>
+                            <p class="text-muted mb-0" id="process-dropzone-helper">Upload a .zip that contains your Excel workbook.</p>
                         </div>
                     </div>
                     <!-- @error('upload')
@@ -80,7 +80,8 @@
                     <div class="process-guidelines mt-4">
                         <h2 class="process-guidelines-title">File requirements</h2>
                         <ul class="mb-0">
-                            <li>Upload a single Microsoft Excel workbook with the header row shown in the data dictionary.</li>
+                            <li>Compress your Microsoft Excel workbook into a ZIP archive before uploading it here.</li>
+                            <li>Each upload must contain exactly one Excel (.xlsx) workbook with the header row shown in the data dictionary.</li>
                             <li>The columns <strong>ADDRESS_NAME</strong>, <strong>EMAIL_ADDRESS</strong>, <strong>CREDIT_SCORE</strong>, <strong>SALES_PERSON</strong>, and <strong>SALES_CHANNEL</strong> may be empty.</li>
                             <li><strong>LATEST_BILL_MNY</strong> must contain a numeric amount or the character <strong>-</strong>.</li>
                             <li>All other columns must have values for every populated row.</li>
@@ -120,7 +121,7 @@
         }
 
         const updateHelper = (file) => {
-            helper.textContent = file ? file.name : 'Only .xlsx files are supported.';
+            helper.textContent = file ? file.name : 'Upload a .zip that contains your Excel workbook.';
         };
 
         const clearErrors = () => {
@@ -512,25 +513,25 @@
 
             const [file] = event.dataTransfer.files;
 
-            if (file && file.name.toLowerCase().endsWith('.xlsx')) {
+            if (file && file.name.toLowerCase().endsWith('.zip')) {
                 fileInput.files = event.dataTransfer.files;
                 updateHelper(file);
             } else {
                 updateHelper(null);
-                alert('Please upload an Excel .xlsx file.');
+                alert('Please upload a ZIP file that contains your Excel workbook.');
             }
         });
 
         fileInput.addEventListener('change', () => {
             const file = fileInput.files[0];
 
-            if (file && file.name.toLowerCase().endsWith('.xlsx')) {
+            if (file && file.name.toLowerCase().endsWith('.zip')) {
                 updateHelper(file);
             } else {
                 fileInput.value = '';
                 updateHelper(null);
                 if (file) {
-                    alert('Please upload an Excel .xlsx file.');
+                    alert('Please upload a ZIP file that contains your Excel workbook.');
                 }
             }
         });
@@ -543,7 +544,7 @@
             event.preventDefault();
 
             if (!fileInput.files.length) {
-                renderErrors(['Please choose an Excel (.xlsx) file before submitting.']);
+                renderErrors(['Please choose a ZIP file containing your Excel workbook before submitting.']);
                 return;
             }
 

@@ -140,7 +140,7 @@ class ProcessExcelChunk implements ShouldQueue
     private function loadChunkRows(): array
     {
         $reader = IOFactory::createReader('Xlsx');
-        $reader->setReadDataOnly(true);
+        $reader->setReadDataOnly(false);
         $reader->setReadFilter(new ChunkReadFilter($this->startRow, $this->endRow));
 
         $spreadsheet = $reader->load(Storage::path($this->storedPath));

@@ -4,12 +4,80 @@ import 'jquery/dist/jquery.min.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 	const loader = document.getElementById('page-loader');
-	if (!loader) {
-		return;
-	}
 
-	const hideLoader = () => loader.classList.add('page-loader--hidden');
-	const showLoader = () => loader.classList.remove('page-loader--hidden');
+	const hideLoader = () => {
+		if (!loader) {
+			return;
+		}
+		loader.classList.add('page-loader--hidden');
+	};
+
+	const showLoader = () => {
+		if (!loader) {
+			return;
+		}
+		loader.classList.remove('page-loader--hidden');
+	};
+
+	const themeToggle = document.getElementById('theme-toggle');
+	const THEME_STORAGE_KEY = 'cdds-theme-mode';
+	const THEMES = {
+		LIGHT: 'light',
+		DARK: 'dark',
+	};
+
+	const applyTheme = (theme) => {
+		document.body.classList.remove('theme-light', 'theme-dark');
+		document.body.classList.add(`theme-${theme}`);
+		if (themeToggle) {
+			themeToggle.dataset.theme = theme;
+			themeToggle.setAttribute('aria-pressed', theme === THEMES.DARK ? 'true' : 'false');
+		}
+	};
+
+	const loadStoredTheme = () => {
+		try {
+			const stored = localStorage.getItem(THEME_STORAGE_KEY);
+			if (stored === THEMES.DARK || stored === THEMES.LIGHT) {
+				return stored;
+			}
+		} catch (err) {
+			return null;
+		}
+		return null;
+	};
+
+	const saveTheme = (theme) => {
+		try {
+			localStorage.setItem(THEME_STORAGE_KEY, theme);
+		} catch (err) {
+			// ignore
+		}
+	};
+
+	const detectPreferredTheme = () => {
+		if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+			return THEMES.DARK;
+		}
+		return THEMES.LIGHT;
+	};
+
+	const toggleTheme = () => {
+		const current = document.body.classList.contains('theme-dark') ? THEMES.DARK : THEMES.LIGHT;
+		const next = current === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK;
+		applyTheme(next);
+		saveTheme(next);
+	};
+
+	const initializeTheme = () => {
+		const stored = loadStoredTheme();
+		const initial = stored || detectPreferredTheme();
+		applyTheme(initial);
+	};
+
+	if (themeToggle) {
+		themeToggle.addEventListener('click', toggleTheme);
+	}
 
 	window.addEventListener('load', () => {
 		// allow small delay so CSS/JS settle before hiding
@@ -51,4 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 		showLoader();
 	}, true);
+
+	initializeTheme();
 });

@@ -76,7 +76,7 @@ class ProcessFileController extends Controller
 	private const FILTER_MEDIUM_VALUES = ['COPPER', 'FTTH'];
 	private const FILTER_STATUS_VALUE = 'OK';
 	private const FILTER_MIN_ARREARS = 2400;
-	private const PREVIEW_ROW_LIMIT = 10;
+	private const PREVIEW_ROW_LIMIT = 6;
 
 	public function create(): View
 	{

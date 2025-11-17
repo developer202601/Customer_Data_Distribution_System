@@ -73,6 +73,7 @@ class UploadProcessManager
         $disk = Storage::disk(config('filesystems.default', 'local'));
         $disk->deleteDirectory('processed/' . $token);
         $disk->delete('uploads/' . $token . '.xlsx');
+        $disk->delete('uploads/' . $token . '.zip');
     }
 
     private static function cacheKey(string $token): string

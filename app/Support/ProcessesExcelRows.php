@@ -4,6 +4,9 @@ namespace App\Support;
 
 trait ProcessesExcelRows
 {
+    private const NEW_ARREARS_PREFIX = 'NEW_ARREARS_';
+    private const DYNAMIC_EXPECTED_PREFIXES = [self::NEW_ARREARS_PREFIX];
+
     private function separateHeaderAndRows(array $rows): array
     {
         if (empty($rows)) {
@@ -107,17 +110,26 @@ trait ProcessesExcelRows
         $headerMap = $this->buildHeaderMap($headers);
 
         $medium = strtoupper($this->getColumnValue($columns, $headerMap, 'MEDIUM'));
-        if (! in_array($medium, static::FILTER_MEDIUM_VALUES, true)) {
+        $filterMediumValues = $this->getClassConstantArray('FILTER_MEDIUM_VALUES');
+        if (! in_array($medium, $filterMediumValues, true)) {
             return false;
         }
 
         $status = strtoupper($this->getColumnValue($columns, $headerMap, 'LATEST_PRODUCT_STATUS'));
-        if ($status !== static::FILTER_STATUS_VALUE) {
+        $filterStatus = $this->getClassConstantValue('FILTER_STATUS_VALUE', 'OK');
+        if ($status !== $filterStatus) {
             return false;
         }
 
-        $arrears = $this->parseNumeric($this->getColumnValue($columns, $headerMap, 'NEW_ARREARS_20251022'));
-        if ($arrears <= static::FILTER_MIN_ARREARS) {
+        $arrearsColumn = $this->findHeaderColumnByPrefix($headerMap, self::NEW_ARREARS_PREFIX);
+        if ($arrearsColumn === null) {
+            return false;
+        }
+
+        $value = $columns[$arrearsColumn] ?? '';
+        $arrears = $this->parseNumeric($value);
+        $minArrears = $this->getClassConstantValue('FILTER_MIN_ARREARS', 2400);
+        if ($arrears <= $minArrears) {
             return false;
         }
 
@@ -264,5 +276,88 @@ trait ProcessesExcelRows
         $numeric = str_replace([',', ' '], '', $value);
 
         return is_numeric($numeric) ? (float) $numeric : 0.0;
+    }
+
+    private function findHeaderColumnByPrefix(array $headerMap, string $prefix): ?string
+    {
+        foreach ($headerMap as $normalised => $letter) {
+            if (str_starts_with($normalised, $prefix)) {
+                return $letter;
+            }
+        }
+
+        return null;
+    }
+
+    private function isArrearsHeader(string $normalised): bool
+    {
+        return str_starts_with($normalised, self::NEW_ARREARS_PREFIX);
+    }
+
+    /**
+     * Validate arrears cell contains only numeric amount characters (digits, optional decimal point,
+     * commas and spaces allowed as thousand separators). Returns true if valid.
+     */
+    private function isValidArrears($value): bool
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return false;
+        }
+
+        // Disallow a lone dash; treat that as invalid for arrears amount
+        if ($value === '-') {
+            return false;
+        }
+
+        // Remove common thousands separators and spaces
+        $normalized = str_replace([',', ' '], '', $value);
+
+        // Allow optional leading minus, digits, optional decimal point and digits
+        return (bool) preg_match('/^-?\d+(?:\.\d+)?$/', $normalized);
+    }
+
+    private function isExpectedColumn(string $normalised): bool
+    {
+        $expected = $this->getClassConstantArray('EXPECTED_COLUMNS');
+        if (in_array($normalised, $expected, true)) {
+            return true;
+        }
+
+        foreach (self::DYNAMIC_EXPECTED_PREFIXES as $prefix) {
+            if (str_starts_with($normalised, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Read a class constant and return it as an array if present, otherwise empty array.
+     */
+    private function getClassConstantArray(string $name): array
+    {
+        $constRef = static::class . '::' . $name;
+        if (defined($constRef)) {
+            $val = constant($constRef);
+            return is_array($val) ? $val : [];
+        }
+
+        return [];
+    }
+
+    /**
+     * Read a class constant value if present, otherwise return the provided default.
+     */
+    private function getClassConstantValue(string $name, $default)
+    {
+        $constRef = static::class . '::' . $name;
+        if (defined($constRef)) {
+            return constant($constRef);
+        }
+
+        return $default;
     }
 }

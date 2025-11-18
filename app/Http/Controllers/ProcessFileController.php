@@ -40,7 +40,6 @@ class ProcessFileController extends Controller
 		'ADDRESS_NAME',
 		'FULL_ADDRESS',
 		'LATEST_BILL_MNY',
-		'NEW_ARREARS_20251022',
 		'MOBILE_CONTACT_TEL',
 		'EMAIL_ADDRESS',
 		'CREDIT_SCORE',

@@ -33,7 +33,6 @@ class ProcessExcelChunk implements ShouldQueue
         'ADDRESS_NAME',
         'FULL_ADDRESS',
         'LATEST_BILL_MNY',
-        'NEW_ARREARS_20251022',
         'MOBILE_CONTACT_TEL',
         'EMAIL_ADDRESS',
         'CREDIT_SCORE',
@@ -102,7 +101,7 @@ class ProcessExcelChunk implements ShouldQueue
                 foreach ($this->headers as $columnLetter => $headerMeta) {
                     $normalised = $headerMeta['normalised'];
 
-                    if (! in_array($normalised, self::EXPECTED_COLUMNS, true)) {
+                    if (! $this->isExpectedColumn($normalised)) {
                         continue;
                     }
 
@@ -115,6 +114,12 @@ class ProcessExcelChunk implements ShouldQueue
 
                     if ($normalised === 'LATEST_BILL_MNY' && ! $this->isValidLatestBill($value)) {
                         $errors[] = sprintf('Row %d: "%s" must contain a numeric amount or "-".', $rowIndex, $headerMeta['label']);
+                        $passesValidation = false;
+                    }
+
+                    // Validate dynamic NEW_ARREARS_YYYYMMDD columns contain only numeric amount characters
+                    if (str_starts_with($normalised, 'NEW_ARREARS_') && ! $this->isValidArrears($value)) {
+                        $errors[] = sprintf('Row %d: "%s" must contain only a numeric amount (no letters or currency symbols).', $rowIndex, $headerMeta['label']);
                         $passesValidation = false;
                     }
                 }

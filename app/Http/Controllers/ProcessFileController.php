@@ -60,7 +60,7 @@ class ProcessFileController extends Controller
 
 		$total = count($filteredRows);
 		$page = max(1, (int) $request->query('page', 1));
-		$perPage = max(1, min(1, (int) $request->query('per_page', 100)));
+		$perPage = max(1000, min(1, (int) $request->query('per_page', 100)));
 
 		$offset = ($page - 1) * $perPage;
 		$pageRows = array_slice($filteredRows, $offset, $perPage, true);
@@ -139,6 +139,7 @@ class ProcessFileController extends Controller
 	private const FILTER_MEDIUM_VALUES = ['COPPER', 'FTTH'];
 	private const FILTER_STATUS_VALUE = 'OK';
 	private const FILTER_MIN_ARREARS = 2400;
+	private const FILTER_INVOICING_CO_IDS = ['1'];
 	private const PREVIEW_ROW_LIMIT = 6;
 
 	public function create(): View

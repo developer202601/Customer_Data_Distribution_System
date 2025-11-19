@@ -46,7 +46,8 @@
     --btn-focus-ring: rgba(0, 180, 235, 0.35);
     --surface-card2: #ffffffee;
     --pagination: #0d6efd;
-    --table-loading:rgba(83, 83, 83, 0.234);
+    --table-loading: rgba(83, 83, 83, 0.234);
+    --no-data: #5c6478;
 }
 
 :root.theme-dark,
@@ -85,7 +86,8 @@ body.theme-dark {
     --btn-focus-ring: rgba(0, 180, 235, 0.5);
     --surface-card2: #050608ee;
     --pagination: #0f264c;
-    --table-loading:rgba(0, 0, 0, 0.45);
+    --table-loading: rgba(0, 0, 0, 0.45);
+    --no-data: rgba(245, 249, 255, 0.72);
 }
 
 /* Prevent small layout overflows and ensure height calculations are reliable */
@@ -133,7 +135,6 @@ body.guest-layout {
     color: var(--text-primary);
     overflow: hidden;
 }
-
 @media (max-width: 768px) {
     body.guest-layout {
         overflow: auto;
@@ -1281,6 +1282,13 @@ body.theme-dark .process-dropzone:hover {
 .process-table-overlay:not(.d-none) {
     display: block;
     opacity: 1;
+}
+
+.process-table-empty-message {
+    color: var(--no-data);
+    text-align: left;
+    font-weight: 500;
+    padding: 1rem;
 }
 
 .process-table thead th {

@@ -37,7 +37,7 @@
             <div class="d-flex flex-wrap gap-2">
                 <a href="{{ $vipApplied ? route('process.upload.preview') : route('process.upload.create') }}" class="btn btn-outline-secondary">Back</a>
                 @if($vipApplied)
-                <a href="{{ route('process.upload.export', array_filter(['vip' => 1, 'search' => $searchTerm ?: null])) }}" class="btn btn-dark">Export VIP Excel</a>
+                <a href="{{ route('process.upload.export', array_filter(['vip' => 1, 'search' => $searchTerm ?: null])) }}" class="btn btn-dark" data-loader-off="1" target="_blank" rel="noopener noreferrer">Export VIP Excel</a>
                 @else
                 <a href="{{ route('process.upload.vip', array_filter(['search' => $searchTerm ?: null])) }}" class="btn btn-dark">VIP records</a>
                 @endif

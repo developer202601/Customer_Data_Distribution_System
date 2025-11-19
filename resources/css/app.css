@@ -45,6 +45,8 @@
     --btn-outline-border: rgba(15, 27, 61, 0.24);
     --btn-focus-ring: rgba(0, 180, 235, 0.35);
     --surface-card2: #ffffffee;
+    --pagination: #0d6efd;
+    --table-loading:rgba(83, 83, 83, 0.234);
 }
 
 :root.theme-dark,
@@ -82,6 +84,8 @@ body.theme-dark {
     --btn-outline-border: rgba(255, 255, 255, 0.28);
     --btn-focus-ring: rgba(0, 180, 235, 0.5);
     --surface-card2: #050608ee;
+    --pagination: #0f264c;
+    --table-loading:rgba(0, 0, 0, 0.45);
 }
 
 /* Prevent small layout overflows and ensure height calculations are reliable */
@@ -1262,6 +1266,23 @@ body.theme-dark .process-dropzone:hover {
     background: linear-gradient(135deg, var(--accent-highlight), var(--accent-primary));
 }
 
+/* Table overlay loader (dark theme friendly) */
+.process-table-overlay {
+    z-index: 10;
+    background: var(--table-loading);
+    transition: opacity .12s ease;
+    pointer-events: auto;
+}
+.process-table-overlay.d-none {
+    display: none !important;
+    opacity: 0;
+    pointer-events: none;
+}
+.process-table-overlay:not(.d-none) {
+    display: block;
+    opacity: 1;
+}
+
 .process-table thead th {
     background: var(--table-thead);
     font-weight: 600;
@@ -1513,4 +1534,14 @@ body.theme-dark .btn-outline-light:focus {
 body.theme-dark .login-page__visual-inner {
     border-color: var(--surface-border);
     border-width: thin;
+}
+
+.pagination{
+    gap: 6px;
+}
+
+.pagination a{
+    color: var(--pagination);
+    background-color: var(--table-body);
+    border-color: var(--surface-border);
 }

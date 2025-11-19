@@ -133,6 +133,14 @@ trait ProcessesExcelRows
             return false;
         }
 
+        $allowedInvoicingIds = $this->getClassConstantArray('FILTER_INVOICING_CO_IDS');
+        if (! empty($allowedInvoicingIds)) {
+            $invoicingId = $this->getColumnValue($columns, $headerMap, 'INVOICING_CO_ID');
+            if ($invoicingId === '' || ! in_array($invoicingId, $allowedInvoicingIds, true)) {
+                return false;
+            }
+        }
+
         return true;
     }
 

@@ -25,9 +25,9 @@
                 <h1 class="process-preview-title mb-2">{{ $vipApplied ? 'VIP Records' : 'Filtered Results' }}</h1>
                 <p class="text-muted mb-1">
                     @if($vipApplied)
-                    The list below contains the subset of filtered rows where <strong>CREDIT_CLASS_NAME</strong> starts with <strong>VIP</strong> (for example, "VIP" or "VIP - Gold").
+                    The list below contains the subset of filtered rows where <strong>CREDIT_CLASS_NAME</strong> starts with <strong>VIP</strong> (for example, "VIP" or "VIP - Low").
                     @else
-                    The dataset has been filtered to include only records where the medium is <strong>Copper</strong> or <strong>FTTH</strong>, the latest product status is <strong>OK</strong>, and the arrears value is greater than <strong>2400</strong>.
+                    The dataset has been filtered to include only records where the medium is <strong>Copper</strong> or <strong>FTTH</strong>, the latest product status is <strong>OK</strong>, Invoicing CO ID is equals to <strong>1</strong> and the arrears value is greater than <strong>2400</strong>.
                     @endif
                 </p>
                 @if($filename)
@@ -81,7 +81,7 @@
         </p>
         @endif
 
-        <form method="get" class="process-search mb-4">
+        <form method="get" class="process-search mb-4" data-loader-off>
             @if($vipApplied)
             <input type="hidden" name="vip" value="1">
             @endif
@@ -247,8 +247,13 @@
             if (overlay) overlay.classList.add('d-none');
             if (!tbody) return;
             tbody.innerHTML = '';
-            for (const row of data.rows) {
-                tbody.insertAdjacentHTML('beforeend', buildRowHtml(row));
+            if (!data.rows.length) {
+                const colspan = Math.max(1, (headersOrder.length || 0) + 1);
+                tbody.innerHTML = `<tr class="table-empty"><td colspan="${colspan}" class="process-table-empty-message">No records matched your filters.</td></tr>`;
+            } else {
+                for (const row of data.rows) {
+                    tbody.insertAdjacentHTML('beforeend', buildRowHtml(row));
+                }
             }
             renderPagination(data.meta);
             updateCountText({ total: data.meta.total, per_page: data.meta.per_page });

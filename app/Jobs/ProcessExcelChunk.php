@@ -68,6 +68,7 @@ class ProcessExcelChunk implements ShouldQueue
     private const FILTER_MEDIUM_VALUES = ['COPPER', 'FTTH'];
     private const FILTER_STATUS_VALUE = 'OK';
     private const FILTER_MIN_ARREARS = 2400;
+    private const FILTER_INVOICING_CO_IDS = ['1'];
 
     public function __construct(
         private readonly string $token,

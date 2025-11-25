@@ -5,8 +5,6 @@
     <span class="process-step active"></span>
     <span class="process-step"></span>
     <span class="process-step"></span>
-    <span class="process-step"></span>
-    <span class="process-step"></span>
 </div>
 @if(session('user.is_admin'))
 <a href="#" class="btn btn-outline-secondary">Configurations</a>

@@ -3,9 +3,7 @@
 @section('navbar-right')
 <div class="process-stepper d-flex align-items-center gap-2">
     <span class="process-step completed"></span>
-    <span class="process-step completed"></span>
     <span class="process-step active"></span>
-    <span class="process-step"></span>
     <span class="process-step"></span>
 </div>
 @if(session('user.is_admin'))

@@ -4,8 +4,6 @@
 <div class="process-stepper d-flex align-items-center gap-2">
     <span class="process-step completed"></span>
     <span class="process-step completed"></span>
-    <span class="process-step completed"></span>
-    <span class="process-step completed"></span>
     <span class="process-step active"></span>
 </div>
 @if(session('user.is_admin'))

@@ -16,6 +16,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/upload/complete/{token}', [ProcessFileController::class, 'complete'])->name('process.upload.complete');
     Route::get('/process/upload/preview', [ProcessFileController::class, 'preview'])->name('process.upload.preview');
     Route::get('/process/upload/vip', [ProcessFileController::class, 'vip'])->name('process.upload.vip');
+    Route::get('/process/upload/rows', [ProcessFileController::class, 'rows'])->name('process.upload.rows');
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
     Route::get('/process/exclusions', [ExclusionUploadController::class, 'create'])->name('process.exclusions.create');
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');

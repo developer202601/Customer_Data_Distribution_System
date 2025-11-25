@@ -28,6 +28,70 @@ class ProcessFileController extends Controller
 		ini_set('max_execution_time', 300);
 	}
 
+	/**
+	 * Return paginated filtered rows as JSON for AJAX pagination.
+	 */
+	public function rows(Request $request): JsonResponse
+	{
+		$dataset = $this->loadProcessedDataOrRedirect(
+			'Upload a file to review filtered rows.'
+		);
+
+		if ($dataset instanceof RedirectResponse) {
+			return response()->json([
+				'status' => 'missing',
+				'message' => 'Processed dataset not available.',
+			], 404);
+		}
+
+		$headers = $dataset['headers'];
+		$filteredRows = $dataset['rows'];
+		$headerMap = $this->buildHeaderMap($headers);
+
+		$vipApplied = $request->boolean('vip');
+		if ($vipApplied) {
+			$filteredRows = $this->filterVipRows($filteredRows, $headerMap);
+		}
+
+		$searchTerm = trim((string) $request->query('search', ''));
+		if ($searchTerm !== '') {
+			$filteredRows = $this->searchRows($filteredRows, $headerMap, $searchTerm);
+		}
+
+		$total = count($filteredRows);
+		$page = max(1, (int) $request->query('page', 1));
+		$perPage = max(1000, min(1, (int) $request->query('per_page', 100)));
+
+		$offset = ($page - 1) * $perPage;
+		$pageRows = array_slice($filteredRows, $offset, $perPage, true);
+
+		$rowsOut = [];
+		foreach ($pageRows as $rowIndex => $row) {
+			$entry = ['excel_row' => $rowIndex];
+			foreach ($headers as $letter => $meta) {
+				$entry[$letter] = $row[$letter] ?? '';
+			}
+			$rowsOut[] = $entry;
+		}
+
+		$headerList = [];
+		foreach ($headers as $letter => $meta) {
+			$headerList[] = ['key' => $letter, 'label' => $meta['label']];
+		}
+
+		return response()->json([
+			'status' => 'ok',
+			'headers' => $headerList,
+			'rows' => $rowsOut,
+			'meta' => [
+				'total' => $total,
+				'per_page' => $perPage,
+				'page' => $page,
+				'last_page' => (int) ceil($total / max(1, $perPage)),
+			],
+		]);
+	}
+
 	private const EXPECTED_COLUMNS = [
 		'RUN_DATE',
 		'REGION',
@@ -75,6 +139,7 @@ class ProcessFileController extends Controller
 	private const FILTER_MEDIUM_VALUES = ['COPPER', 'FTTH'];
 	private const FILTER_STATUS_VALUE = 'OK';
 	private const FILTER_MIN_ARREARS = 2400;
+	private const FILTER_INVOICING_CO_IDS = ['1'];
 	private const PREVIEW_ROW_LIMIT = 6;
 
 	public function create(): View
@@ -189,7 +254,6 @@ class ProcessFileController extends Controller
 		if ($dataset instanceof RedirectResponse) {
 			return $dataset;
 		}
-
 		$headers = $dataset['headers'];
 		$filteredRows = $dataset['rows'];
 

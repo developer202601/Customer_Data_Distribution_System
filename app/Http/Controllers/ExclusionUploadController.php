@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Support\DatasetAssignmentManager;
+use App\Support\ProcessedDataset;
 use App\Support\ProcessesExcelRows;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Throwable;
 use ZipArchive;
 
 class ExclusionUploadController extends Controller
@@ -19,29 +21,25 @@ class ExclusionUploadController extends Controller
 
     public function create(): View|RedirectResponse
     {
-        $dataset = session('process.upload.data');
+        $dataset = $this->resolveDatasetOrRedirect('Please complete the main upload before managing exclusions.');
 
-        if (! $dataset) {
-            return redirect()->route('process.upload.create')->withErrors([
-                'upload' => 'Please complete the main upload before managing exclusions.',
-            ]);
+        if ($dataset instanceof RedirectResponse) {
+            return $dataset;
         }
 
         return view('process.exclusions', [
-            'filename' => $dataset['original_filename'] ?? null,
-            'totalRows' => count($dataset['rows'] ?? []),
+            'filename' => $dataset->originalFilename(),
+            'totalRows' => $dataset->filteredRowCount(),
             'maxFiles' => self::MAX_FILES,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $dataset = session('process.upload.data');
+        $dataset = $this->resolveDatasetOrRedirect('Please complete the main upload before managing exclusions.');
 
-        if (! $dataset) {
-            return redirect()->route('process.upload.create')->withErrors([
-                'upload' => 'Please complete the main upload before managing exclusions.',
-            ]);
+        if ($dataset instanceof RedirectResponse) {
+            return $dataset;
         }
 
         $request->validate([
@@ -82,46 +80,57 @@ class ExclusionUploadController extends Controller
                 ->withInput();
         }
 
-        $headers = $dataset['headers'] ?? [];
-        $rows = $dataset['rows'] ?? [];
-
-        if (empty($headers) || empty($rows)) {
-            return redirect()->route('process.upload.create')->withErrors([
-                'upload' => 'Processed data is no longer available. Please upload the master file again.',
-            ]);
-        }
-
-        [$filteredRows, $removedCount, $removedDetails] = $this->applyExclusions($rows, $headers, $exclusionKeys);
+        $result = $dataset->removeAccounts($exclusionKeys['account_num'], $exclusionKeys['details']);
+        $removedCount = (int) ($result['removed_count'] ?? 0);
+        $removedEntries = $result['removed'] ?? [];
 
         if ($removedCount === 0) {
             return back()->with('status', 'No matching records were removed by the exclusion files.');
         }
 
-        $dataset['rows'] = $filteredRows;
-        $dataset['total_rows'] = count($filteredRows);
+        $removedDetails = array_map(static function (array $entry) {
+            return [
+                'row_index' => $entry['row_index'] ?? null,
+                'account_num' => $entry['account_num'] ?? null,
+                'customer_ref' => $entry['customer_ref'] ?? null,
+                'reason' => $entry['reason'] ?? 'Excluded via exclusion file.',
+                'file' => $entry['file'] ?? null,
+            ];
+        }, $removedEntries);
 
-        $history = $dataset['exclusions_history'] ?? [];
+        $history = $dataset->exclusionHistory();
         $history[] = [
             'removed' => $removedCount,
             'files' => array_map(fn(UploadedFile $file) => $file->getClientOriginalName(), $files),
             'timestamp' => now()->toDateTimeString(),
             'records' => $removedDetails,
         ];
-        $dataset['exclusions_history'] = $history;
-        $dataset['exclusion_records'] = $removedDetails;
+        $dataset->setExclusionHistory($history);
+        $dataset->setExclusionRecords($removedDetails);
 
-        session()->put('process.upload.data', $dataset);
-
-        if (! empty($dataset['headers']) && ! empty($dataset['rows'])) {
-            $manager = app(DatasetAssignmentManager::class);
-            session()->put('process.assignments', $manager->buildAssignments($dataset['headers'], $dataset['rows']));
-        } else {
-            session()->forget('process.assignments');
-        }
+        $manager = app(DatasetAssignmentManager::class);
+        session()->put('process.assignments', $manager->buildAssignmentsFromDataset($dataset));
 
         return redirect()
             ->route('process.assignments.index')
             ->with('status', sprintf('%d records were excluded from the master list. Assignments have been prepared.', $removedCount));
+    }
+
+    private function resolveDatasetOrRedirect(string $message): ProcessedDataset|RedirectResponse
+    {
+        try {
+            $dataset = ProcessedDataset::fromSession();
+        } catch (Throwable $exception) {
+            $dataset = null;
+        }
+
+        if (! $dataset) {
+            return redirect()->route('process.upload.create')->withErrors([
+                'upload' => $message,
+            ]);
+        }
+
+        return $dataset;
     }
 
     /**
@@ -178,36 +187,6 @@ class ExclusionUploadController extends Controller
         }
 
         return $keys;
-    }
-
-    private function applyExclusions(array $rows, array $headers, array $keys): array
-    {
-        $headerMap = $this->buildHeaderMap($headers);
-        $filtered = [];
-        $removed = 0;
-        $details = [];
-
-        foreach ($rows as $rowIndex => $columns) {
-            $account = $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM');
-
-            if ($account !== '' && isset($keys['account_num'][$account])) {
-                $removed++;
-                $matchDetails = $keys['details'][$account][0] ?? [];
-                $customerRef = $this->getColumnValue($columns, $headerMap, 'CUSTOMER_REF');
-                $details[] = [
-                    'row_index' => $rowIndex,
-                    'account_num' => $account,
-                    'customer_ref' => $customerRef,
-                    'reason' => $matchDetails['reason'] ?? ('Excluded via ' . ($matchDetails['file'] ?? 'exclusion file')),
-                    'file' => $matchDetails['file'] ?? null,
-                ];
-                continue;
-            }
-
-            $filtered[$rowIndex] = $columns;
-        }
-
-        return [$filtered, $removed, $details];
     }
 
     private function extractExclusionReason(array $columns, array $headerMap): string

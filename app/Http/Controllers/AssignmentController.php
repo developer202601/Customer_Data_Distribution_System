@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\DatasetAssignmentManager;
+use App\Support\ProcessedDataset;
 use App\Support\ProcessesExcelRows;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Throwable;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AssignmentController extends Controller
@@ -26,6 +28,8 @@ class AssignmentController extends Controller
         }
 
         $assignments = $context['assignments'];
+        $dataset = $context['dataset'];
+        $datasetSummary = $this->datasetInfo($dataset);
 
         $groupTotals = [
             'group_a' => (int) ($assignments['group_a']['totals']['input'] ?? 0),
@@ -33,12 +37,12 @@ class AssignmentController extends Controller
         ];
 
         return view('process.assignments.overview', [
-            'dataset' => $context['dataset'],
+            'dataset' => $datasetSummary,
             'generatedAt' => $assignments['generated_at'] ?? null,
             'groupTotals' => $groupTotals,
-            'latestExclusion' => $this->latestExclusionSummary($context['dataset']),
-            'filteredOutSummary' => $this->filteredOutSummary($context['dataset']),
-            'vipSummary' => $this->vipSummary($context['dataset']),
+            'latestExclusion' => $this->latestExclusionSummary($dataset),
+            'filteredOutSummary' => $this->filteredOutSummary($dataset),
+            'vipSummary' => $this->vipSummary($dataset),
         ]);
     }
 
@@ -50,11 +54,12 @@ class AssignmentController extends Controller
             return $context;
         }
 
+        $dataset = $context['dataset'];
         return view('process.assignments.group-a', [
-            'dataset' => $context['dataset'],
+            'dataset' => $this->datasetInfo($dataset),
             'assignments' => $context['assignments']['group_a'] ?? [],
             'generatedAt' => $context['assignments']['generated_at'] ?? null,
-            'latestExclusion' => $this->latestExclusionSummary($context['dataset']),
+            'latestExclusion' => $this->latestExclusionSummary($dataset),
         ]);
     }
 
@@ -66,11 +71,12 @@ class AssignmentController extends Controller
             return $context;
         }
 
+        $dataset = $context['dataset'];
         return view('process.assignments.group-b', [
-            'dataset' => $context['dataset'],
+            'dataset' => $this->datasetInfo($dataset),
             'assignments' => $context['assignments']['group_b'] ?? [],
             'generatedAt' => $context['assignments']['generated_at'] ?? null,
-            'latestExclusion' => $this->latestExclusionSummary($context['dataset']),
+            'latestExclusion' => $this->latestExclusionSummary($dataset),
         ]);
     }
 
@@ -82,11 +88,12 @@ class AssignmentController extends Controller
             return $context;
         }
 
+        $dataset = $context['dataset'];
         return view('process.assignments.exclusions', [
-            'dataset' => $context['dataset'],
-            'latestExclusion' => $this->latestExclusionSummary($context['dataset']),
-            'filteredOutSummary' => $this->filteredOutSummary($context['dataset']),
-            'vipSummary' => $this->vipSummary($context['dataset']),
+            'dataset' => $this->datasetInfo($dataset),
+            'latestExclusion' => $this->latestExclusionSummary($dataset),
+            'filteredOutSummary' => $this->filteredOutSummary($dataset),
+            'vipSummary' => $this->vipSummary($dataset),
         ]);
     }
 
@@ -99,59 +106,25 @@ class AssignmentController extends Controller
         }
 
         $dataset = $context['dataset'];
-        $headers = $dataset['headers'] ?? [];
-        $filteredOut = $dataset['filtered_out'] ?? [];
+        $headers = $dataset->headers();
+        $overallCount = $dataset->filteredOutCount();
 
-        if (empty($filteredOut)) {
+        if (empty($headers) || $overallCount === 0) {
             return redirect()->route('process.assignments.exclusions')->withErrors([
                 'assignments' => 'No filtered-out records are available yet. Upload a dataset and rerun the filters.',
             ]);
         }
 
-        $headerMap = $this->buildHeaderMap($headers);
-        $overallCount = count($filteredOut);
-
         $searchTerm = trim((string) $request->query('search', ''));
         $searchApplied = $searchTerm !== '';
-        $filtered = $filteredOut;
-
-        if ($searchApplied) {
-            $term = $this->normaliseSearchTerm($searchTerm);
-            $targets = array_filter([
-                $headerMap['CUSTOMER_REF'] ?? null,
-                $headerMap['ACCOUNT_NUM'] ?? null,
-                $headerMap['PRODUCT_LABEL'] ?? null,
-            ]);
-
-            $filtered = array_filter($filteredOut, function ($entry) use ($term, $targets) {
-                $reason = trim((string) ($entry['reason'] ?? ''));
-                if ($reason !== '' && $this->valueContainsTerm($reason, $term)) {
-                    return true;
-                }
-
-                $columns = $entry['columns'] ?? [];
-
-                foreach ($targets as $letter) {
-                    $value = isset($columns[$letter]) ? trim((string) $columns[$letter]) : '';
-
-                    if ($value !== '' && $this->valueContainsTerm($value, $term)) {
-                        return true;
-                    }
-                }
-
-                return false;
-            });
-        }
-
-        ksort($filtered, SORT_NUMERIC);
-
-        $matchingCount = count($filtered);
-        $limit = 50;
-        $limited = $matchingCount > $limit;
-        $displayRows = $limited ? array_slice($filtered, 0, $limit, true) : $filtered;
+        $listing = $dataset->filteredOutListing(50, $searchTerm);
+        $displayRows = $listing['rows'] ?? [];
+        ksort($displayRows, SORT_NUMERIC);
+        $matchingCount = (int) ($listing['total'] ?? 0);
+        $limited = (bool) ($listing['limited'] ?? false);
 
         return view('process.assignments.filtered-out', [
-            'dataset' => $dataset,
+            'dataset' => $this->datasetInfo($dataset),
             'headers' => $headers,
             'rows' => $displayRows,
             'overallCount' => $overallCount,
@@ -165,16 +138,20 @@ class AssignmentController extends Controller
 
     public function regenerate(Request $request): RedirectResponse
     {
-        $dataset = session('process.upload.data');
+        try {
+            $dataset = ProcessedDataset::fromSession();
+        } catch (Throwable $exception) {
+            $dataset = null;
+        }
 
-        if (! $dataset || empty($dataset['headers']) || empty($dataset['rows'])) {
+        if (! $dataset) {
             return redirect()->route('process.upload.create')->withErrors([
                 'upload' => 'Processed data is unavailable. Upload the master file again.',
             ]);
         }
 
         $manager = app(DatasetAssignmentManager::class);
-        session()->put('process.assignments', $manager->buildAssignments($dataset['headers'], $dataset['rows']));
+        session()->put('process.assignments', $manager->buildAssignmentsFromDataset($dataset));
 
         $redirectRoute = $request->input('redirect_to');
         $message = 'Assignments regenerated successfully.';
@@ -196,8 +173,8 @@ class AssignmentController extends Controller
 
         $assignments = $context['assignments'];
         $dataset = $context['dataset'];
-        $headers = $assignments['headers'] ?? $dataset['headers'] ?? [];
-        $dataRows = $dataset['rows'] ?? [];
+        $headers = $assignments['headers'] ?? $dataset->headers();
+        $headers = is_array($headers) ? $headers : [];
 
         if (empty($headers)) {
             $fallbackRoute = $group === 'group-b'
@@ -214,22 +191,22 @@ class AssignmentController extends Controller
         }
 
         return match ($group) {
-            'group-a' => $this->downloadGroupA($headers, $dataRows, $assignments['group_a'] ?? [], $bucket),
-            'group-b' => $this->downloadGroupB($headers, $dataRows, $assignments['group_b'] ?? [], $bucket),
+            'group-a' => $this->downloadGroupA($dataset, $headers, $assignments['group_a'] ?? [], $bucket),
+            'group-b' => $this->downloadGroupB($dataset, $headers, $assignments['group_b'] ?? [], $bucket),
             default => redirect()->route('process.assignments.index')->withErrors([
                 'assignments' => 'Unknown assignment group requested.',
             ]),
         };
     }
 
-    private function downloadGroupA(array $headers, array $dataRows, array $group, string $bucket): RedirectResponse|StreamedResponse
+    private function downloadGroupA(ProcessedDataset $dataset, array $headers, array $group, string $bucket): RedirectResponse|StreamedResponse
     {
         if ($bucket === 'region-billing') {
             $rows = $group['region_billing']['rows'] ?? [];
             $label = $group['region_billing']['label'] ?? 'Region Billing Centre';
             $filename = Str::slug($label ?: 'region-billing-centre') . '.xlsx';
 
-            return $this->streamWorkbook($headers, $dataRows, $rows, $filename, $label);
+            return $this->streamWorkbook($dataset, $headers, $rows, $filename, $label);
         }
 
         $quota = $group['quotas'][$bucket] ?? null;
@@ -243,10 +220,10 @@ class AssignmentController extends Controller
         $label = $quota['label'] ?? Str::title(str_replace('-', ' ', $bucket));
         $filename = Str::slug($label ?: $bucket) . '.xlsx';
 
-        return $this->streamWorkbook($headers, $dataRows, $quota['rows'] ?? [], $filename, $label);
+        return $this->streamWorkbook($dataset, $headers, $quota['rows'] ?? [], $filename, $label);
     }
 
-    private function downloadGroupB(array $headers, array $dataRows, array $group, string $bucket): RedirectResponse|StreamedResponse
+    private function downloadGroupB(ProcessedDataset $dataset, array $headers, array $group, string $bucket): RedirectResponse|StreamedResponse
     {
         if ($bucket === 'enterprise-wholesale') {
             $bundle = $group['enterprise_wholesale'] ?? [];
@@ -279,7 +256,7 @@ class AssignmentController extends Controller
                 ]);
             }
 
-            return $this->streamMultiSheetWorkbook($headers, $dataRows, $sheets, 'enterprise_wholesale.xlsx');
+            return $this->streamMultiSheetWorkbook($dataset, $headers, $sheets, 'enterprise_wholesale.xlsx');
         }
 
         if ($bucket === 'ignored-latest-bill') {
@@ -294,7 +271,7 @@ class AssignmentController extends Controller
             $label = $ignored['label'] ?? 'Ignored - LATEST_BILL_MNY < 5000';
             $filename = Str::slug($label ?: 'ignored-latest-bill-mny') . '.xlsx';
 
-            return $this->streamWorkbook($headers, $dataRows, $ignored['rows'] ?? [], $filename, $label);
+            return $this->streamWorkbook($dataset, $headers, $ignored['rows'] ?? [], $filename, $label);
         }
 
         $segment = null;
@@ -314,10 +291,10 @@ class AssignmentController extends Controller
         $label = $segment['name'] ?? 'Segment';
         $filename = Str::slug($label ?: 'segment') . '.xlsx';
 
-        return $this->streamWorkbook($headers, $dataRows, $segment['rows'] ?? [], $filename, $label);
+        return $this->streamWorkbook($dataset, $headers, $segment['rows'] ?? [], $filename, $label);
     }
 
-    private function streamWorkbook(array $headers, array $dataRows, array $records, string $filename, string $sheetTitle): StreamedResponse
+    private function streamWorkbook(ProcessedDataset $dataset, array $headers, array $records, string $filename, string $sheetTitle): StreamedResponse
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -328,7 +305,7 @@ class AssignmentController extends Controller
 
         $rowPointer = 2;
         foreach ($records as $record) {
-            $rowValues = $this->buildRowValues($headers, $dataRows, $record);
+            $rowValues = $this->buildRowValues($dataset, $headers, $record);
             $sheet->fromArray($rowValues, null, 'A' . $rowPointer);
             $rowPointer++;
         }
@@ -345,7 +322,7 @@ class AssignmentController extends Controller
         ]);
     }
 
-    private function streamMultiSheetWorkbook(array $headers, array $dataRows, array $segments, string $filename): StreamedResponse
+    private function streamMultiSheetWorkbook(ProcessedDataset $dataset, array $headers, array $segments, string $filename): StreamedResponse
     {
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
@@ -360,7 +337,7 @@ class AssignmentController extends Controller
 
             $rowPointer = 2;
             foreach ($segment['rows'] ?? [] as $record) {
-                $rowValues = $this->buildRowValues($headers, $dataRows, $record);
+                $rowValues = $this->buildRowValues($dataset, $headers, $record);
                 $sheet->fromArray($rowValues, null, 'A' . $rowPointer);
                 $rowPointer++;
             }
@@ -391,16 +368,13 @@ class AssignmentController extends Controller
         return $labels;
     }
 
-    private function buildRowValues(array $headers, array $dataRows, int|array $record): array
+    private function buildRowValues(ProcessedDataset $dataset, array $headers, int|array $record): array
     {
-        if (is_array($record)) {
-            $rowIndex = $record['row_index'] ?? null;
-        } else {
-            $rowIndex = $record;
-        }
+        $rowIndex = is_array($record) ? ($record['row_index'] ?? null) : $record;
+        $rowIndex = is_numeric($rowIndex) ? (int) $rowIndex : null;
 
         $values = [$rowIndex];
-        $columns = ($rowIndex !== null && isset($dataRows[$rowIndex])) ? $dataRows[$rowIndex] : [];
+        $columns = $rowIndex !== null ? ($dataset->getFilteredRow($rowIndex) ?? []) : [];
 
         foreach ($headers as $letter => $meta) {
             $values[] = $columns[$letter] ?? '';
@@ -424,7 +398,12 @@ class AssignmentController extends Controller
     private function resolveContext(string $missingMessage): array|RedirectResponse
     {
         $assignments = session('process.assignments');
-        $dataset = session('process.upload.data');
+
+        try {
+            $dataset = ProcessedDataset::fromSession();
+        } catch (Throwable $exception) {
+            $dataset = null;
+        }
 
         if (! $assignments || ! $dataset) {
             return redirect()->route('process.upload.create')->withErrors([
@@ -438,21 +417,32 @@ class AssignmentController extends Controller
         ];
     }
 
-    private function latestExclusionSummary(array $dataset): ?array
+    private function datasetInfo(ProcessedDataset $dataset): array
     {
-        $history = $dataset['exclusions_history'] ?? [];
+        return [
+            'original_filename' => $dataset->originalFilename(),
+            'row_count' => $dataset->filteredRowCount(),
+            'source_row_count' => $dataset->sourceRowCount(),
+        ];
+    }
+
+    private function latestExclusionSummary(ProcessedDataset $dataset): ?array
+    {
+        $history = $dataset->exclusionHistory();
 
         if (empty($history)) {
             return null;
         }
 
         $latest = $history[count($history) - 1];
-
         $files = array_values($latest['files'] ?? []);
         $records = array_values($latest['records'] ?? []);
-        if (empty($records) && ! empty($dataset['exclusion_records'])) {
-            $records = array_values($dataset['exclusion_records']);
+
+        if (empty($records)) {
+            $manifest = $dataset->manifest();
+            $records = array_values($manifest['exclusion_records'] ?? []);
         }
+
         $previewLimit = 5;
 
         return [
@@ -467,30 +457,22 @@ class AssignmentController extends Controller
         ];
     }
 
-    private function filteredOutSummary(array $dataset): ?array
+    private function filteredOutSummary(ProcessedDataset $dataset): ?array
     {
-        $headers = $dataset['headers'] ?? [];
-        $filteredOut = $dataset['filtered_out'] ?? [];
+        $headers = $dataset->headers();
 
-        if (empty($headers) || empty($filteredOut)) {
+        if (empty($headers)) {
             return null;
         }
 
         $headerMap = $this->buildHeaderMap($headers);
         $previewLimit = 5;
-        $reasonCounts = [];
-
-        foreach ($filteredOut as $entry) {
-            $reason = $entry['reason'] ?? 'Filtered out by eligibility rules.';
-            $reasonCounts[$reason] = ($reasonCounts[$reason] ?? 0) + 1;
-        }
-
-        arsort($reasonCounts);
+        $reasonCounts = $dataset->filteredOutReasonCounts();
         $topReasons = array_slice($reasonCounts, 0, 3, true);
+        $previewEntries = $dataset->filteredOutPreview();
 
         $preview = [];
-
-        foreach (array_slice($filteredOut, 0, $previewLimit, true) as $rowIndex => $entry) {
+        foreach (array_slice($previewEntries, 0, $previewLimit, true) as $rowIndex => $entry) {
             $columns = $entry['columns'] ?? [];
             $preview[] = [
                 'row_index' => $rowIndex,
@@ -503,31 +485,28 @@ class AssignmentController extends Controller
         }
 
         return [
-            'count' => count($filteredOut),
+            'count' => $dataset->filteredOutCount(),
             'preview' => $preview,
             'preview_limit' => $previewLimit,
             'top_reasons' => $topReasons,
         ];
     }
 
-    private function vipSummary(array $dataset): ?array
+    private function vipSummary(ProcessedDataset $dataset): ?array
     {
-        $headers = $dataset['headers'] ?? [];
-        $rows = $dataset['rows'] ?? [];
+        $headers = $dataset->headers();
 
-        if (empty($headers) || empty($rows)) {
+        if (empty($headers)) {
             return null;
         }
 
         $headerMap = $this->buildHeaderMap($headers);
-        $vipRows = $this->filterVipRows($rows, $headerMap);
-        $total = count($vipRows);
-
+        $total = $dataset->vipRowCount();
         $previewLimit = 5;
         $preview = [];
 
         if ($total > 0) {
-            foreach (array_slice($vipRows, 0, $previewLimit, true) as $rowIndex => $columns) {
+            foreach ($dataset->filteredRowsMatching(true) as $rowIndex => $columns) {
                 $preview[] = [
                     'row_index' => $rowIndex,
                     'account_num' => $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM'),
@@ -535,6 +514,10 @@ class AssignmentController extends Controller
                     'credit_class' => $this->getColumnValue($columns, $headerMap, 'CREDIT_CLASS_NAME')
                         ?: $this->getColumnValue($columns, $headerMap, 'CUSTOMER_SEGMENT'),
                 ];
+
+                if (count($preview) >= $previewLimit) {
+                    break;
+                }
             }
         }
 
@@ -545,17 +528,18 @@ class AssignmentController extends Controller
         ];
     }
 
-    private function downloadLatestExclusions(array $dataset, string $group, string $bucket): RedirectResponse|StreamedResponse
+    private function downloadLatestExclusions(ProcessedDataset $dataset, string $group, string $bucket): RedirectResponse|StreamedResponse
     {
-        $records = $dataset['exclusion_records'] ?? [];
-        $filteredOut = $dataset['filtered_out'] ?? [];
+        $manifest = $dataset->manifest();
+        $records = $manifest['exclusion_records'] ?? [];
+        $filteredOut = $dataset->filteredOutPreview();
 
         $fallbackRoute = $group === 'group-b'
             ? 'process.assignments.group-b'
             : 'process.assignments.group-a';
 
         if (empty($records) && empty($filteredOut)) {
-            $history = $dataset['exclusions_history'] ?? [];
+            $history = $dataset->exclusionHistory();
             if (! empty($history)) {
                 $latest = $history[count($history) - 1];
                 $records = $latest['records'] ?? [];
@@ -596,19 +580,17 @@ class AssignmentController extends Controller
             }
         }
 
-        if (! empty($filteredOut)) {
+        if (! empty($filteredOut) || $dataset->filteredOutCount() > 0) {
+            $headers = $dataset->headers() ?? [];
+            $headerLabels = array_merge(['Reason', 'Reason Code'], $this->buildHeaderLabels($headers));
             $sheet = $spreadsheet->createSheet($sheetIndex++);
             $sheet->setTitle($this->truncateSheetTitle('Filtered Out'));
-
-            $headers = $dataset['headers'] ?? [];
-            $headerLabels = array_merge(['Reason', 'Reason Code'], $this->buildHeaderLabels($headers));
             $sheet->fromArray($headerLabels, null, 'A1');
 
             $rowPointer = 2;
-            foreach ($filteredOut as $entry) {
+            foreach ($dataset->filteredOutGenerator() as $entry) {
                 $columns = $entry['columns'] ?? [];
                 $rowIndex = $entry['row_index'] ?? null;
-
                 $rowValues = [
                     $entry['reason'] ?? 'Filtered out by eligibility rules.',
                     $entry['reason_code'] ?? '',

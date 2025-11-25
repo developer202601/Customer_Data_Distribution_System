@@ -25,7 +25,7 @@
                 <h1 class="process-preview-title mb-2">Assignment Results</h1>
                 <p class="text-muted mb-1">The remaining records have been divided into Group&nbsp;A and Group&nbsp;B using the configured business rules. Use the downloads below to retrieve each allocation sheet.</p>
                 @if(($dataset['original_filename'] ?? null))
-                <p class="text-muted mb-0">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format(count($dataset['rows'] ?? [])) }} rows)</p>
+                <p class="text-muted mb-0">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format($dataset['row_count'] ?? 0) }} rows)</p>
                 @endif
                 <p class="text-muted mb-0">Assignments generated on {{ $assignments['generated_at'] ?? now()->toDateTimeString() }}.</p>
             </div>

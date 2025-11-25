@@ -187,6 +187,14 @@ class ProcessExcelChunk implements ShouldQueue
         $chunkPath = $this->chunkPath();
         Storage::makeDirectory(dirname($chunkPath));
         $payload = [
+            'meta' => [
+                'token' => $this->token,
+                'chunk_index' => $this->chunkIndex,
+                'start_row' => $this->startRow,
+                'end_row' => $this->endRow,
+                'filtered_count' => count($filteredRows),
+                'skipped_count' => count($skippedRows),
+            ],
             'rows' => $filteredRows,
             'skipped' => $skippedRows,
         ];

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Support\ProcessesExcelRows;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -13,7 +14,7 @@ use RuntimeException;
 
 class ProcessExcelFinalize implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, ProcessesExcelRows;
 
     public function __construct(
         private readonly string $token,
@@ -25,85 +26,165 @@ class ProcessExcelFinalize implements ShouldQueue
 
     public function handle(): void
     {
-        [$rows, $filteredOut] = $this->mergeChunkRows();
-
-        $processedData = [
-            'headers' => $this->headers,
-            'rows' => $rows,
-            'total_rows' => (int) (Cache::get($this->cacheKey())['total_rows'] ?? count($rows)),
-            'original_filename' => $this->originalName,
-            'filtered_out' => $filteredOut,
-            'filtered_out_total' => count($filteredOut),
-        ];
+        $manifest = $this->buildManifest();
 
         $datasetPath = $this->datasetPath();
-        Storage::put($datasetPath, json_encode(['data' => $processedData], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        Storage::put($datasetPath, json_encode(['manifest' => $manifest], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         $this->updateProgressState([
             'status' => 'complete',
             'message' => 'Processing complete.',
             'progress' => 100,
             'dataset_path' => $datasetPath,
-            'processed_rows' => $processedData['total_rows'],
+            'processed_rows' => $manifest['filtered_rows_total'],
         ]);
-
-        $this->cleanupChunks();
     }
 
-    private function mergeChunkRows(): array
+    private function buildManifest(): array
     {
         $directory = sprintf('processed/%s/chunks', $this->token);
 
+        $state = Cache::get($this->cacheKey(), []);
+
         if (! Storage::exists($directory)) {
-            return [[], []];
+            $sourceTotal = (int) ($state['total_rows'] ?? 0);
+
+            return [
+                'token' => $this->token,
+                'stored_path' => $this->storedPath,
+                'original_filename' => $this->originalName,
+                'headers' => $this->headers,
+                'source_total_rows' => $sourceTotal,
+                'filtered_rows_total' => 0,
+                'filtered_out_total' => 0,
+                'vip_rows_total' => 0,
+                'chunks' => [],
+                'filtered_out_reason_counts' => [],
+                'filtered_out_preview' => [],
+                'created_at' => now()->toIso8601String(),
+                'updated_at' => now()->toIso8601String(),
+            ];
         }
 
-        $files = collect(Storage::files($directory))
+        $chunks = collect(Storage::files($directory))
             ->filter(fn($path) => str_contains($path, 'chunk_'))
             ->sort()
             ->values();
 
-        $rows = [];
-        $filteredOut = [];
+        $headerMap = $this->buildHeaderMap($this->headers);
+        $totalFiltered = 0;
+        $totalSkipped = 0;
+        $vipTotal = 0;
 
-        foreach ($files as $path) {
+        $reasonCounts = [];
+        $filteredOutPreview = [];
+        $previewLimit = 10;
+
+        $chunkMeta = [];
+
+        foreach ($chunks as $path) {
             $payload = json_decode(Storage::get($path), true);
 
             if (! is_array($payload)) {
                 throw new RuntimeException('Unable to read chunk payload: ' . $path);
             }
 
-            $chunkRows = $payload['rows'] ?? [];
+            $rows = $payload['rows'] ?? [];
+            $skipped = $payload['skipped'] ?? [];
+            $meta = $payload['meta'] ?? [];
 
-            foreach ($chunkRows as $rowIndex => $columns) {
-                $rows[$rowIndex] = $columns;
-            }
+            $filteredCount = is_array($rows) ? count($rows) : 0;
+            $skippedCount = is_array($skipped) ? count($skipped) : 0;
 
-            foreach (($payload['skipped'] ?? []) as $rowIndex => $entry) {
-                if (! is_array($entry)) {
-                    continue;
+            $chunkVip = 0;
+
+            if (! empty($rows)) {
+                foreach ($rows as $columns) {
+                    if (! is_array($columns)) {
+                        continue;
+                    }
+
+                    if ($this->rowIsVip($columns, $headerMap)) {
+                        $chunkVip++;
+                    }
                 }
-
-                $filteredOut[$rowIndex] = [
-                    'row_index' => $entry['row_index'] ?? $rowIndex,
-                    'reason' => $entry['reason'] ?? 'Filtered out by eligibility rules.',
-                    'reason_code' => $entry['reason_code'] ?? '',
-                    'columns' => $entry['columns'] ?? [],
-                ];
             }
+
+            if (! empty($skipped)) {
+                foreach ($skipped as $rowIndex => $entry) {
+                    if (! is_array($entry)) {
+                        continue;
+                    }
+
+                    $reason = $entry['reason'] ?? 'Filtered out by eligibility rules.';
+                    $reasonCounts[$reason] = ($reasonCounts[$reason] ?? 0) + 1;
+
+                    if (count($filteredOutPreview) < $previewLimit) {
+                        $filteredOutPreview[$rowIndex] = $entry;
+                    }
+                }
+            }
+
+            $totalFiltered += $filteredCount;
+            $totalSkipped += $skippedCount;
+            $vipTotal += $chunkVip;
+
+            $chunkMeta[] = [
+                'index' => $meta['chunk_index'] ?? $this->extractChunkIndex($path),
+                'path' => $path,
+                'start_row' => $meta['start_row'] ?? null,
+                'end_row' => $meta['end_row'] ?? null,
+                'filtered_count' => $filteredCount,
+                'skipped_count' => $skippedCount,
+                'vip_count' => $chunkVip,
+            ];
         }
 
-        ksort($rows, SORT_NUMERIC);
+        $sourceTotal = (int) ($state['total_rows'] ?? ($totalFiltered + $totalSkipped));
 
-        ksort($filteredOut, SORT_NUMERIC);
+        arsort($reasonCounts);
 
-        return [$rows, $filteredOut];
+        return [
+            'token' => $this->token,
+            'stored_path' => $this->storedPath,
+            'original_filename' => $this->originalName,
+            'headers' => $this->headers,
+            'source_total_rows' => $sourceTotal,
+            'filtered_rows_total' => $totalFiltered,
+            'filtered_out_total' => $totalSkipped,
+            'vip_rows_total' => $vipTotal,
+            'chunks' => $chunkMeta,
+            'filtered_out_reason_counts' => $reasonCounts,
+            'filtered_out_preview' => $filteredOutPreview,
+            'created_at' => now()->toIso8601String(),
+            'updated_at' => now()->toIso8601String(),
+        ];
     }
 
-    private function cleanupChunks(): void
+    private function extractChunkIndex(string $path): int
     {
-        $directory = sprintf('processed/%s/chunks', $this->token);
-        Storage::deleteDirectory($directory);
+        $filename = basename($path);
+
+        if (preg_match('/chunk_(\d+)/', $filename, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return 0;
+    }
+
+    private function rowIsVip(array $columns, array $headerMap): bool
+    {
+        $creditClass = $this->getColumnValue($columns, $headerMap, 'CREDIT_CLASS_NAME');
+
+        if ($creditClass === '') {
+            $creditClass = $this->getColumnValue($columns, $headerMap, 'CUSTOMER_SEGMENT');
+        }
+
+        if ($creditClass === '') {
+            return false;
+        }
+
+        return $this->isVipCreditClass($creditClass);
     }
 
     private function updateProgressState(array $overrides): void

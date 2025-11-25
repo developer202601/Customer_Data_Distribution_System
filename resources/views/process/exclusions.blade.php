@@ -54,6 +54,11 @@
                     </div>
 
                     <div id="exclusion-errors" class="mt-4">
+                        @if(session('status'))
+                        <div class="alert alert-info" role="alert">
+                            {{ session('status') }}
+                        </div>
+                        @endif
                         @if($errors->any())
                         <div class="alert alert-danger" role="alert">
                             <p class="mb-2 fw-semibold">Please resolve the following issues before continuing:</p>

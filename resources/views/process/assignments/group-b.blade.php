@@ -23,7 +23,7 @@
                 <h1 class="process-preview-title mb-2">Group B Allocation</h1>
                 <p class="text-muted mb-1">Segments outside Retail and Micro Business with latest bill amounts &ge; 5,000 are grouped for enterprise, wholesale, and other segment exports.</p>
                 @if(($dataset['original_filename'] ?? null))
-                <p class="text-muted mb-0">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format(count($dataset['rows'] ?? [])) }} rows)</p>
+                <p class="text-muted mb-0">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format($dataset['row_count'] ?? 0) }} rows)</p>
                 @endif
                 @if($generatedAt)
                 <p class="text-muted mb-0">Assignments generated on {{ $generatedAt }}.</p>

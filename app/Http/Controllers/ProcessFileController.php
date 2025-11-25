@@ -483,4 +483,3 @@ class ProcessFileController extends Controller
 		return $entries[0];
 	}
 }
-

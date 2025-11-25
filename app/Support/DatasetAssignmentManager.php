@@ -74,7 +74,7 @@ class DatasetAssignmentManager
                 && $record['total_outstanding'] > self::GROUP_A_ARREARS_MIN
                 && $record['total_outstanding'] < self::GROUP_A_ARREARS_MAX;
         }));
-        usort($midRangePool, static fn ($a, $b) => $a['total_outstanding'] <=> $b['total_outstanding']);
+        usort($midRangePool, static fn($a, $b) => $a['total_outstanding'] <=> $b['total_outstanding']);
 
         $assignments = [];
         $used = [];
@@ -106,7 +106,7 @@ class DatasetAssignmentManager
                 && $record['latest_bill'] < self::GROUP_A_LATEST_BILL_MAX
                 && $record['total_outstanding'] >= self::GROUP_A_ARREARS_MAX;
         }));
-        usort($fallbackCandidates, static fn ($a, $b) => $b['total_outstanding'] <=> $a['total_outstanding']);
+        usort($fallbackCandidates, static fn($a, $b) => $b['total_outstanding'] <=> $a['total_outstanding']);
 
         $fallbackIndex = 0;
         $fallbackCount = count($fallbackCandidates);
@@ -145,7 +145,7 @@ class DatasetAssignmentManager
             $quotaSummaries[$key] = [
                 'label' => $meta['label'],
                 'target' => $meta['target'],
-                'rows' => array_map(static fn ($entry) => $entry['row_index'], $assignments[$key]),
+                'rows' => array_map(static fn($entry) => $entry['row_index'], $assignments[$key]),
                 'actual' => count($assignments[$key]),
             ];
         }
@@ -166,7 +166,7 @@ class DatasetAssignmentManager
             ],
             'totals' => [
                 'input' => count($records),
-                'assigned' => array_sum(array_map(static fn ($entry) => $entry['actual'], $quotaSummaries)),
+                'assigned' => array_sum(array_map(static fn($entry) => $entry['actual'], $quotaSummaries)),
             ],
         ];
     }
@@ -206,7 +206,7 @@ class DatasetAssignmentManager
 
         $enterpriseCount = count($enterpriseRows);
         $wholesaleCount = count($wholesaleRows);
-        $otherCount = array_sum(array_map(static fn ($rows) => count($rows), $otherSegments));
+        $otherCount = array_sum(array_map(static fn($rows) => count($rows), $otherSegments));
         $ignoredCount = count($ignoredRows);
 
         $enterpriseCategory = $this->buildEnterpriseCategory('enterprise', 'Enterprise', $enterpriseSegments, $enterpriseRows);

@@ -158,7 +158,10 @@
 
             errorsContainer.innerHTML = '';
             errorsContainer.appendChild(alert);
-            errorsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            errorsContainer.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
         };
 
         const setLoaderVisibility = (visible) => {
@@ -192,9 +195,9 @@
             setLoaderVisibility(true);
 
             const numericValue = Number(value);
-            const safeValue = Number.isFinite(numericValue)
-                ? Math.max(0, Math.min(100, numericValue))
-                : 0;
+            const safeValue = Number.isFinite(numericValue) ?
+                Math.max(0, Math.min(100, numericValue)) :
+                0;
 
             if (progressBar) {
                 progressBar.style.width = safeValue + '%';
@@ -289,7 +292,9 @@
             const payload = body.toString();
 
             if (navigator.sendBeacon) {
-                const blob = new Blob([payload], { type: 'application/x-www-form-urlencoded' });
+                const blob = new Blob([payload], {
+                    type: 'application/x-www-form-urlencoded'
+                });
                 navigator.sendBeacon(cancelUrl, blob);
                 return;
             }
@@ -412,19 +417,23 @@
                     const payload = await response.json().catch(() => null);
 
                     if (!response.ok || !payload) {
-                        throw payload ?? { message: 'Unable to read progress updates.' };
+                        throw payload ?? {
+                            message: 'Unable to read progress updates.'
+                        };
                     }
 
                     const derivedProgress = deriveProgressValue(payload);
-                    const progressValue = Number.isFinite(derivedProgress)
-                        ? derivedProgress
-                        : Number(payload.progress ?? 0);
+                    const progressValue = Number.isFinite(derivedProgress) ?
+                        derivedProgress :
+                        Number(payload.progress ?? 0);
 
                     updateLoader(progressValue, buildProgressMessage(payload), payload);
 
                     if (payload.status === 'failed') {
                         requestCancel(payload.error || payload.message || 'Processing failed.');
-                        throw { message: payload.error || payload.message || 'Processing failed.' };
+                        throw {
+                            message: payload.error || payload.message || 'Processing failed.'
+                        };
                     }
 
                     if (payload.status === 'complete') {
@@ -476,7 +485,9 @@
                 const payload = await response.json().catch(() => null);
 
                 if (!response.ok || !payload?.token) {
-                    throw payload ?? { message: 'Unable to start processing. Please try again.' };
+                    throw payload ?? {
+                        message: 'Unable to start processing. Please try again.'
+                    };
                 }
 
                 currentToken = payload.token;

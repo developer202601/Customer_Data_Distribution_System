@@ -21,16 +21,15 @@ class ProcessExcelFinalize implements ShouldQueue
         private readonly string $originalName,
         private readonly array $headers,
         private readonly int $chunkCount
-    ) {
-    }
+    ) {}
 
     public function handle(): void
     {
         [$rows, $filteredOut] = $this->mergeChunkRows();
 
-            $processedData = [
-                'headers' => $this->headers,
-                'rows' => $rows,
+        $processedData = [
+            'headers' => $this->headers,
+            'rows' => $rows,
             'total_rows' => (int) (Cache::get($this->cacheKey())['total_rows'] ?? count($rows)),
             'original_filename' => $this->originalName,
             'filtered_out' => $filteredOut,
@@ -60,7 +59,7 @@ class ProcessExcelFinalize implements ShouldQueue
         }
 
         $files = collect(Storage::files($directory))
-            ->filter(fn ($path) => str_contains($path, 'chunk_'))
+            ->filter(fn($path) => str_contains($path, 'chunk_'))
             ->sort()
             ->values();
 
@@ -85,11 +84,11 @@ class ProcessExcelFinalize implements ShouldQueue
                     continue;
                 }
 
-                        $filteredOut[$rowIndex] = [
-                            'row_index' => $entry['row_index'] ?? $rowIndex,
-                            'reason' => $entry['reason'] ?? 'Filtered out by eligibility rules.',
-                        'reason_code' => $entry['reason_code'] ?? '',
-                            'columns' => $entry['columns'] ?? [],
+                $filteredOut[$rowIndex] = [
+                    'row_index' => $entry['row_index'] ?? $rowIndex,
+                    'reason' => $entry['reason'] ?? 'Filtered out by eligibility rules.',
+                    'reason_code' => $entry['reason_code'] ?? '',
+                    'columns' => $entry['columns'] ?? [],
                 ];
             }
         }

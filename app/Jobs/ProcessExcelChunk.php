@@ -77,8 +77,7 @@ class ProcessExcelChunk implements ShouldQueue
         private readonly int $chunkIndex,
         private readonly int $startRow,
         private readonly int $endRow
-    ) {
-    }
+    ) {}
 
     public function handle(): void
     {

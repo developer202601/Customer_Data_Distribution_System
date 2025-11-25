@@ -85,8 +85,8 @@ class AssignmentController extends Controller
         return view('process.assignments.exclusions', [
             'dataset' => $context['dataset'],
             'latestExclusion' => $this->latestExclusionSummary($context['dataset']),
-                'filteredOutSummary' => $this->filteredOutSummary($context['dataset']),
-                'vipSummary' => $this->vipSummary($context['dataset']),
+            'filteredOutSummary' => $this->filteredOutSummary($context['dataset']),
+            'vipSummary' => $this->vipSummary($context['dataset']),
         ]);
     }
 

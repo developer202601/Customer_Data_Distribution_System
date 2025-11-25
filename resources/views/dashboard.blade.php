@@ -2,7 +2,7 @@
 
 @section('navbar-right')
 @if(session('user.is_admin'))
-<a href="#" class="btn btn-outline-secondary mr-2">Configurations</a>
+<a href="{{ route('admin.config') }}" class="btn btn-outline-secondary mr-2">Configurations</a>
 @endif
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf

@@ -4,6 +4,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProcessFileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\BillRangeController;
 
 Route::middleware('session.auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -16,7 +18,10 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/upload/vip', [ProcessFileController::class, 'vip'])->name('process.upload.vip');
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
 });
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.perform');
+
+Route::post('/create/range', [BillRangeController::class, 'createRange'])->name('create.range');

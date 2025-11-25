@@ -23,7 +23,7 @@
                 <h1 class="process-preview-title mb-2">Assignments overview</h1>
                 <p class="text-muted mb-0">Choose which allocation set you want to review and download. Group A covers Retail &amp; Micro Business quotas; Group B covers all other segments.</p>
                 @if(($dataset['original_filename'] ?? null))
-                <p class="text-muted mb-0 mt-2">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format(count($dataset['rows'] ?? [])) }} rows)</p>
+                <p class="text-muted mb-0 mt-2">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format($dataset['row_count'] ?? 0) }} rows)</p>
                 @endif
                 @if($generatedAt)
                 <p class="text-muted mb-0">Assignments generated on {{ $generatedAt }}.</p>

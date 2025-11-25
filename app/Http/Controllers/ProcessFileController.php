@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessExcelCoordinator;
+use App\Support\ProcessedDataset;
 use App\Support\ProcessesExcelRows;
 use App\Support\UploadProcessManager;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +16,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Throwable;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use ZipArchive;
 
@@ -33,7 +35,7 @@ class ProcessFileController extends Controller
 	 */
 	public function rows(Request $request): JsonResponse
 	{
-		$dataset = $this->loadProcessedDataOrRedirect(
+		$dataset = $this->resolveDatasetOrRedirect(
 			'Upload a file to review filtered rows.'
 		);
 
@@ -44,29 +46,18 @@ class ProcessFileController extends Controller
 			], 404);
 		}
 
-		$headers = $dataset['headers'];
-		$filteredRows = $dataset['rows'];
-		$headerMap = $this->buildHeaderMap($headers);
-
-		$vipApplied = $request->boolean('vip');
-		if ($vipApplied) {
-			$filteredRows = $this->filterVipRows($filteredRows, $headerMap);
-		}
-
-		$searchTerm = trim((string) $request->query('search', ''));
-		if ($searchTerm !== '') {
-			$filteredRows = $this->searchRows($filteredRows, $headerMap, $searchTerm);
-		}
-
-		$total = count($filteredRows);
+		$headers = $dataset->headers();
 		$page = max(1, (int) $request->query('page', 1));
-		$perPage = max(1000, min(1, (int) $request->query('per_page', 100)));
+		$perPage = (int) $request->query('per_page', 100);
+		$perPage = max(1, min(1000, $perPage));
+		$vipApplied = $request->boolean('vip');
+		$searchTerm = trim((string) $request->query('search', ''));
 
-		$offset = ($page - 1) * $perPage;
-		$pageRows = array_slice($filteredRows, $offset, $perPage, true);
+		$result = $dataset->paginateFilteredRows($page, $perPage, $vipApplied, $searchTerm);
+		$total = (int) ($result['total'] ?? 0);
 
 		$rowsOut = [];
-		foreach ($pageRows as $rowIndex => $row) {
+		foreach ($result['rows'] ?? [] as $rowIndex => $row) {
 			$entry = ['excel_row' => $rowIndex];
 			foreach ($headers as $letter => $meta) {
 				$entry[$letter] = $row[$letter] ?? '';
@@ -79,6 +70,8 @@ class ProcessFileController extends Controller
 			$headerList[] = ['key' => $letter, 'label' => $meta['label']];
 		}
 
+		$lastPage = $perPage > 0 ? (int) max(1, ceil($total / $perPage)) : 1;
+
 		return response()->json([
 			'status' => 'ok',
 			'headers' => $headerList,
@@ -87,7 +80,7 @@ class ProcessFileController extends Controller
 				'total' => $total,
 				'per_page' => $perPage,
 				'page' => $page,
-				'last_page' => (int) ceil($total / max(1, $perPage)),
+				'last_page' => $lastPage,
 			],
 		]);
 	}
@@ -254,8 +247,9 @@ class ProcessFileController extends Controller
 		if ($dataset instanceof RedirectResponse) {
 			return $dataset;
 		}
-		$headers = $dataset['headers'];
-		$filteredRows = $dataset['rows'];
+
+		$headers = $dataset->headers();
+		$searchTerm = trim((string) $request->query('search', ''));
 
 		$exportSpreadsheet = new Spreadsheet();
 		$sheet = $exportSpreadsheet->getActiveSheet();
@@ -268,10 +262,10 @@ class ProcessFileController extends Controller
 		$sheet->fromArray($headerLabels, null, 'A1');
 
 		$rowPointer = 2;
-		foreach ($filteredRows as $rowIndex => $row) {
+		foreach ($dataset->filteredRowsMatching(true, $searchTerm) as $rowIndex => $columns) {
 			$rowValues = [$rowIndex];
 			foreach ($headers as $letter => $meta) {
-				$rowValues[] = $row[$letter] ?? '';
+				$rowValues[] = $columns[$letter] ?? '';
 			}
 
 			$sheet->fromArray($rowValues, null, 'A' . $rowPointer);
@@ -294,7 +288,7 @@ class ProcessFileController extends Controller
 
 	private function renderFilteredView(Request $request, bool $forceVip): View|RedirectResponse
 	{
-		$dataset = $this->loadProcessedDataOrRedirect(
+		$dataset = $this->resolveDatasetOrRedirect(
 			$forceVip ? 'Upload a file to review VIP records.' : 'Upload a file to see the filtered results.'
 		);
 
@@ -302,105 +296,94 @@ class ProcessFileController extends Controller
 			return $dataset;
 		}
 
-		$headers = $dataset['headers'];
-		$filteredRows = $dataset['rows'];
-		$dataRowCount = $dataset['total_rows'];
-		$filename = $dataset['original_filename'];
-
-		$headerMap = $this->buildHeaderMap($headers);
+		$headers = $dataset->headers();
 		$vipApplied = $forceVip || $request->boolean('vip');
-
-		if ($vipApplied) {
-			$filteredRows = $this->filterVipRows($filteredRows, $headerMap);
-		}
-
-		$filteredCount = count($filteredRows);
-
 		$searchTerm = trim((string) $request->query('search', ''));
 		$searchApplied = $searchTerm !== '';
 
+		$perPage = $vipApplied ? 100 : self::PREVIEW_ROW_LIMIT;
 		if ($searchApplied) {
-			$displayRows = $this->searchRows($filteredRows, $headerMap, $searchTerm);
-			$limited = false;
-		} else {
-			$limit = $vipApplied ? null : self::PREVIEW_ROW_LIMIT;
-			if ($limit !== null && count($filteredRows) > $limit) {
-				$displayRows = array_slice($filteredRows, 0, $limit, true);
-				$limited = true;
-			} else {
-				$displayRows = $filteredRows;
-				$limited = false;
-			}
+			$perPage = max($perPage, 100);
+		}
+
+		$result = $dataset->paginateFilteredRows(1, $perPage, $vipApplied, $searchTerm);
+		$displayRows = $result['rows'] ?? [];
+		$matchingCount = (int) ($result['total'] ?? 0);
+		$limited = $matchingCount > count($displayRows);
+
+		if (! $searchApplied && ! $vipApplied) {
+			$matchingCount = $dataset->filteredRowCount();
+			$limited = $matchingCount > self::PREVIEW_ROW_LIMIT;
+		}
+
+		if (! $searchApplied && $vipApplied) {
+			$matchingCount = $dataset->vipRowCount();
+			$limited = $matchingCount > count($displayRows);
 		}
 
 		$summary = [
-			'total_rows' => $dataRowCount,
-			'filtered_rows' => $filteredCount,
-			'skipped_rows' => max($dataRowCount - $filteredCount, 0),
+			'total_rows' => $dataset->sourceRowCount(),
+			'filtered_rows' => $dataset->filteredRowCount(),
+			'skipped_rows' => max($dataset->sourceRowCount() - $dataset->filteredRowCount(), 0),
 		];
 
 		return view('process.filtered', [
 			'headers' => $headers,
 			'filteredRows' => $displayRows,
 			'summary' => $summary,
-			'filename' => $filename,
+			'filename' => $dataset->originalFilename(),
 			'searchTerm' => $searchTerm,
 			'searchApplied' => $searchApplied,
-			'filteredCount' => $filteredCount,
+			'filteredCount' => $matchingCount,
 			'limited' => $limited,
 			'vipApplied' => $vipApplied,
 			'displayCount' => count($displayRows),
 		]);
 	}
 
-	private function loadProcessedDataOrRedirect(string $missingUploadStatus): array|RedirectResponse
+	private function resolveDatasetOrRedirect(string $missingUploadStatus): ProcessedDataset|RedirectResponse
 	{
-		$path = session('process.upload.path');
-		$data = session('process.upload.data');
+		try {
+			$dataset = ProcessedDataset::fromSession();
+		} catch (Throwable $exception) {
+			$dataset = null;
+		}
 
-		if (! $path || ! $data || ! Storage::exists($path)) {
-			session()->forget(['process.upload.path', 'process.upload.data']);
+		if (! $dataset) {
+			session()->forget(['process.upload.dataset', 'process.upload.data', 'process.upload.path']);
 			return redirect()
 				->route('process.upload.create')
 				->with('status', $missingUploadStatus);
 		}
 
-		return $data;
+		return $dataset;
 	}
 
-	private function prepareVipExportRows(Request $request): array|RedirectResponse
+	private function prepareVipExportRows(Request $request): ProcessedDataset|RedirectResponse
 	{
-		$dataset = $this->loadProcessedDataOrRedirect(
+		return $this->resolveDatasetOrRedirect(
 			'Upload a file to export VIP records.'
 		);
-
-		if ($dataset instanceof RedirectResponse) {
-			return $dataset;
-		}
-
-		$headers = $dataset['headers'];
-		$filteredRows = $dataset['rows'];
-
-		$headerMap = $this->buildHeaderMap($headers);
-		$filteredRows = $this->filterVipRows($filteredRows, $headerMap);
-
-		$searchTerm = trim((string) $request->query('search', ''));
-
-		if ($searchTerm !== '') {
-			$filteredRows = $this->searchRows($filteredRows, $headerMap, $searchTerm);
-		}
-
-		return [
-			'headers' => $headers,
-			'rows' => $filteredRows,
-			'filename' => $dataset['original_filename'],
-		];
 	}
 
 	private function buildVipFilename(string $extension): string
 	{
-		$filename = pathinfo((string) session('process.upload.data.original_filename', 'vip-records'), PATHINFO_FILENAME);
-		return $filename . '_vip.' . $extension;
+		$base = 'vip-records';
+
+		try {
+			$dataset = ProcessedDataset::fromSession();
+		} catch (Throwable $exception) {
+			$dataset = null;
+		}
+
+		if ($dataset && ($original = $dataset->originalFilename())) {
+			$baseCandidate = pathinfo($original, PATHINFO_FILENAME);
+			if (is_string($baseCandidate) && $baseCandidate !== '') {
+				$base = $baseCandidate;
+			}
+		}
+
+		return $base . '_vip.' . $extension;
 	}
 
 	private function initialiseProgressState(string $token, string $storedPath, string $originalName, ?string $archivePath = null): void
@@ -458,22 +441,31 @@ class ProcessFileController extends Controller
 		}
 
 		$payload = json_decode(Storage::get($datasetPath), true);
+		$manifest = null;
 
-		if (! is_array($payload) || empty($payload['data'])) {
+		if (is_array($payload)) {
+			$manifestCandidate = $payload['manifest'] ?? $payload;
+			if (is_array($manifestCandidate) && ! empty($manifestCandidate['headers'])) {
+				$manifest = $manifestCandidate;
+			}
+		}
+
+		if (! $manifest) {
 			Cache::forget($this->progressCacheKey($token));
-			Storage::delete($datasetPath);
-
 			return redirect()->route('process.upload.create')->withErrors([
 				'upload' => 'Unable to load processed data. Please try again.',
 			]);
 		}
 
-		session()->put('process.upload.path', $state['uploaded_path'] ?? null);
-		session()->put('process.upload.data', $payload['data']);
+		session()->put('process.upload.dataset', [
+			'token' => $token,
+			'manifest_path' => $datasetPath,
+		]);
 		session()->forget('process.assignments');
+		session()->forget('process.upload.data');
+		session()->forget('process.upload.path');
 
 		Cache::forget($this->progressCacheKey($token));
-		Storage::delete($datasetPath);
 
 		return redirect()->route('process.exclusions.create')
 			->with('status', 'File processed successfully. Continue by uploading exclusion files.');

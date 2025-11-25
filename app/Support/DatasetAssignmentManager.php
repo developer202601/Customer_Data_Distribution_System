@@ -19,7 +19,12 @@ class DatasetAssignmentManager
     private const ENTERPRISE_PREFIX = 'ENTERPRISE';
     private const WHOLESALE_PREFIX = 'WHOLE';
 
-    public function buildAssignments(array $headers, array $rows): array
+    public function buildAssignmentsFromDataset(ProcessedDataset $dataset): array
+    {
+        return $this->buildAssignments($dataset->headers(), $dataset->filteredRowsMatching(false));
+    }
+
+    public function buildAssignments(array $headers, iterable $rows): array
     {
         $headerMap = $this->buildHeaderMap($headers);
         $groupA = [];

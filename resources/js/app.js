@@ -4,6 +4,7 @@ import 'jquery/dist/jquery.min.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 	const loader = document.getElementById('page-loader');
+	let loaderSuppressed = false;
 
 	const hideLoader = () => {
 		if (!loader) {
@@ -13,10 +14,17 @@ document.addEventListener('DOMContentLoaded', () => {
 	};
 
 	const showLoader = () => {
-		if (!loader) {
+		if (!loader || loaderSuppressed) {
 			return;
 		}
 		loader.classList.remove('page-loader--hidden');
+	};
+
+	const suppressLoaderTemporarily = () => {
+		loaderSuppressed = true;
+		setTimeout(() => {
+			loaderSuppressed = false;
+		}, 1000);
 	};
 
 	const themeToggle = document.getElementById('theme-toggle');
@@ -94,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 		if (form.matches('[data-loader-off]')) {
+			suppressLoaderTemporarily();
 			return;
 		}
 		showLoader();
@@ -108,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 		if (link.hasAttribute('data-loader-off')) {
+			suppressLoaderTemporarily();
 			return;
 		}
 		if (link.getAttribute('target') === '_blank' || link.hasAttribute('download')) {

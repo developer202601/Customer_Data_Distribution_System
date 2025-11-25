@@ -1,0 +1,327 @@
+@extends('layouts.admin')
+
+@section('navbar-right')
+<div class="process-stepper d-flex align-items-center gap-2">
+    <span class="process-step completed"></span>
+    <span class="process-step active"></span>
+    <span class="process-step"></span>
+</div>
+@if(session('user.is_admin'))
+<a href="#" class="btn btn-outline-secondary">Configurations</a>
+@endif
+<form action="{{ route('logout') }}" method="post" class="d-inline">
+    @csrf
+    <button type="submit" class="btn btn-outline-secondary">Logout</button>
+</form>
+@endsection
+
+@section('content')
+<div class="process-upload py-4">
+    <div class="container-fluid">
+        <!-- <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+            <div>
+                <strong>Upload Exclusion Files</strong>
+                <p class="mb-0">Attach up to {{ $maxFiles }} Excel workbooks that describe the rows you want to exclude from the master dataset.</p>
+            </div>
+            <a href="{{ route('process.upload.preview') }}" class="btn btn-outline-secondary" data-loader-off="true">Back to preview</a>
+        </div> -->
+
+        <form id="exclusion-upload-form"
+            action="{{ route('process.exclusions.store') }}"
+            method="post"
+            enctype="multipart/form-data"
+            data-loader-off="true">
+            @csrf
+            <div class="card process-upload-card shadow-sm">
+                <div class="card-body p-4 p-lg-5">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div>
+                                <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
+                                <p class="text-muted mb-0">Upload up to {{ $maxFiles }} ZIP archives (each with a single Excel workbook) that list the identifiers you want to remove from the master list.</p>
+                                @if($filename)
+                                <p class="text-muted mb-0 mt-2">Active dataset: <strong>{{ $filename }}</strong> ({{ number_format($totalRows) }} rows)</p>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="d-flex justify-content-end align-items-center gap-2">
+                                <a href="#" class="btn btn-outline-secondary" data-loader-off="true" onclick="history.back(); return false;">Back</a>
+                                <button type="submit" class="btn btn-dark px-4">Apply exclusions</button>
+                            </div>
+                            <p class="text-muted mb-0 mt-2">You can add files one at a time or all at once.</p>
+                        </div>
+                    </div>
+
+                    <div id="exclusion-errors" class="mt-4">
+                        @if($errors->any())
+                        <div class="alert alert-danger" role="alert">
+                            <p class="mb-2 fw-semibold">Please resolve the following issues before continuing:</p>
+                            <ul class="mb-0">
+                                @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                        @endif
+                    </div>
+
+                    <div class="process-dropzone mt-4" id="exclusion-dropzone">
+                        <input type="file" class="visually-hidden" id="exclusion-files" name="exclusions[]" accept=".zip" multiple>
+                        <label for="exclusion-files" class="process-dropzone-content text-center" tabindex="0" role="button">
+                            <p class="process-dropzone-title mb-1">Drag and drop or click to add ZIP files</p>
+                            <p class="text-muted mb-0" id="exclusion-dropzone-helper">
+                                You can queue up to {{ $maxFiles }} .zip files. Each ZIP must include exactly one Excel workbook.
+                            </p>
+                        </label>
+                    </div>
+
+                    <div class="mt-4">
+                        <h2 class="process-guidelines-title h5">Selected files</h2>
+                        <div id="exclusion-file-list" class="process-selected-files">
+                            <p class="mb-0">No files selected yet.</p>
+                        </div>
+                    </div>
+
+                    <div class="process-guidelines mt-4">
+                        <h2 class="process-guidelines-title">Exclusion guidelines</h2>
+                        <p class="mb-2">For the remaining non-VIP records, perform the exclusion process as follows:</p>
+                        <ol class="mb-2">
+                            <li><strong>Import the three exclusion workbooks:</strong> Add each exclusion file (up to three) to the form. Each file should be a ZIP containing exactly one Excel workbook with the standard header row (for example, <code>CUSTOMER_REF</code> and <code>ACCOUNT_NUM</code>).</li>
+                            <li><strong>Remove matches from the master list:</strong> After uploading, you can either let the system apply exclusions when you press <em>Apply exclusions</em>, or you may perform the matching yourself offline before uploading by using Excel functions such as <code>VLOOKUP</code>, <code>XLOOKUP</code> or conditional filters. Matching is performed when either <code>CUSTOMER_REF</code> or <code>ACCOUNT_NUM</code> appears in any exclusion workbook.</li>
+                        </ol>
+                        <ul class="mb-0">
+                            <li>Each ZIP must contain exactly one workbook with the standard header row (for example, <strong>CUSTOMER_REF</strong> and <strong>ACCOUNT_NUM</strong>).</li>
+                            <li>You may add the three ZIP archives sequentially; they will appear in the list before you submit.</li>
+                            <li>When you press <strong>Apply exclusions</strong>, the system will extract each workbook, merge the rows, and remove any matching rows from the master list.</li>
+                            <li>Only ZIP archives containing Microsoft Excel (.xlsx) files are supported for this workflow.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const maxFiles = <?php echo (int) $maxFiles; ?>;
+        const dropzone = document.getElementById('exclusion-dropzone');
+        const fileInput = document.getElementById('exclusion-files');
+        const helper = document.getElementById('exclusion-dropzone-helper');
+        const baseHelperText = helper ? helper.textContent.trim() : '';
+        const fileList = document.getElementById('exclusion-file-list');
+        const errorContainer = document.getElementById('exclusion-errors');
+        const form = document.getElementById('exclusion-upload-form');
+        const selectedFiles = [];
+
+        if (!dropzone || !fileInput || !form) {
+            return;
+        }
+
+        const renderList = () => {
+            if (!fileList) {
+                return;
+            }
+
+            if (!selectedFiles.length) {
+                fileList.innerHTML = '<p class="mb-0 text-muted">No files selected yet.</p>';
+                fileList.classList.add('text-muted');
+                return;
+            }
+
+            fileList.classList.remove('text-muted');
+            const list = document.createElement('ul');
+            list.className = 'list-unstyled mb-0 process-selected-file-list';
+
+            selectedFiles.forEach((file, index) => {
+                const item = document.createElement('li');
+                item.className = 'd-flex justify-content-between align-items-center gap-2 py-1 border-bottom';
+
+                const details = document.createElement('span');
+                const name = document.createElement('strong');
+                name.textContent = file.name;
+
+                const size = document.createElement('small');
+                size.className = 'text-muted ms-2';
+                size.textContent = (file.size / 1024).toFixed(1) + ' KB';
+
+                details.appendChild(name);
+                details.appendChild(size);
+
+                item.appendChild(details);
+                list.appendChild(item);
+            });
+
+            fileList.innerHTML = '';
+            fileList.appendChild(list);
+        };
+
+        const createTransfer = () => {
+            if (typeof DataTransfer === 'undefined') {
+                return null;
+            }
+
+            try {
+                return new DataTransfer();
+            } catch (error) {
+                return null;
+            }
+        };
+
+        const syncInputFiles = () => {
+            const transfer = createTransfer();
+            if (!transfer) {
+                return;
+            }
+
+            selectedFiles.forEach((file) => transfer.items.add(file));
+            fileInput.files = transfer.files;
+        };
+
+        const updateHelperText = (limitMessage = null) => {
+            if (!helper) {
+                return;
+            }
+
+            if (limitMessage) {
+                helper.textContent = limitMessage;
+                return;
+            }
+
+            if (!selectedFiles.length) {
+                helper.textContent = baseHelperText;
+                return;
+            }
+
+            const names = selectedFiles.map((file) => file.name).join(', ');
+            const remaining = Math.max(maxFiles - selectedFiles.length, 0);
+            const status = selectedFiles.length + '/' + maxFiles + ' file(s) selected';
+            helper.textContent = remaining > 0 ?
+                status + ': ' + names + '. You can add ' + remaining + ' more.' :
+                status + ': ' + names + '.';
+        };
+
+        const showError = (messages) => {
+            if (!errorContainer) {
+                alert(messages.join('\n'));
+                return;
+            }
+
+            const block = document.createElement('div');
+            block.className = 'alert alert-danger';
+            block.setAttribute('role', 'alert');
+            const list = document.createElement('ul');
+            list.className = 'mb-0';
+
+            (Array.isArray(messages) ? messages : [messages]).forEach((message) => {
+                const item = document.createElement('li');
+                item.textContent = message;
+                list.appendChild(item);
+            });
+
+            block.appendChild(list);
+            errorContainer.innerHTML = '';
+            errorContainer.appendChild(block);
+            block.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        };
+
+        const clearErrors = () => {
+            if (errorContainer) {
+                errorContainer.innerHTML = '';
+            }
+        };
+
+        const addFiles = (files) => {
+            if (!files?.length) {
+                return;
+            }
+
+            clearErrors();
+
+            for (const file of files) {
+                if (selectedFiles.length >= maxFiles) {
+                    updateHelperText('You have reached the limit of ' + maxFiles + ' files.');
+                    break;
+                }
+
+                if (!file.name.toLowerCase().endsWith('.zip')) {
+                    showError(['Only .zip archives are allowed for exclusions.']);
+                    continue;
+                }
+
+                const exists = selectedFiles.some((current) => current.name === file.name && current.size === file.size);
+                if (exists) {
+                    continue;
+                }
+
+                selectedFiles.push(file);
+            }
+
+            updateHelperText();
+
+            syncInputFiles();
+            renderList();
+        };
+
+        const removeFile = (index) => {
+            if (index < 0 || index >= selectedFiles.length) {
+                return;
+            }
+
+            selectedFiles.splice(index, 1);
+            updateHelperText();
+            syncInputFiles();
+            renderList();
+        };
+
+        dropzone.addEventListener('click', (event) => {
+            // The label inside the dropzone already triggers the native file picker
+            // when clicked. If the click originated on the label (or its children),
+            // don't call fileInput.click() again — that causes two pickers to open.
+            if (event.target && event.target.closest && event.target.closest('label')) {
+                return;
+            }
+
+            fileInput.click();
+        });
+
+        dropzone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropzone.classList.add('is-dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('is-dragover');
+        });
+
+        dropzone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropzone.classList.remove('is-dragover');
+            addFiles(event.dataTransfer?.files || []);
+        });
+
+        fileInput.addEventListener('change', () => {
+            addFiles(fileInput.files);
+        });
+
+        // Removal of files from the list is currently disabled in the UI.
+
+        form.addEventListener('submit', (event) => {
+            if (!selectedFiles.length) {
+                event.preventDefault();
+                showError(['Please add at least one exclusion file before submitting.']);
+                return;
+            }
+        });
+
+        renderList();
+        updateHelperText();
+    });
+</script>
+@endpush
+@endsection

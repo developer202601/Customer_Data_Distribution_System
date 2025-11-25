@@ -5,8 +5,6 @@
     <span class="process-step active"></span>
     <span class="process-step"></span>
     <span class="process-step"></span>
-    <span class="process-step"></span>
-    <span class="process-step"></span>
 </div>
 @if(session('user.is_admin'))
 <a href="#" class="btn btn-outline-secondary">Configurations</a>
@@ -68,10 +66,10 @@
 
                     <div class="process-dropzone mt-4" id="process-dropzone">
                         <input type="file" class="visually-hidden" id="upload" name="upload" accept=".zip">
-                        <div class="process-dropzone-content text-center">
+                        <label for="upload" class="process-dropzone-content text-center" tabindex="0" role="button">
                             <p class="process-dropzone-title mb-1">Drag and drop file or click to browse</p>
                             <p class="text-muted mb-0" id="process-dropzone-helper">Upload a .zip that contains your Excel workbook.</p>
-                        </div>
+                        </label>
                     </div>
                     <!-- @error('upload')
                     <small class="text-danger d-block mt-2">{{ $message }}</small>
@@ -158,7 +156,10 @@
 
             errorsContainer.innerHTML = '';
             errorsContainer.appendChild(alert);
-            errorsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            errorsContainer.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
         };
 
         const setLoaderVisibility = (visible) => {
@@ -192,9 +193,9 @@
             setLoaderVisibility(true);
 
             const numericValue = Number(value);
-            const safeValue = Number.isFinite(numericValue)
-                ? Math.max(0, Math.min(100, numericValue))
-                : 0;
+            const safeValue = Number.isFinite(numericValue) ?
+                Math.max(0, Math.min(100, numericValue)) :
+                0;
 
             if (progressBar) {
                 progressBar.style.width = safeValue + '%';
@@ -289,7 +290,9 @@
             const payload = body.toString();
 
             if (navigator.sendBeacon) {
-                const blob = new Blob([payload], { type: 'application/x-www-form-urlencoded' });
+                const blob = new Blob([payload], {
+                    type: 'application/x-www-form-urlencoded'
+                });
                 navigator.sendBeacon(cancelUrl, blob);
                 return;
             }
@@ -412,19 +415,23 @@
                     const payload = await response.json().catch(() => null);
 
                     if (!response.ok || !payload) {
-                        throw payload ?? { message: 'Unable to read progress updates.' };
+                        throw payload ?? {
+                            message: 'Unable to read progress updates.'
+                        };
                     }
 
                     const derivedProgress = deriveProgressValue(payload);
-                    const progressValue = Number.isFinite(derivedProgress)
-                        ? derivedProgress
-                        : Number(payload.progress ?? 0);
+                    const progressValue = Number.isFinite(derivedProgress) ?
+                        derivedProgress :
+                        Number(payload.progress ?? 0);
 
                     updateLoader(progressValue, buildProgressMessage(payload), payload);
 
                     if (payload.status === 'failed') {
                         requestCancel(payload.error || payload.message || 'Processing failed.');
-                        throw { message: payload.error || payload.message || 'Processing failed.' };
+                        throw {
+                            message: payload.error || payload.message || 'Processing failed.'
+                        };
                     }
 
                     if (payload.status === 'complete') {
@@ -476,7 +483,9 @@
                 const payload = await response.json().catch(() => null);
 
                 if (!response.ok || !payload?.token) {
-                    throw payload ?? { message: 'Unable to start processing. Please try again.' };
+                    throw payload ?? {
+                        message: 'Unable to start processing. Please try again.'
+                    };
                 }
 
                 currentToken = payload.token;
@@ -492,7 +501,17 @@
             }
         };
 
-        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('click', (event) => {
+            // If the click came from the label (or its children) the browser
+            // will already activate the associated input. Avoid calling
+            // `fileInput.click()` in that case to prevent the file picker
+            // from opening twice.
+            if (event.target && event.target.closest && event.target.closest('label')) {
+                return;
+            }
+
+            fileInput.click();
+        });
 
         dropzone.addEventListener('dragover', (event) => {
             event.preventDefault();

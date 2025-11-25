@@ -1,4 +1,4 @@
-<div id="page-loader" class="page-loader" aria-live="polite" aria-busy="true">
+<div id="page-loader" class="page-loader page-loader--hidden" aria-live="polite" aria-busy="true">
     <div class="page-loader__inner">
         <div class="page-loader__spinner" role="presentation"></div>
         <div class="page-loader__text">

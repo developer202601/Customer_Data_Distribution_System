@@ -1152,6 +1152,22 @@ body.theme-dark .alert-danger {
     transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
+.process-dropzone-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    text-align: center;
+}
+
+.process-dropzone-content:focus {
+    outline: 2px dashed var(--surface-border);
+    outline-offset: 4px;
+}
+
 /* me thiyenne white mode ekedi hover color eka */
 .process-dropzone:hover {
     border-color: #1bb80f33;

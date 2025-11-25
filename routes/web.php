@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\AssignmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\ProcessFileController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,6 +18,15 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/upload/vip', [ProcessFileController::class, 'vip'])->name('process.upload.vip');
     Route::get('/process/upload/rows', [ProcessFileController::class, 'rows'])->name('process.upload.rows');
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
+    Route::get('/process/exclusions', [ExclusionUploadController::class, 'create'])->name('process.exclusions.create');
+    Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
+    Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
+    Route::get('/process/assignments/group-a', [AssignmentController::class, 'groupA'])->name('process.assignments.group-a');
+    Route::get('/process/assignments/group-b', [AssignmentController::class, 'groupB'])->name('process.assignments.group-b');
+    Route::get('/process/assignments/exclusions', [AssignmentController::class, 'exclusions'])->name('process.assignments.exclusions');
+    Route::get('/process/assignments/filtered-out', [AssignmentController::class, 'filteredOut'])->name('process.assignments.filtered-out');
+    Route::post('/process/assignments/regenerate', [AssignmentController::class, 'regenerate'])->name('process.assignments.regenerate');
+    Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
 

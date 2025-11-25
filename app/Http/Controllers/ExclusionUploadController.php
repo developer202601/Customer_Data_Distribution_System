@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateDatasetExports;
 use App\Support\DatasetAssignmentManager;
 use App\Support\ProcessedDataset;
 use App\Support\ProcessesExcelRows;
@@ -110,6 +111,18 @@ class ExclusionUploadController extends Controller
 
         $manager = app(DatasetAssignmentManager::class);
         session()->put('process.assignments', $manager->buildAssignmentsFromDataset($dataset));
+
+        $user = $request->user();
+        $userContext = [
+            'id' => $user?->getAuthIdentifier(),
+            'name' => $user?->username ?? $user?->name ?? ($user?->email ?? null),
+        ];
+
+        GenerateDatasetExports::dispatch(
+            $dataset->token(),
+            $dataset->manifestPath(),
+            $userContext
+        );
 
         return redirect()
             ->route('process.assignments.index')

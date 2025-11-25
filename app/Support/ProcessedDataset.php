@@ -12,6 +12,12 @@ class ProcessedDataset
     private string $manifestPath;
     private array $manifest;
     private ?array $headerMap = null;
+    /**
+     * Cache of decoded chunk payloads keyed by storage path. Prevents repeatedly
+     * loading large JSON files when exporting thousands of rows.
+     */
+    private array $chunkCache = [];
+    private const MAX_CACHE_SIZE = 2;
 
     public function __construct(string $token, string $manifestPath)
     {
@@ -382,6 +388,11 @@ class ProcessedDataset
         $this->persistManifest();
     }
 
+    public function exclusionRecords(): array
+    {
+        return $this->manifest['exclusion_records'] ?? [];
+    }
+
     public function manifest(): array
     {
         return $this->manifest;
@@ -599,6 +610,10 @@ class ProcessedDataset
             return [];
         }
 
+        if (isset($this->chunkCache[$path])) {
+            return $this->chunkCache[$path];
+        }
+
         if (! Storage::exists($path)) {
             return [];
         }
@@ -606,7 +621,17 @@ class ProcessedDataset
         $contents = Storage::get($path);
         $decoded = json_decode($contents, true);
 
-        return is_array($decoded) ? $decoded : [];
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        if (count($this->chunkCache) >= self::MAX_CACHE_SIZE) {
+            array_shift($this->chunkCache);
+        }
+
+        $this->chunkCache[$path] = $decoded;
+
+        return $decoded;
     }
 
     private function loadManifest(): array

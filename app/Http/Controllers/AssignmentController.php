@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DatasetExport;
 use App\Support\DatasetAssignmentManager;
+use App\Support\DatasetExportManager;
 use App\Support\ProcessedDataset;
 use App\Support\ProcessesExcelRows;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -18,6 +21,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class AssignmentController extends Controller
 {
     use ProcessesExcelRows;
+
+    public function __construct(private DatasetExportManager $exportManager)
+    {
+    }
 
     public function index(): View|RedirectResponse
     {
@@ -206,7 +213,20 @@ class AssignmentController extends Controller
             $label = $group['region_billing']['label'] ?? 'Region Billing Centre';
             $filename = Str::slug($label ?: 'region-billing-centre') . '.xlsx';
 
-            return $this->streamWorkbook($dataset, $headers, $rows, $filename, $label);
+            if ($stored = $this->downloadStoredExport($dataset, 'group-a', $bucket, $filename)) {
+                return $stored;
+            }
+
+            $meta = [
+                'label' => $label,
+                'row_count' => count($rows),
+                'sheet_title' => $label,
+                'headers' => $headers,
+            ];
+
+            $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
+
+            return redirect()->route('process.assignments.group-a')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
         }
 
         $quota = $group['quotas'][$bucket] ?? null;
@@ -220,7 +240,22 @@ class AssignmentController extends Controller
         $label = $quota['label'] ?? Str::title(str_replace('-', ' ', $bucket));
         $filename = Str::slug($label ?: $bucket) . '.xlsx';
 
-        return $this->streamWorkbook($dataset, $headers, $quota['rows'] ?? [], $filename, $label);
+        $rows = $quota['rows'] ?? [];
+
+        if ($stored = $this->downloadStoredExport($dataset, 'group-a', $bucket, $filename)) {
+            return $stored;
+        }
+
+        $meta = [
+            'label' => $label,
+            'row_count' => count($rows),
+            'sheet_title' => $label,
+            'headers' => $headers,
+        ];
+
+        $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
+
+        return redirect()->route('process.assignments.group-a')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
     }
 
     private function downloadGroupB(ProcessedDataset $dataset, array $headers, array $group, string $bucket): RedirectResponse|StreamedResponse
@@ -256,7 +291,22 @@ class AssignmentController extends Controller
                 ]);
             }
 
-            return $this->streamMultiSheetWorkbook($dataset, $headers, $sheets, 'enterprise_wholesale.xlsx');
+            $filename = 'enterprise_wholesale.xlsx';
+
+            if ($stored = $this->downloadStoredExport($dataset, 'group-b', $bucket, $filename)) {
+                return $stored;
+            }
+
+            $meta = [
+                'label' => $bundle['label'] ?? 'Enterprise & Wholesale bundle',
+                'sheet_count' => count($sheets),
+                'headers' => $headers,
+                'segment_names' => array_map(static fn ($sheet) => $sheet['name'], $sheets),
+            ];
+
+            $builder = $this->exportManager->multiSheetBuilder($dataset, $headers, $sheets);
+
+            return redirect()->route('process.assignments.group-b')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
         }
 
         if ($bucket === 'ignored-latest-bill') {
@@ -270,8 +320,22 @@ class AssignmentController extends Controller
 
             $label = $ignored['label'] ?? 'Ignored - LATEST_BILL_MNY < 5000';
             $filename = Str::slug($label ?: 'ignored-latest-bill-mny') . '.xlsx';
+            $rows = $ignored['rows'] ?? [];
 
-            return $this->streamWorkbook($dataset, $headers, $ignored['rows'] ?? [], $filename, $label);
+            if ($stored = $this->downloadStoredExport($dataset, 'group-b', $bucket, $filename)) {
+                return $stored;
+            }
+
+            $meta = [
+                'label' => $label,
+                'row_count' => count($rows),
+                'sheet_title' => $label,
+                'headers' => $headers,
+            ];
+
+            $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
+
+            return redirect()->route('process.assignments.group-b')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
         }
 
         $segment = null;
@@ -289,70 +353,49 @@ class AssignmentController extends Controller
         }
 
         $label = $segment['name'] ?? 'Segment';
-        $filename = Str::slug($label ?: 'segment') . '.xlsx';
+        $storageBucket = $segment['slug'] ?? $bucket;
+        $rows = $segment['rows'] ?? [];
+        $filename = Str::slug($label ?: $storageBucket) . '.xlsx';
 
-        return $this->streamWorkbook($dataset, $headers, $segment['rows'] ?? [], $filename, $label);
+        if ($stored = $this->downloadStoredExport($dataset, 'group-b', $storageBucket, $filename)) {
+            return $stored;
+        }
+
+        $meta = [
+            'label' => $label,
+            'row_count' => count($rows),
+            'sheet_title' => $label,
+            'headers' => $headers,
+        ];
+
+        $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
+
+        return redirect()->route('process.assignments.group-b')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
     }
 
-    private function streamWorkbook(ProcessedDataset $dataset, array $headers, array $records, string $filename, string $sheetTitle): StreamedResponse
+    private function downloadStoredExport(ProcessedDataset $dataset, string $group, string $bucket, ?string $filename = null): ?StreamedResponse
     {
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle($this->truncateSheetTitle($sheetTitle));
+        $record = DatasetExport::query()
+            ->where('token', $dataset->token())
+            ->where('group', $group)
+            ->where('bucket', $bucket)
+            ->orderByDesc('generated_at')
+            ->orderByDesc('id')
+            ->first();
 
-        $headerLabels = $this->buildHeaderLabels($headers);
-        $sheet->fromArray($headerLabels, null, 'A1');
-
-        $rowPointer = 2;
-        foreach ($records as $record) {
-            $rowValues = $this->buildRowValues($dataset, $headers, $record);
-            $sheet->fromArray($rowValues, null, 'A' . $rowPointer);
-            $rowPointer++;
+        if (! $record) {
+            return null;
         }
 
-        if ($rowPointer === 2) {
-            $sheet->fromArray([], null, 'A2');
+        $disk = $record->file_disk ?: config('filesystems.default', 'local');
+
+        if (! Storage::disk($disk)->exists($record->file_path)) {
+            return null;
         }
 
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
-    }
+        $downloadName = $filename ?: $record->filename;
 
-    private function streamMultiSheetWorkbook(ProcessedDataset $dataset, array $headers, array $segments, string $filename): StreamedResponse
-    {
-        $spreadsheet = new Spreadsheet();
-        $spreadsheet->removeSheetByIndex(0);
-
-        foreach ($segments as $index => $segment) {
-            $label = $segment['name'] ?? 'Segment ' . ($index + 1);
-            $sheet = $spreadsheet->createSheet($index);
-            $sheet->setTitle($this->truncateSheetTitle($label));
-
-            $headerLabels = $this->buildHeaderLabels($headers);
-            $sheet->fromArray($headerLabels, null, 'A1');
-
-            $rowPointer = 2;
-            foreach ($segment['rows'] ?? [] as $record) {
-                $rowValues = $this->buildRowValues($dataset, $headers, $record);
-                $sheet->fromArray($rowValues, null, 'A' . $rowPointer);
-                $rowPointer++;
-            }
-
-            if ($rowPointer === 2) {
-                $sheet->fromArray([], null, 'A2');
-            }
-        }
-
-        $spreadsheet->setActiveSheetIndex(0);
-
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-        }, $filename, [
+        return Storage::disk($disk)->download($record->file_path, $downloadName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }

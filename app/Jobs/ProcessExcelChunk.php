@@ -88,6 +88,7 @@ class ProcessExcelChunk implements ShouldQueue
 
             $errors = [];
             $filteredRows = [];
+            $skippedRows = [];
             $processedRows = 0;
 
             foreach ($dataRows as $rowIndex => $columns) {
@@ -124,8 +125,17 @@ class ProcessExcelChunk implements ShouldQueue
                     }
                 }
 
-                if ($passesValidation && $this->passesFilters($columns, $this->headers)) {
+                $filterResult = $this->evaluateFilterResult($columns, $this->headers);
+
+                if ($passesValidation && $filterResult['passes']) {
                     $filteredRows[$rowIndex] = $columns;
+                } elseif ($passesValidation) {
+                    $skippedRows[$rowIndex] = [
+                        'row_index' => $rowIndex,
+                        'reason' => $filterResult['reason'] ?? 'Filtered out by eligibility rules.',
+                        'columns' => $columns,
+                        'reason_code' => $this->buildFilterReasonCode($filterResult),
+                    ];
                 }
             }
 
@@ -134,7 +144,7 @@ class ProcessExcelChunk implements ShouldQueue
                 throw new RuntimeException('Validation failed: ' . implode(' ', $sample));
             }
 
-            $this->storeChunkResults($filteredRows);
+            $this->storeChunkResults($filteredRows, $skippedRows);
             $this->updateProgress($processedRows);
         } catch (Throwable $exception) {
             $this->handleFailure($exception);
@@ -172,12 +182,13 @@ class ProcessExcelChunk implements ShouldQueue
         return $rows;
     }
 
-    private function storeChunkResults(array $filteredRows): void
+    private function storeChunkResults(array $filteredRows, array $skippedRows): void
     {
         $chunkPath = $this->chunkPath();
         Storage::makeDirectory(dirname($chunkPath));
         $payload = [
             'rows' => $filteredRows,
+            'skipped' => $skippedRows,
         ];
 
         Storage::put($chunkPath, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));

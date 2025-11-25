@@ -107,33 +107,110 @@ trait ProcessesExcelRows
 
     private function passesFilters(array $columns, array $headers): bool
     {
+        return $this->evaluateFilterResult($columns, $headers)['passes'];
+    }
+
+    private function evaluateFilterResult(array $columns, array $headers): array
+    {
         $headerMap = $this->buildHeaderMap($headers);
 
         $medium = strtoupper($this->getColumnValue($columns, $headerMap, 'MEDIUM'));
         $filterMediumValues = $this->getClassConstantArray('FILTER_MEDIUM_VALUES');
         if (! in_array($medium, $filterMediumValues, true)) {
-            return false;
+            $value = $medium !== '' ? $medium : 'blank';
+            return [
+                'passes' => false,
+                'reason' => sprintf('MEDIUM is %s (allowed: %s).', $value, implode(', ', $filterMediumValues)),
+                'medium' => $medium,
+                'status' => $status,
+            ];
         }
 
         $status = strtoupper($this->getColumnValue($columns, $headerMap, 'LATEST_PRODUCT_STATUS'));
         $filterStatus = $this->getClassConstantValue('FILTER_STATUS_VALUE', 'OK');
         if ($status !== $filterStatus) {
-            return false;
+            $value = $status !== '' ? $status : 'blank';
+            return [
+                'passes' => false,
+                'reason' => sprintf('LATEST_PRODUCT_STATUS is %s (expected %s).', $value, $filterStatus),
+                'medium' => $medium,
+                'status' => $status,
+            ];
         }
 
         $arrearsColumn = $this->findHeaderColumnByPrefix($headerMap, self::NEW_ARREARS_PREFIX);
         if ($arrearsColumn === null) {
-            return false;
+            return [
+                'passes' => false,
+                'reason' => 'No NEW_ARREARS column was found in the dataset.',
+                'medium' => $medium,
+                'status' => $status,
+            ];
         }
 
         $value = $columns[$arrearsColumn] ?? '';
         $arrears = $this->parseNumeric($value);
         $minArrears = $this->getClassConstantValue('FILTER_MIN_ARREARS', 2400);
         if ($arrears <= $minArrears) {
-            return false;
+            return [
+                'passes' => false,
+                'reason' => sprintf('NEW_ARREARS value %.2f is at or below %d.', $arrears, $minArrears),
+                'medium' => $medium,
+                'status' => $status,
+                'arrears' => $arrears,
+            ];
         }
 
-        return true;
+        return [
+            'passes' => true,
+            'reason' => null,
+            'medium' => $medium,
+            'status' => $status,
+            'arrears' => $arrears,
+        ];
+    }
+
+    private function buildFilterReasonCode(array $result): string
+    {
+        if (($result['passes'] ?? false) === true) {
+            return 'PASSED';
+        }
+
+        $medium = strtoupper((string) ($result['medium'] ?? ''));
+        $status = strtoupper((string) ($result['status'] ?? ''));
+        $reason = (string) ($result['reason'] ?? '');
+
+        if ($reason !== '') {
+            if (str_contains($reason, 'MEDIUM')) {
+                return 'MEDIUM_NOT_ALLOWED';
+            }
+            if (str_contains($reason, 'LATEST_PRODUCT_STATUS')) {
+                return 'STATUS_NOT_ALLOWED';
+            }
+            if (str_contains($reason, 'NEW_ARREARS')) {
+                return 'ARREARS_TOO_LOW';
+            }
+            if (str_contains($reason, 'No NEW_ARREARS')) {
+                return 'ARREARS_COLUMN_MISSING';
+            }
+        }
+
+        if ($medium !== '' && ! in_array($medium, $this->getClassConstantArray('FILTER_MEDIUM_VALUES'), true)) {
+            return 'MEDIUM_NOT_ALLOWED';
+        }
+
+        $expectedStatus = strtoupper((string) $this->getClassConstantValue('FILTER_STATUS_VALUE', 'OK'));
+        if ($status !== '' && $status !== $expectedStatus) {
+            return 'STATUS_NOT_ALLOWED';
+        }
+
+        $arrears = $result['arrears'] ?? null;
+        $minArrears = (float) $this->getClassConstantValue('FILTER_MIN_ARREARS', 2400);
+        if (is_numeric($arrears) && (float) $arrears <= $minArrears) {
+            return 'ARREARS_TOO_LOW';
+        }
+
+        return 'FILTERED';
     }
 
     private function filterRows(array $rows, array $headers): array

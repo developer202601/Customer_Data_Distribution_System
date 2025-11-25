@@ -68,10 +68,10 @@
 
                     <div class="process-dropzone mt-4" id="process-dropzone">
                         <input type="file" class="visually-hidden" id="upload" name="upload" accept=".zip">
-                        <div class="process-dropzone-content text-center">
+                        <label for="upload" class="process-dropzone-content text-center" tabindex="0" role="button">
                             <p class="process-dropzone-title mb-1">Drag and drop file or click to browse</p>
                             <p class="text-muted mb-0" id="process-dropzone-helper">Upload a .zip that contains your Excel workbook.</p>
-                        </div>
+                        </label>
                     </div>
                     <!-- @error('upload')
                     <small class="text-danger d-block mt-2">{{ $message }}</small>
@@ -492,7 +492,17 @@
             }
         };
 
-        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('click', (event) => {
+            // If the click came from the label (or its children) the browser
+            // will already activate the associated input. Avoid calling
+            // `fileInput.click()` in that case to prevent the file picker
+            // from opening twice.
+            if (event.target && event.target.closest && event.target.closest('label')) {
+                return;
+            }
+
+            fileInput.click();
+        });
 
         dropzone.addEventListener('dragover', (event) => {
             event.preventDefault();

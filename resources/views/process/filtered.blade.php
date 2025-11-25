@@ -35,13 +35,12 @@
                 @endif
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <a href="{{ $vipApplied ? route('process.upload.preview') : route('process.upload.create') }}" class="btn btn-outline-secondary">Back</a>
+                <a href="{{ $vipApplied ? route('process.assignments.index') : route('process.upload.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
                 <!-- @if(! $vipApplied)
                 <a href="{{ route('process.exclusions.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Upload exclusion files</a>
                 @endif -->
                 @if($vipApplied)
                 <a href="{{ route('process.upload.export', array_filter(['vip' => 1, 'search' => $searchTerm ?: null])) }}" class="btn btn-dark" data-loader-off="1" target="_blank" rel="noopener noreferrer">Export VIP Excel</a>
-                <a href="{{ route('process.exclusions.create') }}" class="btn btn-dark ms-2 text-white" data-loader-off="1">Next</a>
                 @else
                 <a href="{{ route('process.upload.vip', array_filter(['search' => $searchTerm ?: null])) }}" class="btn btn-dark">VIP records</a>
                 @endif

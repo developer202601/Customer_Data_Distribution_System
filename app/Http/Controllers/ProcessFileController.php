@@ -406,12 +406,13 @@ class ProcessFileController extends Controller
 
 		session()->put('process.upload.path', $state['uploaded_path'] ?? null);
 		session()->put('process.upload.data', $payload['data']);
+		session()->forget('process.assignments');
 
 		Cache::forget($this->progressCacheKey($token));
 		Storage::delete($datasetPath);
 
-		return redirect()->route('process.upload.preview')
-			->with('status', 'File uploaded and processed successfully.');
+		return redirect()->route('process.exclusions.create')
+			->with('status', 'File processed successfully. Continue by uploading exclusion files.');
 	}
 
 	private function extractWorkbookFromArchive(string $archivePath, string $token): string

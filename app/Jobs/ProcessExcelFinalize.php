@@ -26,13 +26,15 @@ class ProcessExcelFinalize implements ShouldQueue
 
     public function handle(): void
     {
-        $rows = $this->mergeChunkRows();
+        [$rows, $filteredOut] = $this->mergeChunkRows();
 
-        $processedData = [
-            'headers' => $this->headers,
-            'rows' => $rows,
+            $processedData = [
+                'headers' => $this->headers,
+                'rows' => $rows,
             'total_rows' => (int) (Cache::get($this->cacheKey())['total_rows'] ?? count($rows)),
             'original_filename' => $this->originalName,
+            'filtered_out' => $filteredOut,
+            'filtered_out_total' => count($filteredOut),
         ];
 
         $datasetPath = $this->datasetPath();
@@ -54,7 +56,7 @@ class ProcessExcelFinalize implements ShouldQueue
         $directory = sprintf('processed/%s/chunks', $this->token);
 
         if (! Storage::exists($directory)) {
-            return [];
+            return [[], []];
         }
 
         $files = collect(Storage::files($directory))
@@ -63,6 +65,7 @@ class ProcessExcelFinalize implements ShouldQueue
             ->values();
 
         $rows = [];
+        $filteredOut = [];
 
         foreach ($files as $path) {
             $payload = json_decode(Storage::get($path), true);
@@ -76,11 +79,26 @@ class ProcessExcelFinalize implements ShouldQueue
             foreach ($chunkRows as $rowIndex => $columns) {
                 $rows[$rowIndex] = $columns;
             }
+
+            foreach (($payload['skipped'] ?? []) as $rowIndex => $entry) {
+                if (! is_array($entry)) {
+                    continue;
+                }
+
+                        $filteredOut[$rowIndex] = [
+                            'row_index' => $entry['row_index'] ?? $rowIndex,
+                            'reason' => $entry['reason'] ?? 'Filtered out by eligibility rules.',
+                        'reason_code' => $entry['reason_code'] ?? '',
+                            'columns' => $entry['columns'] ?? [],
+                ];
+            }
         }
 
         ksort($rows, SORT_NUMERIC);
 
-        return $rows;
+        ksort($filteredOut, SORT_NUMERIC);
+
+        return [$rows, $filteredOut];
     }
 
     private function cleanupChunks(): void

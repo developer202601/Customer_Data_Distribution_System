@@ -20,13 +20,13 @@
 @section('content')
 <div class="process-upload py-4">
     <div class="container-fluid">
-        <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <!-- <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
             <div>
                 <strong>Upload Exclusion Files</strong>
                 <p class="mb-0">Attach up to {{ $maxFiles }} Excel workbooks that describe the rows you want to exclude from the master dataset.</p>
             </div>
-            <a href="{{ route('process.upload.preview') }}" class="btn btn-outline-secondary">Back to preview</a>
-        </div>
+            <a href="{{ route('process.upload.preview') }}" class="btn btn-outline-secondary" data-loader-off="true">Back to preview</a>
+        </div> -->
 
         <form id="exclusion-upload-form"
             action="{{ route('process.exclusions.store') }}"
@@ -40,15 +40,18 @@
                         <div class="d-flex align-items-center gap-3">
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
-                                <p class="text-muted mb-0">Select up to {{ $maxFiles }} Microsoft Excel (.xlsx) workbooks that contain the identifiers you want to remove from the master list.</p>
+                                <p class="text-muted mb-0">Upload up to {{ $maxFiles }} ZIP archives (each with a single Excel workbook) that list the identifiers you want to remove from the master list.</p>
                                 @if($filename)
                                 <p class="text-muted mb-0 mt-2">Active dataset: <strong>{{ $filename }}</strong> ({{ number_format($totalRows) }} rows)</p>
                                 @endif
                             </div>
                         </div>
                         <div class="text-end">
-                            <p class="text-muted mb-1">You can add files one at a time or all at once.</p>
-                            <button type="submit" class="btn btn-dark px-4">Apply exclusions</button>
+                            <div class="d-flex justify-content-end align-items-center gap-2">
+                                <a href="#" class="btn btn-outline-secondary" data-loader-off="true" onclick="history.back(); return false;">Back</a>
+                                <button type="submit" class="btn btn-dark px-4">Apply exclusions</button>
+                            </div>
+                            <p class="text-muted mb-0 mt-2">You can add files one at a time or all at once.</p>
                         </div>
                     </div>
 
@@ -66,30 +69,34 @@
                     </div>
 
                     <div class="process-dropzone mt-4" id="exclusion-dropzone">
-                        <input type="file" class="visually-hidden" id="exclusion-files" name="exclusions[]" accept=".xlsx" multiple>
-                        <div class="process-dropzone-content text-center">
-                            <p class="process-dropzone-title mb-1">Drag and drop or click to add Excel files</p>
+                        <input type="file" class="visually-hidden" id="exclusion-files" name="exclusions[]" accept=".zip" multiple>
+                        <label for="exclusion-files" class="process-dropzone-content text-center" tabindex="0" role="button">
+                            <p class="process-dropzone-title mb-1">Drag and drop or click to add ZIP files</p>
                             <p class="text-muted mb-0" id="exclusion-dropzone-helper">
-                                You can queue up to {{ $maxFiles }} .xlsx files. They will be matched row-by-row against the master list.
+                                You can queue up to {{ $maxFiles }} .zip files. Each ZIP must include exactly one Excel workbook.
                             </p>
-                        </div>
+                        </label>
                     </div>
 
                     <div class="mt-4">
                         <h2 class="process-guidelines-title h5">Selected files</h2>
-                        <div id="exclusion-file-list" class="process-selected-files text-muted">
+                        <div id="exclusion-file-list" class="process-selected-files">
                             <p class="mb-0">No files selected yet.</p>
                         </div>
                     </div>
 
                     <div class="process-guidelines mt-4">
                         <h2 class="process-guidelines-title">Exclusion guidelines</h2>
+                        <p class="mb-2">For the remaining non-VIP records, perform the exclusion process as follows:</p>
+                        <ol class="mb-2">
+                            <li><strong>Import the three exclusion workbooks:</strong> Add each exclusion file (up to three) to the form. Each file should be a ZIP containing exactly one Excel workbook with the standard header row (for example, <code>CUSTOMER_REF</code> and <code>ACCOUNT_NUM</code>).</li>
+                            <li><strong>Remove matches from the master list:</strong> After uploading, you can either let the system apply exclusions when you press <em>Apply exclusions</em>, or you may perform the matching yourself offline before uploading by using Excel functions such as <code>VLOOKUP</code>, <code>XLOOKUP</code> or conditional filters. Matching is performed when either <code>CUSTOMER_REF</code> or <code>ACCOUNT_NUM</code> appears in any exclusion workbook.</li>
+                        </ol>
                         <ul class="mb-0">
-                            <li>Each workbook must include a header row with the standard column set (for example, CUSTOMER_REF and ACCOUNT_NUM).</li>
-                            <li>You may add the three files sequentially; they will appear in the list before you submit.</li>
-                            <li>As soon as you submit, the system will merge the uploaded sheets and remove any matching rows from the master list.</li>
-                            <li>Matching occurs on both <strong>CUSTOMER_REF</strong> and <strong>ACCOUNT_NUM</strong>. If either value matches, the row will be excluded.</li>
-                            <li>Only Microsoft Excel (.xlsx) files are supported for the exclusion workflow.</li>
+                            <li>Each ZIP must contain exactly one workbook with the standard header row (for example, <strong>CUSTOMER_REF</strong> and <strong>ACCOUNT_NUM</strong>).</li>
+                            <li>You may add the three ZIP archives sequentially; they will appear in the list before you submit.</li>
+                            <li>When you press <strong>Apply exclusions</strong>, the system will extract each workbook, merge the rows, and remove any matching rows from the master list.</li>
+                            <li>Only ZIP archives containing Microsoft Excel (.xlsx) files are supported for this workflow.</li>
                         </ul>
                     </div>
                 </div>
@@ -101,10 +108,11 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const maxFiles = {{ (int) $maxFiles }};
+        const maxFiles = <?php echo (int) $maxFiles; ?>;
         const dropzone = document.getElementById('exclusion-dropzone');
         const fileInput = document.getElementById('exclusion-files');
         const helper = document.getElementById('exclusion-dropzone-helper');
+        const baseHelperText = helper ? helper.textContent.trim() : '';
         const fileList = document.getElementById('exclusion-file-list');
         const errorContainer = document.getElementById('exclusion-errors');
         const form = document.getElementById('exclusion-upload-form');
@@ -121,9 +129,11 @@
 
             if (!selectedFiles.length) {
                 fileList.innerHTML = '<p class="mb-0 text-muted">No files selected yet.</p>';
+                fileList.classList.add('text-muted');
                 return;
             }
 
+            fileList.classList.remove('text-muted');
             const list = document.createElement('ul');
             list.className = 'list-unstyled mb-0 process-selected-file-list';
 
@@ -142,14 +152,7 @@
                 details.appendChild(name);
                 details.appendChild(size);
 
-                const removeButton = document.createElement('button');
-                removeButton.type = 'button';
-                removeButton.className = 'btn btn-link text-danger p-0';
-                removeButton.dataset.removeIndex = String(index);
-                removeButton.textContent = 'Remove';
-
                 item.appendChild(details);
-                item.appendChild(removeButton);
                 list.appendChild(item);
             });
 
@@ -157,10 +160,49 @@
             fileList.appendChild(list);
         };
 
+        const createTransfer = () => {
+            if (typeof DataTransfer === 'undefined') {
+                return null;
+            }
+
+            try {
+                return new DataTransfer();
+            } catch (error) {
+                return null;
+            }
+        };
+
         const syncInputFiles = () => {
-            const transfer = new DataTransfer();
+            const transfer = createTransfer();
+            if (!transfer) {
+                return;
+            }
+
             selectedFiles.forEach((file) => transfer.items.add(file));
             fileInput.files = transfer.files;
+        };
+
+        const updateHelperText = (limitMessage = null) => {
+            if (!helper) {
+                return;
+            }
+
+            if (limitMessage) {
+                helper.textContent = limitMessage;
+                return;
+            }
+
+            if (!selectedFiles.length) {
+                helper.textContent = baseHelperText;
+                return;
+            }
+
+            const names = selectedFiles.map((file) => file.name).join(', ');
+            const remaining = Math.max(maxFiles - selectedFiles.length, 0);
+            const status = selectedFiles.length + '/' + maxFiles + ' file(s) selected';
+            helper.textContent = remaining > 0 ?
+                status + ': ' + names + '. You can add ' + remaining + ' more.' :
+                status + ': ' + names + '.';
         };
 
         const showError = (messages) => {
@@ -184,7 +226,10 @@
             block.appendChild(list);
             errorContainer.innerHTML = '';
             errorContainer.appendChild(block);
-            block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            block.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
         };
 
         const clearErrors = () => {
@@ -202,12 +247,12 @@
 
             for (const file of files) {
                 if (selectedFiles.length >= maxFiles) {
-                    helper.textContent = 'You have reached the limit of ' + maxFiles + ' files.';
+                    updateHelperText('You have reached the limit of ' + maxFiles + ' files.');
                     break;
                 }
 
-                if (!file.name.toLowerCase().endsWith('.xlsx')) {
-                    showError(['Only .xlsx files are allowed for exclusions.']);
+                if (!file.name.toLowerCase().endsWith('.zip')) {
+                    showError(['Only .zip archives are allowed for exclusions.']);
                     continue;
                 }
 
@@ -219,9 +264,7 @@
                 selectedFiles.push(file);
             }
 
-            if (selectedFiles.length < maxFiles) {
-                helper.textContent = 'You can add ' + (maxFiles - selectedFiles.length) + ' more file(s).';
-            }
+            updateHelperText();
 
             syncInputFiles();
             renderList();
@@ -233,12 +276,21 @@
             }
 
             selectedFiles.splice(index, 1);
-            helper.textContent = 'You can add ' + (maxFiles - selectedFiles.length) + ' more file(s).';
+            updateHelperText();
             syncInputFiles();
             renderList();
         };
 
-        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('click', (event) => {
+            // The label inside the dropzone already triggers the native file picker
+            // when clicked. If the click originated on the label (or its children),
+            // don't call fileInput.click() again — that causes two pickers to open.
+            if (event.target && event.target.closest && event.target.closest('label')) {
+                return;
+            }
+
+            fileInput.click();
+        });
 
         dropzone.addEventListener('dragover', (event) => {
             event.preventDefault();
@@ -259,14 +311,7 @@
             addFiles(fileInput.files);
         });
 
-        fileList.addEventListener('click', (event) => {
-            const button = event.target.closest('[data-remove-index]');
-            if (!button) {
-                return;
-            }
-            const index = Number(button.dataset.removeIndex);
-            removeFile(index);
-        });
+        // Removal of files from the list is currently disabled in the UI.
 
         form.addEventListener('submit', (event) => {
             if (!selectedFiles.length) {
@@ -277,6 +322,7 @@
         });
 
         renderList();
+        updateHelperText();
     });
 </script>
 @endpush

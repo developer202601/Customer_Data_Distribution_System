@@ -88,20 +88,20 @@
                                     </div>
                                 </div>
                             </div>
-                            </div>
+                        </div>
 
-                            <div class="user-account-actions">
-                                <div class="user-account-save-status" aria-live="polite"></div>
-                                <button type="button" class="user-account-save-btn">Save</button>
-                            </div>
-
+                        <div class="user-account-actions">
+                            <div class="user-account-save-status" aria-live="polite"></div>
+                            <button type="button" class="user-account-save-btn">Save</button>
                         </div>
 
                     </div>
+
                 </div>
             </div>
         </div>
     </div>
+</div>
 </div>
 @endsection
 
@@ -244,10 +244,10 @@
         font-size: 15px;
         font-weight: 700;
         text-align: center;
-        background: rgba(17,118,10,0.04);
+        background: rgba(17, 118, 10, 0.04);
         padding: 10px 14px;
         border-radius: 8px;
-        border: 1px solid rgba(17,118,10,0.08);
+        border: 1px solid rgba(17, 118, 10, 0.08);
     }
 
     /* User account list styles (matches attachment) */
@@ -283,11 +283,11 @@
         padding: 12px;
         border-radius: 6px;
         min-height: 72px;
-        background: rgba(0,0,0,0.02);
+        background: rgba(0, 0, 0, 0.02);
     }
 
     .user-account-item {
-        background: rgba(0,0,0,0.03);
+        background: rgba(0, 0, 0, 0.03);
         padding: 10px 12px;
         margin-bottom: 10px;
         display: flex;
@@ -314,7 +314,7 @@
 
     .user-account-item.blocked {
         opacity: 0.6;
-        background: rgba(0,0,0,0.02);
+        background: rgba(0, 0, 0, 0.02);
         text-decoration: line-through;
     }
 
@@ -437,7 +437,7 @@
 </style>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
         var buttons = document.querySelectorAll('.admin-config-btn[data-config-target]');
         var blocks = document.querySelectorAll('.admin-config-form[data-config-block]');
 
@@ -446,19 +446,19 @@
                 return;
             }
 
-            buttons.forEach(function (button) {
+            buttons.forEach(function(button) {
                 var matches = button.getAttribute('data-config-target') === target;
                 button.classList.toggle('is-active', matches);
             });
 
-            blocks.forEach(function (block) {
+            blocks.forEach(function(block) {
                 var matches = block.getAttribute('data-config-block') === target;
                 block.classList.toggle('is-active', matches);
             });
         }
 
-        buttons.forEach(function (button) {
-            button.addEventListener('click', function () {
+        buttons.forEach(function(button) {
+            button.addEventListener('click', function() {
                 activate(button.getAttribute('data-config-target'));
             });
         });
@@ -472,7 +472,7 @@
     });
 </script>
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
         var addBtn = document.querySelector('.user-account-add-btn');
         var input = document.getElementById('user-account-input');
         var list = document.querySelector('.user-account-list');
@@ -496,7 +496,7 @@
                 return item;
             }
 
-            addBtn.addEventListener('click', function () {
+            addBtn.addEventListener('click', function() {
                 var val = input.value.trim();
                 if (!val) return;
                 var id = Date.now();
@@ -506,7 +506,7 @@
                 input.focus();
             });
 
-            list.addEventListener('click', function (e) {
+            list.addEventListener('click', function(e) {
                 var target = e.target;
                 if (target.classList.contains('user-account-item-remove')) {
                     var row = target.closest('.user-account-item');
@@ -540,14 +540,18 @@
         var saveBtn = document.querySelector('.user-account-save-btn');
         var saveStatus = document.querySelector('.user-account-save-status');
         if (saveBtn && list) {
-            saveBtn.addEventListener('click', function () {
+            saveBtn.addEventListener('click', function() {
                 var rows = list.querySelectorAll('.user-account-item');
                 var data = [];
-                rows.forEach(function (r) {
+                rows.forEach(function(r) {
                     var label = r.querySelector('.user-account-item-label')?.textContent.trim() || '';
                     var id = r.getAttribute('data-user-id') || null;
                     var blocked = r.getAttribute('data-blocked') === 'true' || r.classList.contains('blocked');
-                    data.push({ id: id, label: label, blocked: blocked });
+                    data.push({
+                        id: id,
+                        label: label,
+                        blocked: blocked
+                    });
                 });
 
                 // simple UI feedback
@@ -555,11 +559,13 @@
                 if (saveStatus) saveStatus.textContent = 'Saving...';
 
                 // simulate save delay
-                setTimeout(function () {
+                setTimeout(function() {
                     saveBtn.disabled = false;
                     if (saveStatus) saveStatus.textContent = 'Saved ' + data.length + ' account(s)';
                     console.log('User accounts saved (client-side):', data);
-                    setTimeout(function () { if (saveStatus) saveStatus.textContent = ''; }, 2500);
+                    setTimeout(function() {
+                        if (saveStatus) saveStatus.textContent = '';
+                    }, 2500);
                 }, 600);
             });
         }

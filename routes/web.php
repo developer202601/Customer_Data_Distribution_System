@@ -6,6 +6,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\ProcessFileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\BillRangeController;
 
 Route::middleware('session.auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -28,7 +30,10 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/process/assignments/regenerate', [AssignmentController::class, 'regenerate'])->name('process.assignments.regenerate');
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
 });
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.perform');
+
+Route::post('/create/range', [BillRangeController::class, 'createRange'])->name('create.range');

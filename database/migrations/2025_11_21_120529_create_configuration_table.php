@@ -16,7 +16,8 @@ return new class extends Migration
             $table->timestamps();
             $table->integer('upper_range');
             $table->integer('lower_range');
-            $table->foreignId('user_id')->constrained();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+
         });
     }
 

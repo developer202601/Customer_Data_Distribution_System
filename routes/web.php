@@ -19,9 +19,11 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
+
+    
 });
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.perform');
 
-Route::post('/create/range', [BillRangeController::class, 'createRange'])->name('create.range');
+Route::post('/create/range', [AdminController::class, 'createRange'])->name('create.range');

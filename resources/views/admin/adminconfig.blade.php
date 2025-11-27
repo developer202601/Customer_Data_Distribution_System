@@ -48,7 +48,7 @@
                     </div>
                 </div>
             </div>
-
+                @csrf
                     <div class="admin-config-upper-label">
                         <label for="name">Upper Range :</label>
                         <input type="number" placeholder='Upper Range' required />
@@ -58,7 +58,6 @@
                         <label for="lowername">Lower Range :</label>
                         <input type="number" placeholder='Lower Range' required />
                     </div>
-
                     <button class="config-btn-range">Save</button>
                 </div>
             </div>

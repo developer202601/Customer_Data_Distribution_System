@@ -10,6 +10,8 @@ class Configuration extends Model
 {
     use HasFactory;
 
+    protected $table = 'configuration';
+
     protected $fillable = [
         'upper_range',
         'lower_range',

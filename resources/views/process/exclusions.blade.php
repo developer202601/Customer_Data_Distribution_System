@@ -39,8 +39,8 @@
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
                                 <p class="text-muted mb-0">Upload up to {{ $maxFiles }} ZIP archives (each with a single Excel workbook) that list the identifiers you want to remove from the master list.</p>
-                                @if($filename)
-                                <p class="text-muted mb-0 mt-2">Active dataset: <strong>{{ $filename }}</strong> ({{ number_format($totalRows) }} rows)</p>
+                                @if(isset($process))
+                                <p class="text-muted mb-0 mt-2">Active dataset token: <strong>{{ $process->token }}</strong> ({{ number_format((int) $process->row_count) }} rows)</p>
                                 @endif
                             </div>
                         </div>
@@ -105,6 +105,23 @@
                 </div>
             </div>
         </form>
+
+        @if(isset($process) && ! empty($process->exclusion_archives))
+        <div class="card shadow-sm mt-4">
+            <div class="card-body p-4 p-lg-5">
+                <h2 class="h5 mb-3">Uploaded exclusion archives</h2>
+                <ul class="mb-0 list-unstyled">
+                    @foreach($process->exclusion_archives as $archive)
+                    <li class="py-1 border-bottom">
+                        <strong>{{ $archive['original_name'] ?? basename($archive['path'] ?? '') }}</strong>
+                        <span class="text-muted ms-2">{{ isset($archive['size']) ? number_format((int) $archive['size'] / 1024, 1) . ' KB' : '' }}</span>
+                        <span class="text-muted ms-2">{{ isset($archive['uploaded_at']) ? \Illuminate\Support\Carbon::parse($archive['uploaded_at'])->toDayDateTimeString() : '' }}</span>
+                    </li>
+                    @endforeach
+                </ul>
+            </div>
+        </div>
+        @endif
     </div>
 </div>
 

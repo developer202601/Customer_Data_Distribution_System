@@ -8,6 +8,17 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Master Dataset Hybrid Ingestion
+
+This project ingests very large (800k+ row) Excel workbooks through a hybrid PHP/Python pipeline:
+
+- Laravel receives the ZIP uploads, performs header/structure validation, and writes a manifest + status pair under `storage/app/master-datasets/{token}`.
+- An Artisan command (`php artisan master:ingest {process_id}`) or the upload controller invokes `scripts/ingest_master.py`, handing it the manifest and status paths along with the archive location.
+- Python is responsible for streaming the workbook into the `master_dataset_rows_staging` table (and applying the exclusion ZIPs) before exiting with a status payload.
+- Once Python exits successfully, Laravel promotes the staging rows into `master_dataset_rows`, recalculates assignments, and unlocks the UI.
+
+Set the `PYTHON_BINARY` environment variable if the runtime is not available as `python` on your PATH.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

@@ -21,13 +21,8 @@
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
                 <h1 class="process-preview-title mb-2">Group A Allocation</h1>
-                <p class="text-muted mb-1">Retail and Micro Business records that matched the latest bill and arrears rules have been split into the operational quotas below.</p>
-                @if(($dataset['original_filename'] ?? null))
-                    <p class="text-muted mb-0">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format($dataset['row_count'] ?? 0) }} rows)</p>
-                @endif
-                @if($generatedAt)
-                <p class="text-muted mb-0">Assignments generated on {{ $generatedAt }}.</p>
-                @endif
+                <p class="text-muted mb-1">Retail and Micro Business records that matched the arrears rules have been split into the operational quotas below.</p>
+                <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Evaluated rows: {{ number_format($group['input'] ?? 0) }}</p>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 <a href="{{ route('process.assignments.index') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
@@ -52,12 +47,12 @@
         @endif
 
 
-        @php($quotas = $assignments['quotas'] ?? [])
-        @php($region = $assignments['region_billing'] ?? [])
+        @php($quotas = $group['quotas'] ?? [])
+        @php($region = $group['region'] ?? [])
         <div class="group-section mb-5">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h4 mb-0">Quota allocation</h2>
-                <span class="text-muted">{{ number_format($assignments['totals']['input'] ?? 0) }} records evaluated</span>
+                <span class="text-muted">{{ number_format($group['input'] ?? 0) }} records evaluated</span>
             </div>
 
             <div class="row g-3">
@@ -68,7 +63,7 @@
                             <span class="process-summary-label d-block">{{ $quota['label'] }}</span>
                             <span class="process-summary-value">{{ number_format($quota['actual'] ?? 0) }}</span>
                         </div>
-                        <p class="text-muted mb-3">Target {{ number_format($quota['target'] ?? 0) }}. {{ ($quota['actual'] ?? 0) >= ($quota['target'] ?? 0) ? 'Quota met.' : ('Short by ' . number_format(max(($quota['target'] ?? 0) - ($quota['actual'] ?? 0), 0)) . '.') }}</p>
+                        <p class="text-muted mb-3">Target {{ number_format($quota['target'] ?? 0) }} · {{ ($quota['actual'] ?? 0) >= ($quota['target'] ?? 0) ? 'Quota met.' : ('Short by ' . number_format(max(($quota['target'] ?? 0) - ($quota['actual'] ?? 0), 0)) . '.') }}</p>
                         <div class="mt-auto">
                             <a href="{{ route('process.assignments.download', ['group' => 'group-a', 'bucket' => $key]) }}" class="btn btn-dark w-100" data-loader-off="1">Download Excel</a>
                         </div>
@@ -85,9 +80,9 @@
                             <span class="process-summary-label d-block">{{ $region['label'] ?? 'Region Billing Centre' }}</span>
                             <span class="process-summary-value">{{ number_format($region['actual'] ?? 0) }}</span>
                         </div>
-                        <p class="text-muted mb-3">Contains all remaining Group&nbsp;A records not allocated to a quota.</p>
+                        <p class="text-muted mb-3">Contains all remaining Group&nbsp;A records not allocated to a quota. Download the combined workbook from the Region Billing Centre page.</p>
                         <div class="mt-auto">
-                            <a href="{{ route('process.assignments.download', ['group' => 'group-a', 'bucket' => 'region-billing']) }}" class="btn btn-success w-100 text-white" data-loader-off="1">Download Excel</a>
+                            <a href="{{ route('process.assignments.region') }}" class="btn btn-success w-100 text-white" data-loader-off="1">Open Region Billing Centre</a>
                         </div>
                     </div>
                 </div>

@@ -1,0 +1,59 @@
+here, we have to do a change, it as below,
+
+specially we cant use php artisan queue:work or listen
+
+u know that we have a master excel file that have below fields and data:
+RUN_DATE	REGION	RTOM	CUSTOMER_REF	ACCOUNT_NUM	PRODUCT_LABEL	MEDIUM	CUSTOMER_SEGMENT	ADDRESS_NAME	FULL_ADDRESS	 LATEST_BILL_MNY 	 NEW_ARREARS_20251022 	MOBILE_CONTACT_TEL	EMAIL_ADDRESS	CREDIT_SCORE	CREDIT_CLASS_NAME	BILL_HANDLING_CODE_NAME	AGE_MONTHS	SALES_PERSON	ACCOUNT_MANAGER	SLT_GL_SUB_SEGMENT	BILLING_CENTRE	PROVINCE	NEXT_BILL_DTM	BILL_MONTH	LATEST_BILL_DTM	INVOICING_CO_ID	INVOICING_CO_NAME	PRODUCT_SEQ	PRODUCT_ID	LATEST_PRODUCT_STATUS	BILL_HANDLING_CODE	SLT_BUSINESS_LINE_VALUE	SALES_CHANNEL
+2025-10-22 09.20	METRO	KX	CR003461444	0038628692	0112872438	COPPER	05	To Chief Sales Officer	2nd Floor,,Lotus Road,,Colombo 01	 -   	 3,432,797.16 	0710335665	trilliumresidencies@gmail.com	20.55	Business - High	E-statement by email	99	D M I R Siriwardana	RM_CON_GL	Retail	KX	Metro 01	2025-11-01	2025-09	2025-10-01	1	SLT	618	1529	OK	02	11	RTOM-Kotte
+
+
+now we need to get it into the server as zip file we did before and navigate to the next page that get exclusion files (can upto 3 excels) as a single zip file for exclusion process. then we have save that zip files in the server side and then start to validate master excel file (1st uploaded) that the fields have valid data we previously checked, and after then upload it row by row using python code to the database table that have exact column names and variable types. if there is validate issue redirect user to the 1st page to upload again and show what is the error and remove those saved zip files from backend. and if they upload that master file again do the save process. if the master data insert to the database we can remove that zip file from the system. (not the saved file from server.)
+
+Then we have to unzip exclusion files each and check its'ACCOUNT_NUM' with that database column data and mark them as excluded and the filename that used to exclude that row. for that we need to have 2 additional columns "exclusion reason" to put excel exclusion file name and "excluded" (excluded can be a booloean or better to maximize performance in later processors for get non excluded rows immediatly.) and also mark as excluded followings with reason,
+latest_product_status != "OK"
+medium column is not "Copper" or "FTTH"
+new_arrears_yyyymmdd < 2400 
+
+and after we have to do that ranging process for group A and B, for now lets hardcode those range values in to the system. here in slt_sub_segmant column = Retail or Micro business, then we have to check the rows that have latest_bill_mny<5000 and get middle rows when order ascending order of the new_arrears_YYYYMMDD column and take its value 10000>new_arrears_YYYYMMDD>3000 (10000 and 3000 is not row numbers when order. its value in the column) and mark them as (in new column called "assigned to" in the same table) call center staff for 1st 30000,call center for next 5000 rows and staff for after 3000 rows and then mark other all retail and micro business as "region billing centre".(remember if we cant get 30000+5000+3000 within that 10000>x>3000 range, extend that range into the 10000 side. as and example lets expand that into 15000>x>3000 to satisfy that number).
+
+if its not retail or micro business, then if its latest_bill_mny < 5000, needs to mark as excluded. others to region billing center
+
+
+after that have to get that each and every excel file download button. for that we need following excels, u can easily identify them using below SLT_BUSINESS_LINE_VALUE column values.
+
+call center staff (group A)
+call center (group A)
+staff (group A)
+region billing centre (group A and B both)
+47, 44, 41 enterprise & 76 wholesale bundle (group B)
+31 SME (group B)
+excluded excel with reasons for each row.
+
+additionally for your reference,
+retail is 11
+micro business is 35
+
+later we have to download them again based on the month and we have to show who was the creator of that process for each month process. for that i think we have to make a way to remember this month creator and the rows that month have in a seperate table right? please suggest speed method for that. remember this is done once per month. new_arrears_yyyymmdd can identify the month and date the excel file belongs.
+
+currently we need to have a composite key, lets use "RUN_DATE" and "PRODUCT_LABEL" for that.
+
+GPT-5-Codex note (2025-11-26): Requirements reviewed and analysis in progress.
+GPT-5-Codex note (2025-11-26 10:00): Implementation started per plan.
+GPT-5-Codex note (2025-11-26 10:05): Added master dataset process/row migrations.
+GPT-5-Codex note (2025-11-26 10:12): Created Eloquent models for master dataset tables.
+GPT-5-Codex note (2025-11-26 10:25): Drafted MasterDatasetImporter service (validation + DB ingest skeleton).
+GPT-5-Codex note (2025-11-26 10:30): Preparing controller integration updates.
+GPT-5-Codex note (2025-11-26 10:45): Added MasterDatasetUploadController, new upload view, and routes using importer.
+GPT-5-Codex note (2025-11-26 10:46): Beginning exclusion workflow refactor to use persisted master dataset rows.
+GPT-5-Codex note (2025-11-26 11:05): Implemented MasterDatasetExclusionService, refactored controller/view to tag rows + archive uploads.
+GPT-5-Codex note (2025-11-26 11:25): Added MasterDatasetAssignmentService with Group A distribution, importer now calls it and exclusions re-run assignments.
+GPT-5-Codex note (2025-11-26 11:35): Refactoring assignment UI/downloads to use persisted master dataset rows.
+GPT-5-Codex note (2025-11-26 11:55): Replaced assignment controller/views with DB-backed summaries and on-demand Excel exports.
+GPT-5-Codex note (2025-11-26 12:10): Wired dashboard/nav to the master dataset workflow and disabled the legacy queue upload screens.
+GPT-5-Codex note (2025-11-26 12:18): Master upload now redirects straight to the exclusions step after a successful import.
+GPT-5-Codex note (2025-11-26 12:22): Exclusion uploads now jump to the assignments exclusion summary once applied.
+GPT-5-Codex note (2025-11-26 12:30): Exclusion confirmation now routes back to the assignment overview with refreshed guidance.
+GPT-5-Codex note (2025-11-26 12:32): Restored VIP workflow via new assignments page, searchable table, and dedicated Excel export.
+GPT-5-Codex note (2025-11-26 12:35): Assignment logic now leaves VIP credit-class rows unassigned and filters them into the standalone VIP export.
+GPT-5-Codex note (2025-11-26 12:42): Region Billing Centre records now surface via a dedicated page and single combined export.
+GPT-5-Codex note (2025-11-28 09:15): Introduced the hybrid ingestion scaffold (staging table, Python manifest/status hand-off, artisan command, placeholder script).

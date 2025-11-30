@@ -135,99 +135,49 @@ class ProcessFileController extends Controller
 	private const FILTER_INVOICING_CO_IDS = ['1'];
 	private const PREVIEW_ROW_LIMIT = 6;
 
-	public function create(): View
+	public function create(Request $request): RedirectResponse
 	{
-		return view('process.upload');
+		return redirect()->route('master.upload.create')->with('status', $this->legacyWorkflowDisabledMessage());
 	}
 
 	public function store(Request $request): RedirectResponse|JsonResponse
 	{
-		$request->validate([
-			'upload' => 'required|file|mimes:zip',
-		]);
-
-		$file = $request->file('upload');
-		$token = (string) Str::uuid();
-		$archivePath = $file->storeAs('uploads', $token . '.zip');
-		$originalName = $file->getClientOriginalName();
-
-		try {
-			$storedPath = $this->extractWorkbookFromArchive($archivePath, $token);
-		} catch (\RuntimeException $exception) {
-			Storage::delete($archivePath);
-			Storage::delete('uploads/' . $token . '.xlsx');
-
-			throw ValidationException::withMessages([
-				'upload' => $exception->getMessage(),
-			]);
-		}
-
-		$this->initialiseProgressState($token, $storedPath, $originalName, $archivePath);
-
-		ProcessExcelCoordinator::dispatch($token, $storedPath, $originalName);
+		$message = $this->legacyWorkflowDisabledMessage();
 
 		if ($request->expectsJson()) {
 			return response()->json([
-				'token' => $token,
-			]);
+				'status' => 'unsupported',
+				'message' => $message,
+			], 410);
 		}
 
-		return redirect()
-			->route('process.upload.create')
-			->with('status', 'Processing started. You can refresh this page in a moment to see the preview.');
+		return redirect()->route('master.upload.create')->withErrors([
+			'upload' => $message,
+		]);
 	}
 
 	public function cancel(Request $request): JsonResponse
 	{
-		$data = $request->validate([
-			'token' => 'required|string',
-			'reason' => 'nullable|string',
-		]);
-
-		$token = $data['token'];
-		$state = Cache::get($this->progressCacheKey($token));
-
-		if (! $state) {
-			return response()->json([
-				'status' => 'missing',
-				'message' => 'Processing session already cleared.',
-			], 404);
-		}
-
-		UploadProcessManager::cancel($token, $state['batch_id'] ?? null, $data['reason'] ?? null);
-
 		return response()->json([
-			'status' => 'cancelled',
-		]);
+			'status' => 'unsupported',
+			'message' => $this->legacyWorkflowDisabledMessage(),
+		], 410);
 	}
 
 	public function progress(string $token): JsonResponse
 	{
-		$state = Cache::get($this->progressCacheKey($token));
-
-		if (! $state) {
-			return response()->json([
-				'status' => 'missing',
-				'progress' => 0,
-				'message' => 'Processing state not found. Please upload the file again.',
-			], 404);
-		}
-
 		return response()->json([
-			'status' => $state['status'] ?? 'queued',
-			'progress' => $state['progress'] ?? 0,
-			'message' => $state['message'] ?? 'Preparing data…',
-			'error' => $state['error'] ?? null,
-			'processed_rows' => $state['processed_rows'] ?? null,
-			'total_rows' => $state['total_rows'] ?? null,
-			'chunks_total' => $state['chunks_total'] ?? null,
-			'chunks_completed' => $state['chunks_completed'] ?? null,
-		]);
+			'status' => 'unsupported',
+			'progress' => 0,
+			'message' => $this->legacyWorkflowDisabledMessage(),
+		], 410);
 	}
 
 	public function complete(string $token): RedirectResponse
 	{
-		return $this->finalizeUpload($token);
+		return redirect()->route('master.upload.create')->withErrors([
+			'upload' => $this->legacyWorkflowDisabledMessage(),
+		]);
 	}
 
 	public function preview(Request $request): View|RedirectResponse
@@ -352,8 +302,10 @@ class ProcessFileController extends Controller
 		if (! $dataset) {
 			session()->forget(['process.upload.dataset', 'process.upload.data', 'process.upload.path']);
 			return redirect()
-				->route('process.upload.create')
-				->with('status', $missingUploadStatus);
+				->route('master.upload.create')
+				->withErrors([
+					'upload' => $missingUploadStatus,
+				]);
 		}
 
 		return $dataset;
@@ -413,7 +365,7 @@ class ProcessFileController extends Controller
 		$state = Cache::get($this->progressCacheKey($token));
 
 		if (! $state) {
-			return redirect()->route('process.upload.create')->withErrors([
+			return redirect()->route('master.upload.create')->withErrors([
 				'upload' => 'Processing session expired. Please upload the file again.',
 			]);
 		}
@@ -425,7 +377,7 @@ class ProcessFileController extends Controller
 				$message = $state['error'];
 			}
 
-			return redirect()->route('process.upload.create')->withErrors([
+			return redirect()->route('master.upload.create')->withErrors([
 				'upload' => $message,
 			]);
 		}
@@ -435,7 +387,7 @@ class ProcessFileController extends Controller
 		if (! $datasetPath || ! Storage::exists($datasetPath)) {
 			Cache::forget($this->progressCacheKey($token));
 
-			return redirect()->route('process.upload.create')->withErrors([
+			return redirect()->route('master.upload.create')->withErrors([
 				'upload' => 'Processed data could not be located. Please upload the file again.',
 			]);
 		}
@@ -452,7 +404,7 @@ class ProcessFileController extends Controller
 
 		if (! $manifest) {
 			Cache::forget($this->progressCacheKey($token));
-			return redirect()->route('process.upload.create')->withErrors([
+			return redirect()->route('master.upload.create')->withErrors([
 				'upload' => 'Unable to load processed data. Please try again.',
 			]);
 		}
@@ -537,5 +489,10 @@ class ProcessFileController extends Controller
 		}
 
 		return $entries[0];
+	}
+
+	private function legacyWorkflowDisabledMessage(): string
+	{
+		return 'The legacy queue-based uploader has been replaced. Use the Master Dataset workflow instead.';
 	}
 }

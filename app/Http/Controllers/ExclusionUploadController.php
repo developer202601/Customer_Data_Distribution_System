@@ -2,45 +2,42 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\GenerateDatasetExports;
-use App\Support\DatasetAssignmentManager;
-use App\Support\ProcessedDataset;
-use App\Support\ProcessesExcelRows;
+use App\Models\MasterDatasetProcess;
+use App\Support\MasterDatasetExclusionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Throwable;
-use ZipArchive;
 
 class ExclusionUploadController extends Controller
 {
-    use ProcessesExcelRows;
-
     private const MAX_FILES = 3;
+
+    public function __construct(private MasterDatasetExclusionService $exclusionService)
+    {
+    }
 
     public function create(): View|RedirectResponse
     {
-        $dataset = $this->resolveDatasetOrRedirect('Please complete the main upload before managing exclusions.');
+        $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
 
-        if ($dataset instanceof RedirectResponse) {
-            return $dataset;
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
         return view('process.exclusions', [
-            'filename' => $dataset->originalFilename(),
-            'totalRows' => $dataset->filteredRowCount(),
             'maxFiles' => self::MAX_FILES,
+            'process' => $process,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $dataset = $this->resolveDatasetOrRedirect('Please complete the main upload before managing exclusions.');
+        $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
 
-        if ($dataset instanceof RedirectResponse) {
-            return $dataset;
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
         $request->validate([
@@ -68,277 +65,48 @@ class ExclusionUploadController extends Controller
         }
 
         try {
-            $exclusionKeys = $this->collectExclusionKeys($files);
-        } catch (\RuntimeException $exception) {
-            return back()
-                ->withErrors(['exclusions' => $exception->getMessage()])
-                ->withInput();
+            $result = $this->exclusionService->apply($process, $files);
+        } catch (Throwable $exception) {
+            throw $exception instanceof \Illuminate\Validation\ValidationException ? $exception : \Illuminate\Validation\ValidationException::withMessages([
+                'exclusions' => $exception->getMessage() ?: 'Unable to process the exclusion files.',
+            ]);
         }
 
-        if ($exclusionKeys['rows'] === 0) {
-            return back()
-                ->withErrors(['exclusions' => 'The uploaded files did not contain any rows to match against.'])
-                ->withInput();
-        }
-
-        $result = $dataset->removeAccounts($exclusionKeys['account_num'], $exclusionKeys['details']);
-        $removedCount = (int) ($result['removed_count'] ?? 0);
-        $removedEntries = $result['removed'] ?? [];
-
-        if ($removedCount === 0) {
+        if (($result['matched'] ?? 0) === 0) {
             return back()->with('status', 'No matching records were removed by the exclusion files.');
         }
 
-        $removedDetails = array_map(static function (array $entry) {
-            return [
-                'row_index' => $entry['row_index'] ?? null,
-                'account_num' => $entry['account_num'] ?? null,
-                'customer_ref' => $entry['customer_ref'] ?? null,
-                'reason' => $entry['reason'] ?? 'Excluded via exclusion file.',
-                'file' => $entry['file'] ?? null,
-            ];
-        }, $removedEntries);
-
-        $history = $dataset->exclusionHistory();
-        $history[] = [
-            'removed' => $removedCount,
-            'files' => array_map(fn(UploadedFile $file) => $file->getClientOriginalName(), $files),
-            'timestamp' => now()->toDateTimeString(),
-            'records' => $removedDetails,
-        ];
-        $dataset->setExclusionHistory($history);
-        $dataset->setExclusionRecords($removedDetails);
-
-        $manager = app(DatasetAssignmentManager::class);
-        session()->put('process.assignments', $manager->buildAssignmentsFromDataset($dataset));
-
-        $user = $request->user();
-        $userContext = [
-            'id' => $user?->getAuthIdentifier(),
-            'name' => $user?->username ?? $user?->name ?? ($user?->email ?? null),
-        ];
-
-        GenerateDatasetExports::dispatch(
-            $dataset->token(),
-            $dataset->manifestPath(),
-            $userContext
+        $message = sprintf(
+            '%d records were marked as excluded. %d were already excluded.',
+            (int) ($result['matched'] ?? 0),
+            (int) ($result['already_excluded'] ?? 0)
         );
 
         return redirect()
             ->route('process.assignments.index')
-            ->with('status', sprintf('%d records were excluded from the master list. Assignments have been prepared.', $removedCount));
+            ->with('status', $message . ' Review the assignment overview for updated totals.');
     }
 
-    private function resolveDatasetOrRedirect(string $message): ProcessedDataset|RedirectResponse
+    private function resolveProcessOrRedirect(string $message): MasterDatasetProcess|RedirectResponse
     {
-        try {
-            $dataset = ProcessedDataset::fromSession();
-        } catch (Throwable $exception) {
-            $dataset = null;
-        }
+        $processId = session('master.dataset.process_id');
 
-        if (! $dataset) {
-            return redirect()->route('process.upload.create')->withErrors([
+        if (! $processId) {
+            return redirect()->route('master.upload.create')->withErrors([
                 'upload' => $message,
             ]);
         }
 
-        return $dataset;
-    }
+        $process = MasterDatasetProcess::find($processId);
 
-    /**
-     * @param UploadedFile[] $files
-     */
-    private function collectExclusionKeys(array $files): array
-    {
-        $keys = [
-            'account_num' => [],
-            'rows' => 0,
-            'details' => [],
-        ];
+        if (! $process) {
+            session()->forget('master.dataset.process_id');
 
-        foreach ($files as $file) {
-            if (! $file instanceof UploadedFile) {
-                continue;
-            }
-
-            $worksheetRows = $this->loadWorksheetRows($file);
-
-            if (empty($worksheetRows)) {
-                continue;
-            }
-
-            [$headers, $dataRows] = $this->separateHeaderAndRows($worksheetRows);
-            $headerMap = $this->buildHeaderMap($headers);
-            $fileName = $file->getClientOriginalName();
-
-            foreach ($dataRows as $columns) {
-                if (! $this->rowHasData($columns)) {
-                    continue;
-                }
-
-                $account = $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM');
-                $reason = $this->extractExclusionReason($columns, $headerMap);
-
-                if ($account === '') {
-                    continue;
-                }
-
-                if ($account !== '') {
-                    $keys['account_num'][$account] = true;
-                    if (! isset($keys['details'][$account])) {
-                        $keys['details'][$account] = [];
-                    }
-                    $keys['details'][$account][] = [
-                        'file' => $fileName,
-                        'reason' => $reason,
-                    ];
-                }
-
-                $keys['rows']++;
-            }
+            return redirect()->route('master.upload.create')->withErrors([
+                'upload' => $message,
+            ]);
         }
 
-        return $keys;
-    }
-
-    private function extractExclusionReason(array $columns, array $headerMap): string
-    {
-        foreach (['EXCLUSION_REASON', 'REASON', 'REMARKS', 'COMMENT'] as $column) {
-            $value = $this->getColumnValue($columns, $headerMap, $column);
-
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        return '';
-    }
-
-    private function loadWorksheetRows(UploadedFile $file): array
-    {
-        $workbookPath = $this->prepareWorkbookPath($file);
-
-        try {
-            $reader = IOFactory::createReader('Xlsx');
-            $reader->setReadDataOnly(true);
-
-            $spreadsheet = $reader->load($workbookPath);
-
-            $allRows = [];
-            $firstSheet = true;
-
-            foreach ($spreadsheet->getAllSheets() as $sheet) {
-                $rows = $sheet->toArray(null, true, true, true);
-
-                if (empty($rows)) {
-                    continue;
-                }
-
-                if ($firstSheet) {
-                    // include header row from the first worksheet
-                    foreach ($rows as $r) {
-                        $allRows[] = $r;
-                    }
-                    $firstSheet = false;
-                } else {
-                    // subsequent worksheets: skip their header row (first row)
-                    $rowKeys = array_keys($rows);
-                    $headerKey = $rowKeys[0] ?? null;
-                    if ($headerKey !== null) {
-                        unset($rows[$headerKey]);
-                    }
-
-                    foreach ($rows as $r) {
-                        $allRows[] = $r;
-                    }
-                }
-            }
-
-            $spreadsheet->disconnectWorksheets();
-            unset($spreadsheet);
-
-            return $allRows;
-        } finally {
-            if ($workbookPath !== $file->getRealPath() && file_exists($workbookPath)) {
-                @unlink($workbookPath);
-            }
-        }
-    }
-
-    private function prepareWorkbookPath(UploadedFile $file): string
-    {
-        $extension = strtolower((string) $file->getClientOriginalExtension());
-
-        if ($extension !== 'zip') {
-            return $file->getRealPath();
-        }
-
-        return $this->extractWorkbookFromZip($file);
-    }
-
-    private function extractWorkbookFromZip(UploadedFile $file): string
-    {
-        $zip = new ZipArchive();
-        if ($zip->open($file->getRealPath()) !== true) {
-            throw new \RuntimeException(sprintf('Unable to open the ZIP archive "%s".', $file->getClientOriginalName()));
-        }
-
-        try {
-            $entry = $this->locateExcelEntry($zip);
-            $targetDirectory = storage_path('app/tmp');
-            if (! is_dir($targetDirectory) && ! mkdir($targetDirectory, 0755, true) && ! is_dir($targetDirectory)) {
-                throw new \RuntimeException('Unable to prepare a temporary directory for exclusions.');
-            }
-
-            $targetPath = $targetDirectory . '/exclusion_' . uniqid('', true) . '.xlsx';
-
-            $source = $zip->getStream($entry);
-            if (! $source) {
-                throw new \RuntimeException(sprintf('Unable to read "%s" inside the ZIP archive.', $entry));
-            }
-
-            $target = fopen($targetPath, 'wb');
-            if (! $target) {
-                fclose($source);
-                throw new \RuntimeException('Unable to store the extracted workbook for processing.');
-            }
-
-            stream_copy_to_stream($source, $target);
-            fclose($source);
-            fclose($target);
-
-            return $targetPath;
-        } finally {
-            $zip->close();
-        }
-    }
-
-    private function locateExcelEntry(ZipArchive $zip): string
-    {
-        $entries = [];
-
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $stat = $zip->statIndex($index);
-            $name = $stat['name'] ?? '';
-
-            if ($name === '' || str_ends_with($name, '/')) {
-                continue;
-            }
-
-            if (str_ends_with(strtolower($name), '.xlsx')) {
-                $entries[] = $name;
-            }
-        }
-
-        if (empty($entries)) {
-            throw new \RuntimeException('Each ZIP must contain exactly one Excel (.xlsx) workbook, but none were found.');
-        }
-
-        if (count($entries) > 1) {
-            throw new \RuntimeException('Each ZIP must contain exactly one Excel (.xlsx) workbook.');
-        }
-
-        return $entries[0];
+        return $process;
     }
 }

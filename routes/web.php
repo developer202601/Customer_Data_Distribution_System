@@ -4,11 +4,14 @@ use App\Http\Controllers\AssignmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
+use App\Http\Controllers\MasterDatasetUploadController;
 use App\Http\Controllers\ProcessFileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('session.auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/master/upload', [MasterDatasetUploadController::class, 'create'])->name('master.upload.create');
+    Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
@@ -24,6 +27,8 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments/group-a', [AssignmentController::class, 'groupA'])->name('process.assignments.group-a');
     Route::get('/process/assignments/group-b', [AssignmentController::class, 'groupB'])->name('process.assignments.group-b');
     Route::get('/process/assignments/exclusions', [AssignmentController::class, 'exclusions'])->name('process.assignments.exclusions');
+    Route::get('/process/assignments/vip', [AssignmentController::class, 'vip'])->name('process.assignments.vip');
+    Route::get('/process/assignments/region-billing', [AssignmentController::class, 'regionBilling'])->name('process.assignments.region');
     Route::get('/process/assignments/filtered-out', [AssignmentController::class, 'filteredOut'])->name('process.assignments.filtered-out');
     Route::post('/process/assignments/regenerate', [AssignmentController::class, 'regenerate'])->name('process.assignments.regenerate');
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');

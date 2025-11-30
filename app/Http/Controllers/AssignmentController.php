@@ -2,666 +2,258 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DatasetExport;
-use App\Support\DatasetAssignmentManager;
-use App\Support\DatasetExportManager;
-use App\Support\ProcessedDataset;
-use App\Support\ProcessesExcelRows;
+use App\Models\MasterDatasetProcess;
+use App\Support\MasterDatasetAssignmentService;
+use App\Support\MasterDatasetExportService;
+use App\Support\MasterDatasetViewService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use Throwable;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AssignmentController extends Controller
 {
-    use ProcessesExcelRows;
-
-    public function __construct(private DatasetExportManager $exportManager)
-    {
+    public function __construct(
+        private MasterDatasetViewService $viewService,
+        private MasterDatasetAssignmentService $assignmentService,
+        private MasterDatasetExportService $exportService,
+    ) {
     }
 
     public function index(): View|RedirectResponse
     {
-        $context = $this->resolveContext('Run the main upload and exclusions before reviewing assignments.');
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review assignments.');
 
-        if ($context instanceof RedirectResponse) {
-            return $context;
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
-        $assignments = $context['assignments'];
-        $dataset = $context['dataset'];
-        $datasetSummary = $this->datasetInfo($dataset);
-
-        $groupTotals = [
-            'group_a' => (int) ($assignments['group_a']['totals']['input'] ?? 0),
-            'group_b' => (int) ($assignments['group_b']['totals']['eligible'] ?? 0),
-        ];
-
         return view('process.assignments.overview', [
-            'dataset' => $datasetSummary,
-            'generatedAt' => $assignments['generated_at'] ?? null,
-            'groupTotals' => $groupTotals,
-            'latestExclusion' => $this->latestExclusionSummary($dataset),
-            'filteredOutSummary' => $this->filteredOutSummary($dataset),
-            'vipSummary' => $this->vipSummary($dataset),
+            'process' => $process,
+            'dataset' => $this->viewService->datasetSummary($process),
+            'groupA' => $this->viewService->groupASummary($process),
+            'groupB' => $this->viewService->groupBSummary($process),
+            'exclusions' => $this->viewService->exclusionSummary($process),
+            'vip' => $this->viewService->vipSummary($process),
+            'region' => $this->viewService->regionSummary($process),
+        ]);
+    }
+
+    public function vip(Request $request): View|RedirectResponse
+    {
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review VIP records.');
+
+        if ($process instanceof RedirectResponse) {
+            return $process;
+        }
+
+        $search = trim((string) $request->query('search', ''));
+
+        $query = $this->viewService->vipQuery($process);
+
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $query->where(function ($builder) use ($like) {
+                $builder
+                    ->where('customer_ref', 'like', $like)
+                    ->orWhere('account_num', 'like', $like)
+                    ->orWhere('product_label', 'like', $like);
+            });
+        }
+
+        $rows = $query
+            ->orderBy('customer_ref')
+            ->orderBy('account_num')
+            ->paginate(50)
+            ->withQueryString();
+
+        return view('process.assignments.vip', [
+            'process' => $process,
+            'dataset' => $this->viewService->datasetSummary($process),
+            'summary' => $this->viewService->vipSummary($process),
+            'rows' => $rows,
+            'search' => $search,
         ]);
     }
 
     public function groupA(): View|RedirectResponse
     {
-        $context = $this->resolveContext('Run the main upload and exclusions before reviewing assignments.');
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review assignments.');
 
-        if ($context instanceof RedirectResponse) {
-            return $context;
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
-        $dataset = $context['dataset'];
         return view('process.assignments.group-a', [
-            'dataset' => $this->datasetInfo($dataset),
-            'assignments' => $context['assignments']['group_a'] ?? [],
-            'generatedAt' => $context['assignments']['generated_at'] ?? null,
-            'latestExclusion' => $this->latestExclusionSummary($dataset),
+            'process' => $process,
+            'dataset' => $this->viewService->datasetSummary($process),
+            'group' => $this->viewService->groupASummary($process),
         ]);
     }
 
     public function groupB(): View|RedirectResponse
     {
-        $context = $this->resolveContext('Run the main upload and exclusions before reviewing assignments.');
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review assignments.');
 
-        if ($context instanceof RedirectResponse) {
-            return $context;
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
-        $dataset = $context['dataset'];
         return view('process.assignments.group-b', [
-            'dataset' => $this->datasetInfo($dataset),
-            'assignments' => $context['assignments']['group_b'] ?? [],
-            'generatedAt' => $context['assignments']['generated_at'] ?? null,
-            'latestExclusion' => $this->latestExclusionSummary($dataset),
+            'process' => $process,
+            'dataset' => $this->viewService->datasetSummary($process),
+            'group' => $this->viewService->groupBSummary($process),
+        ]);
+    }
+
+    public function regionBilling(Request $request): View|RedirectResponse
+    {
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review Region Billing Centre records.');
+
+        if ($process instanceof RedirectResponse) {
+            return $process;
+        }
+
+        $search = trim((string) $request->query('search', ''));
+
+        $query = $this->viewService->regionQuery($process);
+
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $query->where(function ($builder) use ($like) {
+                $builder
+                    ->where('customer_ref', 'like', $like)
+                    ->orWhere('account_num', 'like', $like)
+                    ->orWhere('product_label', 'like', $like);
+            });
+        }
+
+        $rows = $query
+            ->orderBy('customer_ref')
+            ->orderBy('account_num')
+            ->paginate(50)
+            ->withQueryString();
+
+        return view('process.assignments.region', [
+            'process' => $process,
+            'dataset' => $this->viewService->datasetSummary($process),
+            'summary' => $this->viewService->regionSummary($process),
+            'rows' => $rows,
+            'search' => $search,
         ]);
     }
 
     public function exclusions(): View|RedirectResponse
     {
-        $context = $this->resolveContext('Upload a dataset and exclusions before reviewing the exclusion summary.');
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset before reviewing exclusions.');
 
-        if ($context instanceof RedirectResponse) {
-            return $context;
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
-        $dataset = $context['dataset'];
         return view('process.assignments.exclusions', [
-            'dataset' => $this->datasetInfo($dataset),
-            'latestExclusion' => $this->latestExclusionSummary($dataset),
-            'filteredOutSummary' => $this->filteredOutSummary($dataset),
-            'vipSummary' => $this->vipSummary($dataset),
+            'process' => $process,
+            'dataset' => $this->viewService->datasetSummary($process),
+            'summary' => $this->viewService->exclusionSummary($process),
         ]);
     }
 
-    public function filteredOut(Request $request): View|RedirectResponse
+    public function filteredOut(): RedirectResponse
     {
-        $context = $this->resolveContext('Upload a dataset before reviewing filtered-out records.');
-
-        if ($context instanceof RedirectResponse) {
-            return $context;
-        }
-
-        $dataset = $context['dataset'];
-        $headers = $dataset->headers();
-        $overallCount = $dataset->filteredOutCount();
-
-        if (empty($headers) || $overallCount === 0) {
-            return redirect()->route('process.assignments.exclusions')->withErrors([
-                'assignments' => 'No filtered-out records are available yet. Upload a dataset and rerun the filters.',
-            ]);
-        }
-
-        $searchTerm = trim((string) $request->query('search', ''));
-        $searchApplied = $searchTerm !== '';
-        $listing = $dataset->filteredOutListing(50, $searchTerm);
-        $displayRows = $listing['rows'] ?? [];
-        ksort($displayRows, SORT_NUMERIC);
-        $matchingCount = (int) ($listing['total'] ?? 0);
-        $limited = (bool) ($listing['limited'] ?? false);
-
-        return view('process.assignments.filtered-out', [
-            'dataset' => $this->datasetInfo($dataset),
-            'headers' => $headers,
-            'rows' => $displayRows,
-            'overallCount' => $overallCount,
-            'matchingCount' => $matchingCount,
-            'displayCount' => count($displayRows),
-            'limited' => $limited,
-            'searchTerm' => $searchTerm,
-            'searchApplied' => $searchApplied,
+        return redirect()->route('process.assignments.exclusions')->withErrors([
+            'assignments' => 'Filtered-out records are included in the exclusions download.',
         ]);
     }
 
-    public function regenerate(Request $request): RedirectResponse
+    public function regenerate(): RedirectResponse
     {
-        try {
-            $dataset = ProcessedDataset::fromSession();
-        } catch (Throwable $exception) {
-            $dataset = null;
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset before regenerating assignments.');
+
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
-        if (! $dataset) {
-            return redirect()->route('process.upload.create')->withErrors([
-                'upload' => 'Processed data is unavailable. Upload the master file again.',
-            ]);
-        }
+        $this->assignmentService->assign($process);
 
-        $manager = app(DatasetAssignmentManager::class);
-        session()->put('process.assignments', $manager->buildAssignmentsFromDataset($dataset));
-
-        $redirectRoute = $request->input('redirect_to');
-        $message = 'Assignments regenerated successfully.';
-
-        if ($redirectRoute && Route::has($redirectRoute)) {
-            return redirect()->route($redirectRoute)->with('status', $message);
-        }
-
-        return redirect()->route('process.assignments.index')->with('status', $message);
+        return redirect()->route('process.assignments.index')->with('status', 'Assignments recalculated successfully.');
     }
 
     public function download(string $group, string $bucket): RedirectResponse|StreamedResponse
     {
-        $context = $this->resolveContext('Run the main upload and exclusions before downloading assignments.');
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset before downloading assignments.');
 
-        if ($context instanceof RedirectResponse) {
-            return $context;
+        if ($process instanceof RedirectResponse) {
+            return $process;
         }
 
-        $assignments = $context['assignments'];
-        $dataset = $context['dataset'];
-        $headers = $assignments['headers'] ?? $dataset->headers();
-        $headers = is_array($headers) ? $headers : [];
-
-        if (empty($headers)) {
-            $fallbackRoute = $group === 'group-b'
-                ? 'process.assignments.group-b'
-                : 'process.assignments.group-a';
-
-            return redirect()->route($fallbackRoute)->withErrors([
-                'assignments' => 'Column headers are missing. Regenerate the assignments and try again.',
+        if (! $this->bucketAllowed($group, $bucket)) {
+            return redirect()->route('process.assignments.index')->withErrors([
+                'assignments' => 'The requested download is not available.',
             ]);
         }
 
-        if (in_array($bucket, ['latest-exclusions', 'filtered-out'], true)) {
-            return $this->downloadLatestExclusions($dataset, $group, $bucket);
+        $query = $this->viewService->bucketQuery($process, $bucket);
+        $count = (clone $query)->count();
+
+        if ($count === 0) {
+            return $this->redirectForGroup($group)->withErrors([
+                'assignments' => 'No records are available for the selected download.',
+            ]);
         }
 
-        return match ($group) {
-            'group-a' => $this->downloadGroupA($dataset, $headers, $assignments['group_a'] ?? [], $bucket),
-            'group-b' => $this->downloadGroupB($dataset, $headers, $assignments['group_b'] ?? [], $bucket),
-            default => redirect()->route('process.assignments.index')->withErrors([
-                'assignments' => 'Unknown assignment group requested.',
-            ]),
+        $label = $this->viewService->bucketLabel($bucket);
+        $filename = $this->viewService->bucketFilename($bucket);
+
+        return $this->exportService->stream($process, $bucket, $label, $filename, $query);
+    }
+
+    private function resolveProcessOrRedirect(string $message): MasterDatasetProcess|RedirectResponse
+    {
+        $processId = session('master.dataset.process_id');
+
+        if (! $processId) {
+            return redirect()->route('master.upload.create')->withErrors([
+                'upload' => $message,
+            ]);
+        }
+
+        $process = MasterDatasetProcess::find($processId);
+
+        if (! $process) {
+            session()->forget('master.dataset.process_id');
+
+            return redirect()->route('master.upload.create')->withErrors([
+                'upload' => $message,
+            ]);
+        }
+
+        return $process;
+    }
+
+    private function bucketAllowed(string $group, string $bucket): bool
+    {
+        $map = [
+            'group-a' => ['call-center-staff', 'call-center', 'staff'],
+            'group-b' => ['enterprise-wholesale', 'sme'],
+            'exclusions' => ['excluded'],
+            'vip' => ['vip'],
+            'region' => ['region-billing'],
+        ];
+
+        return in_array($bucket, $map[$group] ?? [], true);
+    }
+
+    private function redirectForGroup(string $group): RedirectResponse
+    {
+        $route = match ($group) {
+            'group-a' => 'process.assignments.group-a',
+            'group-b' => 'process.assignments.group-b',
+            'exclusions' => 'process.assignments.exclusions',
+            'vip' => 'process.assignments.vip',
+            'region' => 'process.assignments.region',
+            default => 'process.assignments.index',
         };
-    }
 
-    private function downloadGroupA(ProcessedDataset $dataset, array $headers, array $group, string $bucket): RedirectResponse|StreamedResponse
-    {
-        if ($bucket === 'region-billing') {
-            $rows = $group['region_billing']['rows'] ?? [];
-            $label = $group['region_billing']['label'] ?? 'Region Billing Centre';
-            $filename = Str::slug($label ?: 'region-billing-centre') . '.xlsx';
-
-            if ($stored = $this->downloadStoredExport($dataset, 'group-a', $bucket, $filename)) {
-                return $stored;
-            }
-
-            $meta = [
-                'label' => $label,
-                'row_count' => count($rows),
-                'sheet_title' => $label,
-                'headers' => $headers,
-            ];
-
-            $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
-
-            return redirect()->route('process.assignments.group-a')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
-        }
-
-        $quota = $group['quotas'][$bucket] ?? null;
-
-        if (! $quota) {
-            return redirect()->route('process.assignments.group-a')->withErrors([
-                'assignments' => 'The requested Group A export could not be found.',
-            ]);
-        }
-
-        $label = $quota['label'] ?? Str::title(str_replace('-', ' ', $bucket));
-        $filename = Str::slug($label ?: $bucket) . '.xlsx';
-
-        $rows = $quota['rows'] ?? [];
-
-        if ($stored = $this->downloadStoredExport($dataset, 'group-a', $bucket, $filename)) {
-            return $stored;
-        }
-
-        $meta = [
-            'label' => $label,
-            'row_count' => count($rows),
-            'sheet_title' => $label,
-            'headers' => $headers,
-        ];
-
-        $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
-
-        return redirect()->route('process.assignments.group-a')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
-    }
-
-    private function downloadGroupB(ProcessedDataset $dataset, array $headers, array $group, string $bucket): RedirectResponse|StreamedResponse
-    {
-        if ($bucket === 'enterprise-wholesale') {
-            $bundle = $group['enterprise_wholesale'] ?? [];
-            $categories = $bundle['categories'] ?? [];
-
-            if (empty($categories)) {
-                return redirect()->route('process.assignments.group-b')->withErrors([
-                    'assignments' => 'No enterprise or wholesale records available for export.',
-                ]);
-            }
-
-            $sheets = [];
-            foreach ($categories as $category) {
-                $rows = $category['rows'] ?? [];
-
-                if (empty($rows)) {
-                    continue;
-                }
-
-                $label = $category['label'] ?? Str::title($category['key'] ?? 'Category');
-                $sheets[] = [
-                    'name' => $label,
-                    'rows' => $rows,
-                ];
-            }
-
-            if (empty($sheets)) {
-                return redirect()->route('process.assignments.group-b')->withErrors([
-                    'assignments' => 'No enterprise or wholesale records available for export.',
-                ]);
-            }
-
-            $filename = 'enterprise_wholesale.xlsx';
-
-            if ($stored = $this->downloadStoredExport($dataset, 'group-b', $bucket, $filename)) {
-                return $stored;
-            }
-
-            $meta = [
-                'label' => $bundle['label'] ?? 'Enterprise & Wholesale bundle',
-                'sheet_count' => count($sheets),
-                'headers' => $headers,
-                'segment_names' => array_map(static fn ($sheet) => $sheet['name'], $sheets),
-            ];
-
-            $builder = $this->exportManager->multiSheetBuilder($dataset, $headers, $sheets);
-
-            return redirect()->route('process.assignments.group-b')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
-        }
-
-        if ($bucket === 'ignored-latest-bill') {
-            $ignored = $group['ignored'] ?? [];
-
-            if (empty($ignored['rows'])) {
-                return redirect()->route('process.assignments.group-b')->withErrors([
-                    'assignments' => 'No records were ignored for falling below the LATEST_BILL_MNY threshold.',
-                ]);
-            }
-
-            $label = $ignored['label'] ?? 'Ignored - LATEST_BILL_MNY < 5000';
-            $filename = Str::slug($label ?: 'ignored-latest-bill-mny') . '.xlsx';
-            $rows = $ignored['rows'] ?? [];
-
-            if ($stored = $this->downloadStoredExport($dataset, 'group-b', $bucket, $filename)) {
-                return $stored;
-            }
-
-            $meta = [
-                'label' => $label,
-                'row_count' => count($rows),
-                'sheet_title' => $label,
-                'headers' => $headers,
-            ];
-
-            $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
-
-            return redirect()->route('process.assignments.group-b')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
-        }
-
-        $segment = null;
-        foreach ($group['segments'] ?? [] as $entry) {
-            if (($entry['slug'] ?? '') === $bucket) {
-                $segment = $entry;
-                break;
-            }
-        }
-
-        if (! $segment) {
-            return redirect()->route('process.assignments.group-b')->withErrors([
-                'assignments' => 'The requested Group B segment export could not be found.',
-            ]);
-        }
-
-        $label = $segment['name'] ?? 'Segment';
-        $storageBucket = $segment['slug'] ?? $bucket;
-        $rows = $segment['rows'] ?? [];
-        $filename = Str::slug($label ?: $storageBucket) . '.xlsx';
-
-        if ($stored = $this->downloadStoredExport($dataset, 'group-b', $storageBucket, $filename)) {
-            return $stored;
-        }
-
-        $meta = [
-            'label' => $label,
-            'row_count' => count($rows),
-            'sheet_title' => $label,
-            'headers' => $headers,
-        ];
-
-        $builder = $this->exportManager->singleSheetBuilder($dataset, $headers, $rows, $label);
-
-        return redirect()->route('process.assignments.group-b')->with('status', 'The export file is being generated in the background. Please wait a few minutes and try again.');
-    }
-
-    private function downloadStoredExport(ProcessedDataset $dataset, string $group, string $bucket, ?string $filename = null): ?StreamedResponse
-    {
-        $record = DatasetExport::query()
-            ->where('token', $dataset->token())
-            ->where('group', $group)
-            ->where('bucket', $bucket)
-            ->orderByDesc('generated_at')
-            ->orderByDesc('id')
-            ->first();
-
-        if (! $record) {
-            return null;
-        }
-
-        $disk = $record->file_disk ?: config('filesystems.default', 'local');
-
-        if (! Storage::disk($disk)->exists($record->file_path)) {
-            return null;
-        }
-
-        $downloadName = $filename ?: $record->filename;
-
-        return Storage::disk($disk)->download($record->file_path, $downloadName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
-    }
-
-    private function buildHeaderLabels(array $headers): array
-    {
-        $labels = ['Excel Row'];
-
-        foreach ($headers as $meta) {
-            $labels[] = $meta['label'] ?? 'Column';
-        }
-
-        return $labels;
-    }
-
-    private function buildRowValues(ProcessedDataset $dataset, array $headers, int|array $record): array
-    {
-        $rowIndex = is_array($record) ? ($record['row_index'] ?? null) : $record;
-        $rowIndex = is_numeric($rowIndex) ? (int) $rowIndex : null;
-
-        $values = [$rowIndex];
-        $columns = $rowIndex !== null ? ($dataset->getFilteredRow($rowIndex) ?? []) : [];
-
-        foreach ($headers as $letter => $meta) {
-            $values[] = $columns[$letter] ?? '';
-        }
-
-        return $values;
-    }
-
-    private function truncateSheetTitle(string $title): string
-    {
-        $safe = trim($title) !== '' ? trim($title) : 'Sheet';
-        $length = 31;
-
-        if (function_exists('mb_substr')) {
-            return mb_substr($safe, 0, $length);
-        }
-
-        return substr($safe, 0, $length);
-    }
-
-    private function resolveContext(string $missingMessage): array|RedirectResponse
-    {
-        $assignments = session('process.assignments');
-
-        try {
-            $dataset = ProcessedDataset::fromSession();
-        } catch (Throwable $exception) {
-            $dataset = null;
-        }
-
-        if (! $assignments || ! $dataset) {
-            return redirect()->route('process.upload.create')->withErrors([
-                'upload' => $missingMessage,
-            ]);
-        }
-
-        return [
-            'assignments' => $assignments,
-            'dataset' => $dataset,
-        ];
-    }
-
-    private function datasetInfo(ProcessedDataset $dataset): array
-    {
-        return [
-            'original_filename' => $dataset->originalFilename(),
-            'row_count' => $dataset->filteredRowCount(),
-            'source_row_count' => $dataset->sourceRowCount(),
-        ];
-    }
-
-    private function latestExclusionSummary(ProcessedDataset $dataset): ?array
-    {
-        $history = $dataset->exclusionHistory();
-
-        if (empty($history)) {
-            return null;
-        }
-
-        $latest = $history[count($history) - 1];
-        $files = array_values($latest['files'] ?? []);
-        $records = array_values($latest['records'] ?? []);
-
-        if (empty($records)) {
-            $manifest = $dataset->manifest();
-            $records = array_values($manifest['exclusion_records'] ?? []);
-        }
-
-        $previewLimit = 5;
-
-        return [
-            'removed' => (int) ($latest['removed'] ?? 0),
-            'files' => $files,
-            'files_count' => count($files),
-            'timestamp' => $latest['timestamp'] ?? null,
-            'records' => $records,
-            'records_preview' => array_slice($records, 0, $previewLimit),
-            'records_total' => count($records),
-            'preview_limit' => $previewLimit,
-        ];
-    }
-
-    private function filteredOutSummary(ProcessedDataset $dataset): ?array
-    {
-        $headers = $dataset->headers();
-
-        if (empty($headers)) {
-            return null;
-        }
-
-        $headerMap = $this->buildHeaderMap($headers);
-        $previewLimit = 5;
-        $reasonCounts = $dataset->filteredOutReasonCounts();
-        $topReasons = array_slice($reasonCounts, 0, 3, true);
-        $previewEntries = $dataset->filteredOutPreview();
-
-        $preview = [];
-        foreach (array_slice($previewEntries, 0, $previewLimit, true) as $rowIndex => $entry) {
-            $columns = $entry['columns'] ?? [];
-            $preview[] = [
-                'row_index' => $rowIndex,
-                'reason' => $entry['reason'] ?? 'Filtered out by eligibility rules.',
-                'account_num' => $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM'),
-                'customer_ref' => $this->getColumnValue($columns, $headerMap, 'CUSTOMER_REF'),
-                'status' => $this->getColumnValue($columns, $headerMap, 'LATEST_PRODUCT_STATUS'),
-                'medium' => $this->getColumnValue($columns, $headerMap, 'MEDIUM'),
-            ];
-        }
-
-        return [
-            'count' => $dataset->filteredOutCount(),
-            'preview' => $preview,
-            'preview_limit' => $previewLimit,
-            'top_reasons' => $topReasons,
-        ];
-    }
-
-    private function vipSummary(ProcessedDataset $dataset): ?array
-    {
-        $headers = $dataset->headers();
-
-        if (empty($headers)) {
-            return null;
-        }
-
-        $headerMap = $this->buildHeaderMap($headers);
-        $total = $dataset->vipRowCount();
-        $previewLimit = 5;
-        $preview = [];
-
-        if ($total > 0) {
-            foreach ($dataset->filteredRowsMatching(true) as $rowIndex => $columns) {
-                $preview[] = [
-                    'row_index' => $rowIndex,
-                    'account_num' => $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM'),
-                    'customer_ref' => $this->getColumnValue($columns, $headerMap, 'CUSTOMER_REF'),
-                    'credit_class' => $this->getColumnValue($columns, $headerMap, 'CREDIT_CLASS_NAME')
-                        ?: $this->getColumnValue($columns, $headerMap, 'CUSTOMER_SEGMENT'),
-                ];
-
-                if (count($preview) >= $previewLimit) {
-                    break;
-                }
-            }
-        }
-
-        return [
-            'count' => $total,
-            'preview' => $preview,
-            'preview_limit' => $previewLimit,
-        ];
-    }
-
-    private function downloadLatestExclusions(ProcessedDataset $dataset, string $group, string $bucket): RedirectResponse|StreamedResponse
-    {
-        $manifest = $dataset->manifest();
-        $records = $manifest['exclusion_records'] ?? [];
-        $filteredOut = $dataset->filteredOutPreview();
-
-        $fallbackRoute = $group === 'group-b'
-            ? 'process.assignments.group-b'
-            : 'process.assignments.group-a';
-
-        if (empty($records) && empty($filteredOut)) {
-            $history = $dataset->exclusionHistory();
-            if (! empty($history)) {
-                $latest = $history[count($history) - 1];
-                $records = $latest['records'] ?? [];
-            }
-        }
-
-        if (empty($records) && empty($filteredOut)) {
-            return redirect()->route($fallbackRoute)->withErrors([
-                'assignments' => 'There are no exclusion or filtered-out records available to export yet.',
-            ]);
-        }
-
-        $spreadsheet = new Spreadsheet();
-        $spreadsheet->removeSheetByIndex(0);
-
-        $sheetIndex = 0;
-
-        if (! empty($records)) {
-            $sheet = $spreadsheet->createSheet($sheetIndex++);
-            $sheet->setTitle($this->truncateSheetTitle('Latest Exclusions'));
-
-            $headers = ['Excel Row', 'Account Number', 'Customer Reference', 'Source File'];
-            $sheet->fromArray($headers, null, 'A1');
-
-            $rowPointer = 2;
-            foreach ($records as $record) {
-                $sheet->fromArray([
-                    $record['row_index'] ?? null,
-                    $record['account_num'] ?? '',
-                    $record['customer_ref'] ?? '',
-                    $record['file'] ?? '',
-                ], null, 'A' . $rowPointer);
-                $rowPointer++;
-            }
-
-            if ($rowPointer === 2) {
-                $sheet->fromArray([], null, 'A2');
-            }
-        }
-
-        if (! empty($filteredOut) || $dataset->filteredOutCount() > 0) {
-            $headers = $dataset->headers() ?? [];
-            $headerLabels = array_merge(['Reason', 'Reason Code'], $this->buildHeaderLabels($headers));
-            $sheet = $spreadsheet->createSheet($sheetIndex++);
-            $sheet->setTitle($this->truncateSheetTitle('Filtered Out'));
-            $sheet->fromArray($headerLabels, null, 'A1');
-
-            $rowPointer = 2;
-            foreach ($dataset->filteredOutGenerator() as $entry) {
-                $columns = $entry['columns'] ?? [];
-                $rowIndex = $entry['row_index'] ?? null;
-                $rowValues = [
-                    $entry['reason'] ?? 'Filtered out by eligibility rules.',
-                    $entry['reason_code'] ?? '',
-                    $rowIndex,
-                ];
-
-                foreach ($headers as $letter => $meta) {
-                    $rowValues[] = $columns[$letter] ?? '';
-                }
-
-                $sheet->fromArray($rowValues, null, 'A' . $rowPointer);
-                $rowPointer++;
-            }
-
-            if ($rowPointer === 2) {
-                $sheet->fromArray([], null, 'A2');
-            }
-        }
-
-        $spreadsheet->setActiveSheetIndex(0);
-
-        $filename = $bucket === 'filtered-out' ? 'filtered_out.xlsx' : 'latest_exclusions.xlsx';
-
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        return redirect()->route($route);
     }
 }

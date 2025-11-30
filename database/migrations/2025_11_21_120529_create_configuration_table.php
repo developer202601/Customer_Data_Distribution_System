@@ -11,14 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('configuration', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-            $table->integer('upper_range');
-            $table->integer('lower_range');
-            $table->foreignId('user_id')->constrained();
-           
-        });
+        if (!Schema::hasTable('configuration')) {
+            Schema::create('configuration', function (Blueprint $table) {
+                $table->id();
+                $table->timestamps();
+                $table->integer('upper_range');
+                $table->integer('lower_range');
+                $table->foreignId('user_id')->constrained();
+            });
+        }
     }
 
     /**

@@ -33,7 +33,7 @@
                 @endif
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <a href="{{ $vipApplied ? route('process.assignments.index') : route('process.upload.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
+                <a href="{{ $vipApplied ? route('process.assignments.index') : route('master.upload.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
                 <!-- @if(! $vipApplied)
                 <a href="{{ route('process.exclusions.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Upload exclusion files</a>
                 @endif -->

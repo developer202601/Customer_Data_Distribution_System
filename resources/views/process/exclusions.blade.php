@@ -1,4 +1,5 @@
 @extends('layouts.admin')
+@section('loaderAutoRedirect', true)
 
 @section('navbar-right')
 <div class="process-stepper d-flex align-items-center gap-2">
@@ -29,8 +30,7 @@
         <form id="exclusion-upload-form"
             action="{{ route('process.exclusions.store') }}"
             method="post"
-            enctype="multipart/form-data"
-            data-loader-off="true">
+            enctype="multipart/form-data">
             @csrf
             <div class="card process-upload-card shadow-sm">
                 <div class="card-body p-4 p-lg-5">
@@ -39,8 +39,8 @@
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
                                 <p class="text-muted mb-0">Upload up to {{ $maxFiles }} ZIP archives (each with a single Excel workbook) that list the identifiers you want to remove from the master list.</p>
-                                @if($filename)
-                                <p class="text-muted mb-0 mt-2">Active dataset: <strong>{{ $filename }}</strong> ({{ number_format($totalRows) }} rows)</p>
+                                @if(isset($process))
+                                <p class="text-muted mb-0 mt-2">Active dataset token: <strong>{{ $process->token }}</strong> ({{ number_format((int) $process->row_count) }} rows)</p>
                                 @endif
                             </div>
                         </div>
@@ -105,6 +105,23 @@
                 </div>
             </div>
         </form>
+
+        @if(isset($process) && ! empty($process->exclusion_archives))
+        <div class="card shadow-sm mt-4">
+            <div class="card-body p-4 p-lg-5">
+                <h2 class="h5 mb-3">Uploaded exclusion archives</h2>
+                <ul class="mb-0 list-unstyled">
+                    @foreach($process->exclusion_archives as $archive)
+                    <li class="py-1 border-bottom">
+                        <strong>{{ $archive['original_name'] ?? basename($archive['path'] ?? '') }}</strong>
+                        <span class="text-muted ms-2">{{ isset($archive['size']) ? number_format((int) $archive['size'] / 1024, 1) . ' KB' : '' }}</span>
+                        <span class="text-muted ms-2">{{ isset($archive['uploaded_at']) ? \Illuminate\Support\Carbon::parse($archive['uploaded_at'])->toDayDateTimeString() : '' }}</span>
+                    </li>
+                    @endforeach
+                </ul>
+            </div>
+        </div>
+        @endif
     </div>
 </div>
 
@@ -120,6 +137,9 @@
         const errorContainer = document.getElementById('exclusion-errors');
         const form = document.getElementById('exclusion-upload-form');
         const selectedFiles = [];
+        let loaderActive = false;
+        const submitButton = form.querySelector('button[type="submit"]');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
         if (!dropzone || !fileInput || !form) {
             return;
@@ -316,11 +336,114 @@
 
         // Removal of files from the list is currently disabled in the UI.
 
-        form.addEventListener('submit', (event) => {
+        const renderNotice = (message, variant = 'success') => {
+            if (!errorContainer) {
+                alert(message);
+                return;
+            }
+
+            const block = document.createElement('div');
+            block.className = 'alert alert-' + (variant === 'info' ? 'info' : 'success');
+            block.setAttribute('role', 'alert');
+            block.textContent = message;
+            errorContainer.innerHTML = '';
+            errorContainer.appendChild(block);
+            block.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        };
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
             if (!selectedFiles.length) {
-                event.preventDefault();
                 showError(['Please add at least one exclusion file before submitting.']);
                 return;
+            }
+
+
+            if (loaderActive) {
+                return;
+            }
+
+            loaderActive = true;
+            clearErrors();
+
+            // Show simplified global loader (polling already active via app.js)
+            window.CDDSLoader?.show?.();
+
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                    },
+                });
+
+                const payload = await response.json().catch(() => null);
+
+                if (!response.ok) {
+                    window.CDDSLoader?.hide?.();
+                    loaderActive = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+
+                    if (response.status === 422 && payload?.errors) {
+                        const messages = Object.values(payload.errors).flat();
+                        showError(messages);
+                    } else {
+                        showError(payload?.message ? [payload.message] : ['Unable to process the exclusion files. Please try again.']);
+                    }
+                    return;
+                }
+
+                // Completed request; leave loader visible until overall process reaches ready
+                loaderActive = false;
+
+                if (payload?.message) {
+                    renderNotice(payload.message, payload.status === 'info' ? 'info' : 'success');
+                } else {
+                    clearErrors();
+                }
+
+                if (payload?.redirect_url) {
+                    // Defer redirect until final status (ready/failed) is reported
+                    const onFinal = () => {
+                        document.removeEventListener('cdds:loader-final', onFinal);
+                        window.setTimeout(() => {
+                            window.location.href = payload.redirect_url;
+                        }, 400);
+                    };
+                    document.addEventListener('cdds:loader-final', onFinal);
+                }
+
+
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
+
+                selectedFiles.length = 0;
+                syncInputFiles();
+                renderList();
+                updateHelperText();
+            } catch (error) {
+                    window.CDDSLoader?.hide?.();
+                loaderActive = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
+                showError(['Unable to process the exclusion files. Please try again.']);
             }
         });
 

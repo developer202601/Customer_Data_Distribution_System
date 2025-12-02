@@ -20,18 +20,18 @@
 
     <div class="dashboard-grid row g-4">
         <div class="col-lg-6">
-            <a href="#" class="dashboard-card h-100" role="button" aria-label="Open Archive">
+            <a href="{{ route('process.assignments.index') }}" class="dashboard-card h-100" role="button" aria-label="Open assignments and downloads">
                 <div class="dashboard-card-body">
-                    <h2 class="dashboard-card-title">View Past Reports</h2>
-                    <p class="dashboard-card-description">Browse and download previously generated output files for quick reference.</p>
+                    <h2 class="dashboard-card-title">Assignments &amp; Downloads</h2>
+                    <p class="dashboard-card-description">Review the latest quotas, segment summaries, and download the generated Excel workbooks.</p>
                 </div>
             </a>
         </div>
         <div class="col-lg-6">
-            <a href="{{ route('process.upload.create') }}" class="dashboard-card h-100" role="button" aria-label="Start Upload">
+            <a href="{{ route('master.upload.create') }}" class="dashboard-card h-100" role="button" aria-label="Start master dataset upload">
                 <div class="dashboard-card-body">
-                    <h2 class="dashboard-card-title">Process New Excel File</h2>
-                    <p class="dashboard-card-description">Upload the latest Excel inputs to validate data and run automated workflows.</p>
+                    <h2 class="dashboard-card-title">Master Dataset Workflow</h2>
+                    <p class="dashboard-card-description">Upload the monthly master dataset, review import stats, and continue to the exclusion step.</p>
                 </div>
             </a>
         </div>

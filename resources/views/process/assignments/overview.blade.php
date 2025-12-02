@@ -21,13 +21,8 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
                 <h1 class="process-preview-title mb-2">Assignments overview</h1>
-                <p class="text-muted mb-0">Choose which allocation set you want to review and download. Group A covers Retail &amp; Micro Business quotas; Group B covers all other segments.</p>
-                @if(($dataset['original_filename'] ?? null))
-                <p class="text-muted mb-0 mt-2">Active dataset: <strong>{{ $dataset['original_filename'] }}</strong> ({{ number_format($dataset['row_count'] ?? 0) }} rows)</p>
-                @endif
-                @if($generatedAt)
-                <p class="text-muted mb-0">Assignments generated on {{ $generatedAt }}.</p>
-                @endif
+                <p class="text-muted mb-1">Choose which allocation set you want to review and download. Retail &amp; Micro quotas sit alongside Enterprise, Wholesale, and SME segments.</p>
+                <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($dataset['row_count'] ?? 0) }} · Excluded: {{ number_format($dataset['excluded_count'] ?? 0) }}</p>
             </div>
         </div>
 
@@ -45,57 +40,352 @@
         </div>
         @endif
 
-        <div class="row g-4">
-            <div class="col-xl-4 col-md-6">
-                <a href="{{ route('process.assignments.group-a') }}" class="dashboard-card h-100" role="button" aria-label="Go to Group A assignments">
-                    <div class="dashboard-card-body">
-                        <h2 class="dashboard-card-title">Group A (Retail &amp; Micro)</h2>
-                        <p class="dashboard-card-description mb-1">Manage Call Center Staff, Call Center, Staff quotas, and Region Billing Centre remainder.</p>
-                        <p class="text-muted mb-0 small">{{ number_format($groupTotals['group_a'] ?? 0) }} rows eligible.</p>
-                    </div>
-                </a>
+        @php
+            $exportStatuses = $exports ?? [];
+            $groupAQuotas = $groupA['quotas'] ?? [];
+            $regionCount = $groupA['region']['actual'] ?? 0;
+            $renderDownloadButtons = function (string $groupKey, string $bucket, int $count) use ($exportStatuses) {
+                $status = $exportStatuses[$bucket] ?? [];
+                $state = $status['status'] ?? 'processing';
+                $ready = $state === 'ready';
+                $failed = $state === 'failed';
+
+                echo '<div class="d-flex flex-wrap justify-content-end gap-2">';
+
+                if ($count === 0) {
+                    echo '<span class="btn btn-outline-secondary disabled" aria-disabled="true">No export</span>';
+                } elseif ($failed) {
+                    echo '<button type="button" class="btn btn-outline-danger" disabled>Generation failed</button>';
+                } elseif (! $ready) {
+                    echo '<button type="button" class="btn btn-dark" disabled>Generating…</button>';
+                } else {
+                    echo '<a href="' . route('process.assignments.download', ['group' => $groupKey, 'bucket' => $bucket]) . '" class="btn btn-dark" data-loader-off="1">Download</a>';
+                }
+
+                if ($count > 0) {
+                    echo '<a href="' . route('process.assignments.download', ['group' => $groupKey, 'bucket' => $bucket, 'fresh' => 1]) . '" class="btn btn-outline-secondary" data-loader-off="1">Download live</a>';
+                }
+
+                echo '</div>';
+            };
+        @endphp
+
+        <div class="mb-5">
+            <h2 class="h4 mb-3">Retail &amp; Micro Business</h2>
+            <div class="process-table-container">
+                <div class="table-responsive">
+                    <table class="table table-sm process-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="align-middle">Segment</th>
+                                <th scope="col" class="text-end align-middle">Downloads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($groupAQuotas as $key => $quota)
+                            <tr>
+                                <th scope="row">
+                                    @php $quotaCount = (int) ($quota['actual'] ?? 0); @endphp
+                                    <div class="fw-semibold mb-0">
+                                        {{ $quota['label'] ?? 'Quota' }}
+                                        <span class="text-muted">({{ number_format($quotaCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('group-a', $key, $quotaCount); @endphp
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="2" class="text-center py-4 text-muted">No retail &amp; micro quotas available. Upload a dataset to continue.</td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="col-xl-4 col-md-6">
-                <a href="{{ route('process.assignments.group-b') }}" class="dashboard-card h-100" role="button" aria-label="Go to Group B assignments">
-                    <div class="dashboard-card-body">
-                        <h2 class="dashboard-card-title">Group B (Other Segments)</h2>
-                        <p class="dashboard-card-description mb-1">Download Enterprise &amp; Wholesale bundles plus segment-specific exports.</p>
-                        <p class="text-muted mb-0 small">{{ number_format($groupTotals['group_b'] ?? 0) }} rows eligible.</p>
-                    </div>
-                </a>
+        </div>
+
+        <div class="mb-5">
+            <h2 class="h4 mb-3">Region Billing Centre</h2>
+            <div class="process-table-container">
+                <div class="table-responsive">
+                    <table class="table table-sm process-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="align-middle">Segment</th>
+                                <th scope="col" class="text-end align-middle">Downloads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Region Billing Centre
+                                        <span class="text-muted">({{ number_format($regionCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('region', 'region-billing', (int) $regionCount); @endphp
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="col-xl-4 col-md-6">
-                <a href="{{ route('process.assignments.exclusions') }}" class="dashboard-card h-100" role="button" aria-label="Go to exclusions summary">
-                    <div class="dashboard-card-body">
-                        <h2 class="dashboard-card-title">Exclusions</h2>
-                        @if(!$latestExclusion && !$filteredOutSummary)
-                        <p class="text-muted mb-0">No exclusion files have been applied to this dataset yet.</p>
-                        @else
-                        @if($latestExclusion)
-                        <p class="dashboard-card-description mb-1">{{ number_format($latestExclusion['removed']) }} records removed across {{ $latestExclusion['files_count'] }} file{{ $latestExclusion['files_count'] === 1 ? '' : 's' }}.</p>
-                        @endif
-                        @if($filteredOutSummary)
-                        <p class="dashboard-card-description mb-1">{{ number_format($filteredOutSummary['count']) }} rows filtered out before exclusions.</p>
-                        @endif
-                        <p class="text-muted mb-0 small">Tap to open the exclusion summary and download the workbook.</p>
-                        @endif
-                    </div>
-                </a>
+        </div>
+
+        <div class="mb-5">
+            <h2 class="h4 mb-3">Enterprise, Wholesale &amp; SME</h2>
+            <div class="process-table-container">
+                <div class="table-responsive">
+                    <table class="table table-sm process-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="align-middle">Segment</th>
+                                <th scope="col" class="text-end align-middle">Downloads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php
+                                $enterpriseCount = (int) ($groupB['enterprise_wholesale']['count'] ?? 0);
+                                $smeCount = (int) ($groupB['sme']['count'] ?? 0);
+                            @endphp
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Enterprise &amp; Wholesale
+                                        <span class="text-muted">({{ number_format($enterpriseCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('group-b', 'enterprise-wholesale', $enterpriseCount); @endphp
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        SME
+                                        <span class="text-muted">({{ number_format($smeCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('group-b', 'sme', $smeCount); @endphp
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="col-xl-4 col-md-6">
-                <a href="{{ route('process.upload.vip') }}" class="dashboard-card h-100" role="button" aria-label="Review VIP records">
-                    <div class="dashboard-card-body">
-                        <h2 class="dashboard-card-title">VIP Records</h2>
-                        <p class="dashboard-card-description mb-1">Open the dedicated VIP view to inspect rows with VIP credit classes and export their workbook.</p>
-                        @if($vipSummary)
-                        <p class="text-muted mb-0 small">{{ number_format($vipSummary['count']) }} VIP row{{ $vipSummary['count'] === 1 ? '' : 's' }} available.</p>
-                        @else
-                        <p class="text-muted mb-0 small">Upload a dataset to review VIP records.</p>
-                        @endif
-                    </div>
-                </a>
+        </div>
+
+        <div class="mb-5">
+            <h2 class="h4 mb-3">VIP Records</h2>
+            <div class="process-table-container">
+                <div class="table-responsive">
+                    <table class="table table-sm process-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="align-middle">Segment</th>
+                                <th scope="col" class="text-end align-middle">Downloads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $vipCount = (int) ($vip['count'] ?? 0); @endphp
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        VIP Records
+                                        <span class="text-muted">({{ number_format($vipCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('vip', 'vip', $vipCount); @endphp
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
+        </div>
+
+        <div>
+            <h2 class="h4 mb-3">Exclusions</h2>
+            <div class="process-table-container">
+                <div class="table-responsive">
+                    <table class="table table-sm process-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="align-middle">Segment</th>
+                                <th scope="col" class="text-end align-middle">Downloads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @php $excludedCount = (int) ($exclusions['total_excluded'] ?? 0); @endphp
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Excluded Records
+                                        <span class="text-muted">({{ number_format($excludedCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('exclusions', 'excluded', $excludedCount); @endphp
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @php
+            $assignmentLabels = $assignmentLabels ?? [];
+            $resolveAssignment = function ($row) use ($assignmentLabels) {
+                if ($row->excluded) {
+                    return 'Excluded';
+                }
+
+                $value = $row->assigned_to;
+
+                if ($value === null || $value === '') {
+                    return 'Unassigned';
+                }
+
+                foreach ($assignmentLabels as $key => $label) {
+                    if (strtolower($value) === strtolower($key)) {
+                        return $label;
+                    }
+                }
+
+                return ucfirst($value);
+            };
+        @endphp
+
+        <div class="mt-5">
+            <form id="overview-search-form" method="get" action="{{ route('process.assignments.index') }}" class="row g-2 align-items-end" data-loader-off="1">
+                <div class="col-12 col-lg-6 col-xxl-4">
+                    <label for="overview-search" class="form-label">Search across all records</label>
+                    <input type="text" class="form-control" id="overview-search" name="search" value="{{ $search ?? '' }}" placeholder="e.g. customer reference, account, product, or assignment" autocomplete="off">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </div>
+                @if(! empty($search))
+                <div class="col-auto">
+                    <a href="{{ route('process.assignments.index') }}" class="btn btn-outline-secondary" data-loader-off="1">Clear</a>
+                </div>
+                @endif
+            </form>
+
+            @if(! empty($search))
+                <div id="overview-results">
+                    @include('process.assignments.partials.overview-results', [
+                        'rows' => $rows ?? null,
+                        'assignmentLabels' => $assignmentLabels ?? [],
+                    ])
+                </div>
+            @endif
+        </div>
+
+        <div id="overview-results">
+            <div id="loading-indicator" style="display: none; text-align: center; margin: 20px 0;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <!-- Table content will be dynamically loaded here -->
         </div>
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('JavaScript loaded and DOMContentLoaded event fired.');
+
+  const container = document.getElementById('overview-results');
+  const form = document.getElementById('overview-search-form');
+  const loadingIndicator = document.getElementById('loading-indicator');
+
+  if (!container) {
+    console.error('Container #overview-results not found.');
+    return;
+  }
+
+  if (!form) {
+    console.error('Form #overview-search-form not found.');
+    return;
+  }
+
+  if (!loadingIndicator) {
+    console.error('Loading indicator #loading-indicator not found.');
+    return;
+  }
+
+  console.log('Event listeners are being attached.');
+
+  const fetchAndReplace = (url) => {
+    const target = new URL(url, window.location.origin);
+    console.log('Initiating AJAX request to:', target.toString());
+
+    loadingIndicator.style.display = 'block';
+
+    fetch(target.toString(), {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'text/html',
+      },
+      cache: 'no-store',
+      credentials: 'same-origin',
+    })
+      .then((response) => {
+        console.log('AJAX response status:', response.status);
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.text();
+      })
+      .then((html) => {
+        console.log('AJAX request successful. Updating container content.');
+        container.innerHTML = html;
+        window.history.replaceState({}, '', target.toString());
+        container.scrollIntoView({ behavior: 'smooth' });
+
+        // Debugging: Log the updated container content
+        console.log('Updated container content:', container.innerHTML);
+      })
+      .catch((error) => {
+        console.error('Error during AJAX request:', error);
+      })
+      .finally(() => {
+        console.log('Hiding loading indicator.');
+        loadingIndicator.style.display = 'none';
+      });
+  };
+
+  container.addEventListener('click', (e) => {
+    const link = e.target.closest('a.page-link');
+    if (!link) return;
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#')) return;
+    e.preventDefault();
+    console.log('Pagination link clicked:', href);
+    fetchAndReplace(href);
+  });
+
+  form.addEventListener('submit', (e) => {
+    console.log('Form submission intercepted.');
+    e.preventDefault();
+
+    const data = new FormData(form);
+    const params = new URLSearchParams(data);
+    const url = form.action + '?' + params.toString();
+
+    console.log('Form submitted. AJAX request URL:', url);
+    fetchAndReplace(url);
+  });
+});
+</script>
+@endpush

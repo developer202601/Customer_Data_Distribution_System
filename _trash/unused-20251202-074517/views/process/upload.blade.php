@@ -173,6 +173,7 @@
             } else {
                 loader.classList.add('page-loader--hidden');
                 loader.classList.remove('page-loader--show-progress');
+                window.CDDSLoader?.resetStages?.();
             }
         };
 
@@ -218,6 +219,8 @@
                 progressRows.textContent = rowsLabel;
                 progressRows.style.visibility = rowsLabel ? 'visible' : 'hidden';
             }
+
+            updateStageBreakdown(payload, safeValue);
         };
 
         const hideLoader = () => {
@@ -232,7 +235,7 @@
                 progressWrapper.setAttribute('aria-valuenow', '0');
             }
             if (progressMessage) {
-                progressMessage.textContent = 'Preparing data…';
+                progressMessage.textContent = 'Processing…';
             }
             if (progressRows) {
                 progressRows.textContent = '';
@@ -382,6 +385,76 @@
             return Math.max(0, Math.min(100, computed));
         };
 
+        const clampPercentValue = (value) => {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) {
+                return null;
+            }
+
+            return Math.max(0, Math.min(100, Math.round(numeric)));
+        };
+
+        const validationPercentFromPayload = (payload) => {
+            if (!payload) {
+                return null;
+            }
+
+            if (Number.isFinite(payload.validation_progress)) {
+                return clampPercentValue(payload.validation_progress);
+            }
+
+            const totalRows = Number(payload.total_rows);
+            const processedRows = Number(payload.processed_rows);
+
+            if (Number.isFinite(totalRows) && totalRows > 0 && Number.isFinite(processedRows)) {
+                return clampPercentValue((processedRows / totalRows) * 100);
+            }
+
+            return null;
+        };
+
+        const importPercentFromPayload = (payload, fallbackProgress, validationPercent) => {
+            if (!payload) {
+                return null;
+            }
+
+            if (Number.isFinite(payload.import_progress)) {
+                return clampPercentValue(payload.import_progress);
+            }
+
+            if (payload.status === 'complete' || fallbackProgress === 100) {
+                return 100;
+            }
+
+            if (validationPercent !== null) {
+                return 0;
+            }
+
+            return null;
+        };
+
+        const updateStageBreakdown = (payload, fallbackProgress) => {
+            if (!window.CDDSLoader?.setStage) {
+                return;
+            }
+
+            const validationPercent = validationPercentFromPayload(payload);
+
+            if (validationPercent !== null) {
+                window.CDDSLoader.setStage('validation', validationPercent);
+            } else {
+                window.CDDSLoader.setStageState?.('validation', 'pending');
+            }
+
+            const importPercent = importPercentFromPayload(payload, fallbackProgress, validationPercent);
+
+            if (importPercent !== null) {
+                window.CDDSLoader.setStage('records', importPercent);
+            } else {
+                window.CDDSLoader.setStageState?.('records', 'pending');
+            }
+        };
+
         const pollProgress = (token) => {
             const progressTemplate = form.dataset.progressUrlTemplate;
             const completeTemplate = form.dataset.completeUrlTemplate;
@@ -462,6 +535,7 @@
 
         const handleUpload = async () => {
             clearErrors();
+            window.CDDSLoader?.resetStages?.();
             updateLoader(5, 'Uploading file…');
 
             if (submitButton) {

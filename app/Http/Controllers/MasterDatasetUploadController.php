@@ -52,6 +52,7 @@ class MasterDatasetUploadController extends Controller
 
         return redirect()
             ->route('process.exclusions.create')
-            ->with('status', 'Master dataset uploaded. Continue by adding exclusion files to begin validation.');
+            ->with('status', 'Master dataset uploaded. Continue by adding exclusion files to begin validation.')
+            ->with('hide_dataset_info', true);
     }
 }

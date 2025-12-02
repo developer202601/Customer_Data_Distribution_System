@@ -16,6 +16,7 @@
 @endsection
 
 @section('content')
+@php($exportStatuses = $exports ?? [])
 <div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
@@ -24,8 +25,21 @@
                 <p class="text-muted mb-1">All accounts left in the Region Billing Centre bucket after quotas and exclusions are merged into a single workbook.</p>
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($summary['count'] ?? 0) }} @if($search !== '') · Matches for &ldquo;{{ $search }}&rdquo;: {{ number_format($rows->total()) }} @endif</p>
             </div>
+            @php($regionStatus = $exportStatuses['region-billing'] ?? [])
+            @php($regionState = $regionStatus['status'] ?? 'processing')
+            @php($regionReady = $regionState === 'ready')
+            @php($regionFailed = $regionState === 'failed')
             <div class="d-flex flex-wrap gap-2">
+                @if($regionFailed)
+                <button type="button" class="btn btn-outline-danger" disabled>Generation failed</button>
+                @elseif($regionReady)
                 <a href="{{ route('process.assignments.download', ['group' => 'region', 'bucket' => 'region-billing']) }}" class="btn btn-dark" target="_blank" rel="noopener noreferrer" data-loader-off="1">Download Region Billing Excel</a>
+                @else
+                <button type="button" class="btn btn-dark" disabled>Generating…</button>
+                @endif
+                @if(($summary['count'] ?? 0) > 0)
+                <a href="{{ route('process.assignments.download', ['group' => 'region', 'bucket' => 'region-billing', 'fresh' => 1]) }}" class="btn btn-outline-secondary" target="_blank" rel="noopener noreferrer" data-loader-off="1">Download live</a>
+                @endif
                 <a href="{{ route('process.assignments.index') }}" class="btn btn-outline-secondary" data-loader-off="1">Back to overview</a>
             </div>
         </div>
@@ -51,17 +65,6 @@
             No Region Billing Centre records are available. Upload a new master dataset to refresh the assignments.
         </div>
         @else
-        <div class="region-breakdown mb-4">
-            <h2 class="h5 mb-3">Top business lines</h2>
-            <ul class="list-unstyled mb-0 text-muted small d-flex flex-wrap gap-3">
-                @forelse($summary['business_lines'] ?? [] as $stat)
-                <li><strong>{{ $stat['business_line'] }}</strong>: {{ number_format($stat['total']) }}</li>
-                @empty
-                <li>No business line data available.</li>
-                @endforelse
-            </ul>
-        </div>
-
         <form method="get" action="{{ route('process.assignments.region') }}" class="row g-2 align-items-end mb-4" data-loader-off="1">
             <div class="col-12 col-lg-6 col-xxl-4">
                 <label for="region-search" class="form-label">Search by customer reference, account number, or product</label>
@@ -77,8 +80,9 @@
             @endif
         </form>
 
-        <div class="table-responsive">
-            <table class="table table-striped align-middle">
+        <div class="process-table-container">
+            <div class="table-responsive">
+                <table class="table table-striped process-table align-middle mb-0">
                 <thead>
                     <tr>
                         <th scope="col">Customer Reference</th>
@@ -105,7 +109,8 @@
                     </tr>
                     @endforelse
                 </tbody>
-            </table>
+                </table>
+            </div>
         </div>
 
         @if($rows->hasPages())

@@ -76,12 +76,12 @@ class PythonIngestionService
 
     private function manifestRelativePath(MasterDatasetProcess $process): string
     {
-        return 'master-datasets/' . $process->token . '/python-manifest.json';
+        return 'exports/' . $process->token . '/source/python-manifest.json';
     }
 
     private function statusRelativePath(MasterDatasetProcess $process): string
     {
-        return 'master-datasets/' . $process->token . '/python-status.json';
+        return 'exports/' . $process->token . '/source/python-status.json';
     }
 
     private function absolutePath(MasterDatasetProcess $process, string $relative): string

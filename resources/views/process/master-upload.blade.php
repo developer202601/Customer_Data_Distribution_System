@@ -75,33 +75,6 @@
             </div>
         </form>
 
-        @if($process)
-        <div class="card shadow-sm mt-4">
-            <div class="card-body p-4 p-lg-5">
-                <h2 class="h5 mb-3">Latest upload summary</h2>
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Token</dt>
-                    <dd class="col-sm-8">{{ $process->token }}</dd>
-
-                    <dt class="col-sm-4">Dataset month</dt>
-                    <dd class="col-sm-8">{{ $process->dataset_month }}</dd>
-
-                    <dt class="col-sm-4">Rows imported</dt>
-                    <dd class="col-sm-8">{{ number_format((int) $process->row_count) }}</dd>
-
-                    <dt class="col-sm-4">Excluded rows</dt>
-                    <dd class="col-sm-8">{{ number_format((int) $process->excluded_count) }}</dd>
-
-                    <dt class="col-sm-4">Status</dt>
-                    <dd class="col-sm-8">{{ ucfirst($process->status) }}</dd>
-                </dl>
-                <div class="d-flex flex-wrap gap-2 mt-4">
-                    <a href="{{ route('process.exclusions.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Manage exclusions</a>
-                    <a href="{{ route('process.assignments.index') }}" class="btn btn-dark" data-loader-off="1">Go to assignments</a>
-                </div>
-            </div>
-        </div>
-        @endif
     </div>
 </div>
 

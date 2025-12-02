@@ -5,12 +5,7 @@
         </a>
         @php
             $navbarRight = trim($__env->yieldContent('navbar-right'));
-            $navLinks = [
-                ['label' => 'Dashboard', 'route' => 'dashboard', 'active' => ['dashboard']],
-                ['label' => 'Master Upload', 'route' => 'master.upload.create', 'active' => ['master.upload.*']],
-                ['label' => 'Exclusions', 'route' => 'process.exclusions.create', 'active' => ['process.exclusions.*']],
-                ['label' => 'Assignments', 'route' => 'process.assignments.index', 'active' => ['process.assignments.*']],
-            ];
+            $navLinks = [];
         @endphp
         <ul class="navbar-nav flex-row align-items-center gap-2 ms-3">
             @foreach($navLinks as $link)

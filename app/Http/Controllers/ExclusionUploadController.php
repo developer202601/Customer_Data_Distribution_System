@@ -2,10 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessExclusionUpload;
 use App\Models\MasterDatasetProcess;
-use App\Support\MasterDatasetExclusionService;
+use App\Support\MasterDatasetExportCoordinator;
+use App\Support\MasterDatasetWorkflowService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Throwable;
@@ -14,15 +20,26 @@ class ExclusionUploadController extends Controller
 {
     private const MAX_FILES = 3;
 
-    public function __construct(private MasterDatasetExclusionService $exclusionService)
+    public function __construct(
+        private MasterDatasetWorkflowService $workflowService,
+        private MasterDatasetExportCoordinator $exportCoordinator
+    )
     {
     }
 
-    public function create(): View|RedirectResponse
+    public function create(Request $request): View|RedirectResponse|JsonResponse
     {
         $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
 
         if ($process instanceof RedirectResponse) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'status' => 'missing-process',
+                    'message' => 'Please upload the master dataset before managing exclusions.',
+                    'redirect_url' => route('master.upload.create'),
+                ], 409);
+            }
+
             return $process;
         }
 
@@ -32,7 +49,7 @@ class ExclusionUploadController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
 
@@ -53,38 +70,119 @@ class ExclusionUploadController extends Controller
         }
 
         if (count($files) === 0) {
+            $message = ['exclusions' => 'Please add at least one exclusion file before submitting.'];
+
+            if ($request->expectsJson()) {
+                throw ValidationException::withMessages($message);
+            }
+
             return back()
-                ->withErrors(['exclusions' => 'Please add at least one exclusion file before submitting.'])
+                ->withErrors($message)
                 ->withInput();
         }
 
         if (count($files) > self::MAX_FILES) {
+            $message = ['exclusions' => sprintf('You can upload a maximum of %d exclusion files at once.', self::MAX_FILES)];
+
+            if ($request->expectsJson()) {
+                throw ValidationException::withMessages($message);
+            }
+
             return back()
-                ->withErrors(['exclusions' => sprintf('You can upload a maximum of %d exclusion files at once.', self::MAX_FILES)])
+                ->withErrors($message)
                 ->withInput();
         }
 
-        try {
-            $result = $this->exclusionService->apply($process, $files);
-        } catch (Throwable $exception) {
-            throw $exception instanceof \Illuminate\Validation\ValidationException ? $exception : \Illuminate\Validation\ValidationException::withMessages([
-                'exclusions' => $exception->getMessage() ?: 'Unable to process the exclusion files.',
+        $user = $request->user();
+        $userContext = [
+            'id' => $user?->getAuthIdentifier(),
+            'name' => $user?->username ?? $user?->name ?? $user?->email ?? null,
+        ];
+
+        // Release the PHP session lock so concurrent polling requests can read
+        // the process id while the queued job is running.
+        $sessionId = $request->session()->getId();
+        $request->session()->save();
+        if (function_exists('session_write_close')) {
+            \session_write_close();
+        }
+
+        $storedFiles = [];
+        $directory = sprintf('exclusions/%s/%s', $process->id, now()->format('YmdHis'));
+
+        foreach ($files as $file) {
+            $originalName = $file->getClientOriginalName();
+            $storedName = uniqid('exclusion_', true) . '-' . $originalName;
+            $path = Storage::disk('local')->putFileAs($directory, $file, $storedName);
+
+            if ($path) {
+                $storedFiles[] = [
+                    'path' => $path,
+                    'name' => $originalName,
+                    'mime' => $file->getClientMimeType(),
+                ];
+            }
+        }
+
+        if (empty($storedFiles)) {
+            throw ValidationException::withMessages([
+                'exclusions' => 'Unable to store the uploaded exclusion files.',
             ]);
         }
 
-        if (($result['matched'] ?? 0) === 0) {
-            return back()->with('status', 'No matching records were removed by the exclusion files.');
+        try {
+            ProcessExclusionUpload::dispatch($process->id, $storedFiles, $userContext)
+                ->onQueue('exports');
+        } catch (ValidationException $exception) {
+            foreach ($storedFiles as $file) {
+                Storage::disk('local')->delete($file['path']);
+            }
+
+            if ($request->expectsJson()) {
+                throw $exception;
+            }
+
+            return back()
+                ->withErrors($exception->errors())
+                ->withInput();
+        } catch (Throwable $exception) {
+            foreach ($storedFiles as $file) {
+                Storage::disk('local')->delete($file['path']);
+            }
+
+            $wrapped = ValidationException::withMessages([
+                'exclusions' => $exception->getMessage() ?: 'Unable to queue exclusion processing.',
+            ]);
+
+            if ($request->expectsJson()) {
+                throw $wrapped;
+            }
+
+            throw $wrapped;
         }
 
-        $message = sprintf(
-            '%d records were marked as excluded. %d were already excluded.',
-            (int) ($result['matched'] ?? 0),
-            (int) ($result['already_excluded'] ?? 0)
-        );
+        $message = 'Exclusion files were queued for processing. Monitor the loader for live updates.';
+
+        if ($request->expectsJson()) {
+            session()->flash('status', $message);
+
+            return response()->json([
+                'status' => 'ok',
+                'message' => $message,
+                'redirect_url' => route('process.assignments.index'),
+            ]);
+        }
+
+        if (! Session::isStarted()) {
+            if ($sessionId) {
+                Session::setId($sessionId);
+            }
+            Session::start();
+        }
 
         return redirect()
             ->route('process.assignments.index')
-            ->with('status', $message . ' Review the assignment overview for updated totals.');
+            ->with('status', $message);
     }
 
     private function resolveProcessOrRedirect(string $message): MasterDatasetProcess|RedirectResponse

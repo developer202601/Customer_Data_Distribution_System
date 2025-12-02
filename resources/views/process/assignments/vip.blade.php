@@ -16,6 +16,7 @@
 @endsection
 
 @section('content')
+@php($exportStatuses = $exports ?? [])
 <div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
@@ -24,8 +25,21 @@
                 <p class="text-muted mb-1">These accounts have a <strong>CREDIT_CLASS_NAME</strong> beginning with &ldquo;VIP&rdquo; and stay unassigned so they can be handled via the dedicated VIP export.</p>
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total VIP rows: {{ number_format($summary['count'] ?? 0) }} @if($search !== '') · Matches for &ldquo;{{ $search }}&rdquo;: {{ number_format($rows->total()) }} @endif</p>
             </div>
+            @php($vipStatus = $exportStatuses['vip'] ?? [])
+            @php($vipState = $vipStatus['status'] ?? 'processing')
+            @php($vipReady = $vipState === 'ready')
+            @php($vipFailed = $vipState === 'failed')
             <div class="d-flex flex-wrap gap-2">
+                @if($vipFailed)
+                <button type="button" class="btn btn-outline-danger" disabled>Generation failed</button>
+                @elseif($vipReady)
                 <a href="{{ route('process.assignments.download', ['group' => 'vip', 'bucket' => 'vip']) }}" class="btn btn-dark" target="_blank" rel="noopener noreferrer" data-loader-off="1">Download VIP Excel</a>
+                @else
+                <button type="button" class="btn btn-dark" disabled>Generating…</button>
+                @endif
+                @if(($summary['count'] ?? 0) > 0)
+                <a href="{{ route('process.assignments.download', ['group' => 'vip', 'bucket' => 'vip', 'fresh' => 1]) }}" class="btn btn-outline-secondary" target="_blank" rel="noopener noreferrer" data-loader-off="1">Download live</a>
+                @endif
                 <a href="{{ route('process.assignments.index') }}" class="btn btn-outline-secondary" data-loader-off="1">Back to overview</a>
             </div>
         </div>

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use App\Support\MasterDatasetAssignmentService;
+use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetStagingPromoter;
 use App\Support\PythonIngestionService;
 use Carbon\Carbon;
@@ -23,7 +24,11 @@ class MasterDatasetImporter
 {
     use ProcessesExcelRows;
 
-    private const MASTER_UPLOAD_DIRECTORY = 'master-datasets';
+    private const EXPORT_BASE_DIRECTORY = 'exports';
+    private const MASTER_SOURCE_SUBDIRECTORY = 'source';
+    private const TEMP_DIRECTORY = 'tmp/master';
+    private const ASSIGNMENT_EXCLUDED = 'Excluded';
+    private const ASSIGNMENT_VIP = 'VIP';
     private const REQUIRED_COLUMNS = [
         'RUN_DATE',
         'REGION',
@@ -53,7 +58,8 @@ class MasterDatasetImporter
         string $arrearsLetter,
         string $arrearsColumnName,
         ?Carbon $arrearsDate,
-        ?array $userContext
+        ?array $userContext,
+        string $workbookAbsolutePath
     ): array {
         return [
             'process_id' => $process->id,
@@ -61,8 +67,8 @@ class MasterDatasetImporter
             'storage_disk' => $process->storage_disk,
             'master_archive_path' => $process->master_archive_path,
             'master_archive_full_path' => $this->disk->path($process->master_archive_path),
-            'master_workbook_path' => $process->master_workbook_path,
-            'master_workbook_full_path' => $this->disk->path($process->master_workbook_path),
+            'master_workbook_path' => $this->workbookPlaceholderPath($process->token),
+            'master_workbook_full_path' => $workbookAbsolutePath,
             'headers' => $headers,
             'header_map' => $headerMap,
             'arrears_column_letter' => $arrearsLetter,
@@ -72,6 +78,39 @@ class MasterDatasetImporter
             'user_context' => $userContext,
             'generated_at' => now()->toIso8601String(),
         ];
+    }
+
+    private function masterSourceDirectory(string $token): string
+    {
+        return self::EXPORT_BASE_DIRECTORY . '/' . $token . '/' . self::MASTER_SOURCE_SUBDIRECTORY;
+    }
+
+    private function workbookPlaceholderPath(string $token): string
+    {
+        return $this->masterSourceDirectory($token) . '/master.xlsx';
+    }
+
+    private function temporaryWorkbookPath(string $token): string
+    {
+        $directory = storage_path('app/' . self::TEMP_DIRECTORY);
+
+        if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
+            throw new RuntimeException('Unable to prepare a temporary directory for master workbook extraction.');
+        }
+
+        return $directory . '/' . $token . '_' . Str::uuid()->toString() . '.xlsx';
+    }
+
+    private function isTemporaryWorkbookPath(?string $path): bool
+    {
+        if (! $path) {
+            return false;
+        }
+
+        $prefix = rtrim(storage_path('app/' . self::TEMP_DIRECTORY), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $resolved = realpath($path) ?: $path;
+
+        return str_starts_with($resolved, $prefix);
     }
 
     private function updateRunDateFromRows(MasterDatasetProcess $process): void
@@ -91,18 +130,88 @@ class MasterDatasetImporter
     }
 
     /**
-     * @throws ValidationException
+     * Preserve compatibility with the legacy single-step import path.
      */
     public function import(UploadedFile $archive, ?array $userContext = null): MasterDatasetProcess
+    {
+        $process = $this->queue($archive, $userContext);
+
+        return $this->processStoredArchive($process, $userContext);
+    }
+
+    /**
+     * Persist the uploaded master archive and initialise a dataset process without
+     * running validation yet. The resulting process can be resumed once exclusions arrive.
+     */
+    public function queue(UploadedFile $archive, ?array $userContext = null): MasterDatasetProcess
     {
         $token = (string) Str::uuid();
         $zipPath = $this->storeArchive($archive, $token);
 
+        $disk = config('filesystems.default', 'local');
+
+        return MasterDatasetProcess::create([
+            'token' => $token,
+            'dataset_month' => now()->format('Ym'),
+            'arrears_date' => null,
+            'run_date_raw' => null,
+            'master_archive_path' => $zipPath,
+            'master_workbook_path' => $this->workbookPlaceholderPath($token),
+            'storage_disk' => $disk,
+            'master_filesize' => $archive->getSize(),
+            'user_id' => $userContext['id'] ?? null,
+            'user_name' => $userContext['name'] ?? null,
+            'status' => 'awaiting_exclusions',
+            'failure_reason' => null,
+        ]);
+    }
+
+    /**
+     * Resume processing for a dataset whose master archive has already been uploaded.
+     */
+    public function processStoredArchive(
+        MasterDatasetProcess $process,
+        ?array $userContext = null
+    ): MasterDatasetProcess {
+        if ($process->status === MasterDatasetProcessStatus::READY) {
+            return $process->fresh();
+        }
+
+        $diskName = $process->storage_disk ?: config('filesystems.default', 'local');
+        $this->disk = Storage::disk($diskName);
+
+        $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VALIDATING);
+
+        if (! $process->master_archive_path || ! $this->disk->exists($process->master_archive_path)) {
+            throw ValidationException::withMessages([
+                'upload' => 'The uploaded master archive could not be located. Please upload the file again.',
+            ]);
+        }
+
+        $token = $process->token ?? (string) Str::uuid();
+        if (! $process->token) {
+            $process->token = $token;
+            $process->save();
+        }
+
+        $workbookAbsolute = null;
+
         try {
-            $workbookPath = $this->extractWorkbook($zipPath, $token);
-            return $this->ingestWorkbook($token, $zipPath, $workbookPath, $archive, $userContext);
+            $workbookAbsolute = $this->extractWorkbook($process->master_archive_path, $token);
+
+            $placeholder = $this->workbookPlaceholderPath($token);
+            if ($process->master_workbook_path !== $placeholder) {
+                $process->master_workbook_path = $placeholder;
+                $process->save();
+            }
+
+            return $this->ingestWorkbook($process, $process->master_archive_path, $workbookAbsolute, $userContext);
         } catch (Throwable $exception) {
-            $this->cleanupFiles($token);
+            $process->update([
+                'status' => 'failed',
+                'failure_reason' => $exception->getMessage(),
+            ]);
+
             if ($exception instanceof ValidationException) {
                 throw $exception;
             }
@@ -110,14 +219,23 @@ class MasterDatasetImporter
             throw ValidationException::withMessages([
                 'upload' => $exception->getMessage(),
             ]);
+        } finally {
+            if ($this->isTemporaryWorkbookPath($workbookAbsolute) && file_exists((string) $workbookAbsolute)) {
+                @unlink($workbookAbsolute);
+            }
         }
     }
 
-    private function ingestWorkbook(string $token, string $zipPath, string $workbookPath, UploadedFile $archive, ?array $userContext): MasterDatasetProcess
+    private function ingestWorkbook(
+        MasterDatasetProcess $process,
+        string $zipPath,
+        string $workbookAbsolutePath,
+        ?array $userContext
+    ): MasterDatasetProcess
     {
         $reader = IOFactory::createReader('Xlsx');
         $reader->setReadDataOnly(false);
-        $spreadsheet = $reader->load($this->disk->path($workbookPath));
+        $spreadsheet = $reader->load($workbookAbsolutePath);
 
         $sheet = $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray(null, true, true, true);
@@ -145,23 +263,22 @@ class MasterDatasetImporter
         $arrearsDate = $this->extractArrearsDate($arrearsColumnName);
         $datasetMonth = $arrearsDate ? $arrearsDate->format('Ym') : now()->format('Ym');
 
-        $process = null;
+        $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VALIDATED);
 
         DB::beginTransaction();
 
         try {
-            $process = MasterDatasetProcess::create([
-                'token' => $token,
+            $process->update([
                 'dataset_month' => $datasetMonth,
                 'arrears_date' => $arrearsDate,
                 'run_date_raw' => null,
                 'master_archive_path' => $zipPath,
-                'master_workbook_path' => $workbookPath,
-                'storage_disk' => config('filesystems.default', 'local'),
-                'master_filesize' => $archive->getSize(),
-                'user_id' => $userContext['id'] ?? null,
-                'user_name' => $userContext['name'] ?? null,
-                'status' => 'pending_python',
+                'master_workbook_path' => $this->workbookPlaceholderPath($process->token),
+                'storage_disk' => $process->storage_disk ?: config('filesystems.default', 'local'),
+                'master_filesize' => $process->master_filesize ?: $this->disk->size($zipPath),
+                'user_id' => $userContext['id'] ?? $process->user_id,
+                'user_name' => $userContext['name'] ?? $process->user_name,
+                'failure_reason' => null,
             ]);
 
             DB::commit();
@@ -173,12 +290,25 @@ class MasterDatasetImporter
         $process->refresh();
 
         $python = app(PythonIngestionService::class);
-        $manifestPayload = $this->buildManifestPayload($process, $headers, $headerMap, $arrearsLetter, $arrearsColumnName, $arrearsDate, $userContext);
+        $manifestPayload = $this->buildManifestPayload(
+            $process,
+            $headers,
+            $headerMap,
+            $arrearsLetter,
+            $arrearsColumnName,
+            $arrearsDate,
+            $userContext,
+            $workbookAbsolutePath
+        );
         $python->writeManifest($process, $manifestPayload);
         $python->ensureStatusFile($process);
 
         try {
+            $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::PYTHON_RUNNING);
             $python->run($process);
+            $process = MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::PYTHON_COMPLETE);
+
+            $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::RECORDS_INSERTING);
             $promoted = app(MasterDatasetStagingPromoter::class)->promote($process);
 
             if (($promoted['promoted'] ?? 0) === 0) {
@@ -195,15 +325,16 @@ class MasterDatasetImporter
                 'excluded_count' => $statistics['excluded_count'] ?? 0,
                 'run_date' => $statistics['first_run_date'] ?? null,
                 'run_date_raw' => $statistics['first_run_date_raw'] ?? null,
-                'status' => 'ready',
                 'failure_reason' => null,
             ]);
+
+            $process = MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::RECORDS_INSERTED);
 
             return $process->fresh();
         } catch (Throwable $exception) {
             if ($process) {
+                MasterDatasetProcessStatus::set($process, 'failed');
                 $process->update([
-                    'status' => 'failed',
                     'failure_reason' => $exception->getMessage(),
                 ]);
             }
@@ -242,19 +373,17 @@ class MasterDatasetImporter
                 $parsed['excluded'] = true;
                 $parsed['exclusion_reason'] = $autoExclusion;
                 $parsed['exclusion_priority'] = max($parsed['exclusion_priority'] ?? 0, 5);
+                $parsed['assigned_to'] = self::ASSIGNMENT_EXCLUDED;
                 $statistics['excluded_count']++;
+
+                MasterDatasetRow::create(array_merge($parsed, [
+                    'process_id' => $process->id,
+                ]));
+                continue;
             }
 
-            $nonRetailExclusion = $this->nonRetailExclusion($parsed);
-            if ($nonRetailExclusion && ! $parsed['excluded']) {
-                $parsed['excluded'] = true;
-                $parsed['exclusion_reason'] = $nonRetailExclusion;
-                $parsed['exclusion_priority'] = max($parsed['exclusion_priority'] ?? 0, 6);
-                $statistics['excluded_count']++;
-            }
-
-            if ($parsed['excluded']) {
-                $parsed['assigned_to'] = null;
+            if ($this->shouldAssignVip($parsed)) {
+                $parsed['assigned_to'] = self::ASSIGNMENT_VIP;
             }
 
             MasterDatasetRow::create(array_merge($parsed, [
@@ -334,35 +463,40 @@ class MasterDatasetImporter
 
     private function evaluateAutoExclusion(array $row): ?string
     {
+        $medium = strtoupper(trim((string) $row['medium']));
+        if ($medium === '' || ! in_array($medium, ['COPPER', 'FTTH'], true)) {
+            $value = $medium === '' ? 'blank' : $medium;
+            return sprintf('AUTO: MEDIUM is %s (requires COPPER or FTTH)', $value);
+        }
+
         $status = strtoupper(trim((string) $row['latest_product_status']));
         if ($status !== 'OK') {
-            return 'AUTO: latest_product_status != OK';
+            $value = $status === '' ? 'blank' : $status;
+            return sprintf('AUTO: LATEST_PRODUCT_STATUS is %s (requires OK)', $value);
         }
 
-        $medium = strtoupper(trim((string) $row['medium']));
-        if (! in_array($medium, ['COPPER', 'FTTH'], true)) {
-            return 'AUTO: medium not in COPPER/FTTH';
-        }
-
-        if ((float) $row['new_arrears_value'] < 2400) {
-            return 'AUTO: new_arrears below 2400';
+        $arrears = (float) ($row['new_arrears_value'] ?? 0);
+        if ($arrears <= 2400) {
+            $column = $row['new_arrears_column'] ?? 'NEW_ARREARS';
+            return sprintf('AUTO: %s <= 2400', $column);
         }
 
         return null;
     }
 
-    private function nonRetailExclusion(array $row): ?string
+    private function shouldAssignVip(array $row): bool
     {
-        $businessLine = trim((string) $row['slt_business_line_value']);
-        $latestBill = (float) $row['latest_bill_mny'];
+        $creditClass = (string) ($row['credit_class_name'] ?? '');
 
-        $isRetail = in_array((string) $businessLine, ['11', '35'], true);
-
-        if (! $isRetail && $latestBill < 5000) {
-            return 'AUTO: non-retail latest_bill_mny < 5000';
+        if ($creditClass === '') {
+            $creditClass = (string) ($row['customer_segment'] ?? '');
         }
 
-        return null;
+        if ($creditClass === '') {
+            return false;
+        }
+
+        return $this->isVipCreditClass($creditClass);
     }
 
     private function parseRunDate(?string $value): ?Carbon
@@ -490,9 +624,19 @@ class MasterDatasetImporter
 
     private function storeArchive(UploadedFile $archive, string $token): string
     {
-        $path = self::MASTER_UPLOAD_DIRECTORY . '/' . $token . '.zip';
-        $this->disk->putFileAs(self::MASTER_UPLOAD_DIRECTORY, $archive, $token . '.zip');
-        return $path;
+        $directory = $this->masterSourceDirectory($token);
+        $this->disk->makeDirectory($directory);
+
+        $filename = 'master.zip';
+        $stored = $this->disk->putFileAs($directory, $archive, $filename);
+
+        if (! $stored) {
+            throw ValidationException::withMessages([
+                'upload' => 'Unable to store the uploaded master archive. Please try again.',
+            ]);
+        }
+
+        return $directory . '/' . $filename;
     }
 
     private function extractWorkbook(string $zipPath, string $token): string
@@ -506,10 +650,9 @@ class MasterDatasetImporter
 
         try {
             $entry = $this->locateExcelEntry($zip);
-            $targetPath = self::MASTER_UPLOAD_DIRECTORY . '/' . $token . '.xlsx';
-            $absoluteTarget = $this->disk->path($targetPath);
-            $directory = dirname($absoluteTarget);
+            $targetPath = $this->temporaryWorkbookPath($token);
 
+            $directory = dirname($targetPath);
             if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
                 throw new RuntimeException('Unable to prepare storage for the extracted workbook.');
             }
@@ -519,7 +662,7 @@ class MasterDatasetImporter
                 throw new RuntimeException(sprintf('Unable to read "%s" in the uploaded archive.', $entry));
             }
 
-            $targetHandle = fopen($absoluteTarget, 'wb');
+            $targetHandle = fopen($targetPath, 'wb');
             if (! $targetHandle) {
                 fclose($stream);
                 throw new RuntimeException('Unable to write the extracted workbook to storage.');
@@ -563,9 +706,4 @@ class MasterDatasetImporter
         return $entries[0];
     }
 
-    private function cleanupFiles(string $token): void
-    {
-        $this->disk->delete(self::MASTER_UPLOAD_DIRECTORY . '/' . $token . '.zip');
-        $this->disk->delete(self::MASTER_UPLOAD_DIRECTORY . '/' . $token . '.xlsx');
-    }
 }

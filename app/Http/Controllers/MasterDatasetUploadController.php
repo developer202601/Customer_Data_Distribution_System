@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MasterDatasetProcess;
-use App\Support\MasterDatasetImporter;
+use App\Support\MasterDatasetWorkflowService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -26,7 +26,7 @@ class MasterDatasetUploadController extends Controller
         ]);
     }
 
-    public function store(Request $request, MasterDatasetImporter $importer): RedirectResponse
+    public function store(Request $request, MasterDatasetWorkflowService $workflow): RedirectResponse
     {
         $data = $request->validate([
             'upload' => 'required|file|mimes:zip|max:51200',
@@ -39,7 +39,7 @@ class MasterDatasetUploadController extends Controller
                 'name' => $user?->username ?? $user?->name ?? $user?->email ?? null,
             ];
 
-            $process = $importer->import($request->file('upload'), $userContext);
+            $process = $workflow->queueMasterArchive($request->file('upload'), $userContext);
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -52,6 +52,6 @@ class MasterDatasetUploadController extends Controller
 
         return redirect()
             ->route('process.exclusions.create')
-            ->with('status', 'Master dataset uploaded successfully. Continue with exclusions.');
+            ->with('status', 'Master dataset uploaded. Continue by adding exclusion files to begin validation.');
     }
 }

@@ -3,132 +3,114 @@ import 'admin-lte/dist/js/adminlte.min.js';
 import 'jquery/dist/jquery.min.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-	const loader = document.getElementById('page-loader');
-	let loaderSuppressed = false;
+  // Theme handling preserved
+  const themeToggle = document.getElementById('theme-toggle');
+  const THEME_STORAGE_KEY = 'cdds-theme-mode';
+  const THEMES = { LIGHT: 'light', DARK: 'dark' };
+  const applyTheme = (theme) => {
+    document.body.classList.remove('theme-light', 'theme-dark');
+    document.body.classList.add(`theme-${theme}`);
+    if (themeToggle) {
+      themeToggle.dataset.theme = theme;
+      themeToggle.setAttribute('aria-pressed', theme === THEMES.DARK ? 'true' : 'false');
+    }
+  };
+  const loadStoredTheme = () => { try { const s = localStorage.getItem(THEME_STORAGE_KEY); return (s === THEMES.DARK || s === THEMES.LIGHT) ? s : null; } catch { return null; } };
+  const detectPreferredTheme = () => window.matchMedia('(prefers-color-scheme: dark)').matches ? THEMES.DARK : THEMES.LIGHT;
+  const saveTheme = (t) => { try { localStorage.setItem(THEME_STORAGE_KEY, t); } catch {} };
+  const toggleTheme = () => { const cur = document.body.classList.contains('theme-dark') ? THEMES.DARK : THEMES.LIGHT; const next = cur === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK; applyTheme(next); saveTheme(next); };
+  const initTheme = () => { applyTheme(loadStoredTheme() || detectPreferredTheme()); };
+  if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+  initTheme();
 
-	const hideLoader = () => {
-		if (!loader) {
-			return;
-		}
-		loader.classList.add('page-loader--hidden');
-	};
+  // Simplified loader implementation
+  const loader = document.getElementById('page-loader');
+  if (!loader) return;
+  const statusUrl = loader.dataset.statusUrl;
+  const readyRedirect = loader.dataset.readyRedirect;
+  const staticComplete = loader.dataset.staticComplete === '1';
+  let lastProgress = 0;
+  // Remove complex JS animation for reliability; use CSS transitions
+  let animationFrame = null;
+  let pollTimer = null;
 
-	const showLoader = () => {
-		if (!loader || loaderSuppressed) {
-			return;
-		}
-		loader.classList.remove('page-loader--hidden');
-	};
+  const els = {
+    msg: loader.querySelector('[data-loader-message]'),
+    bar: loader.querySelector('[data-loader-bar]'),
+    pct: loader.querySelector('[data-loader-percent]'),
+    line: loader.querySelector('[data-loader-line-fill]'),
+  };
 
-	const suppressLoaderTemporarily = () => {
-		loaderSuppressed = true;
-		setTimeout(() => {
-			loaderSuppressed = false;
-		}, 1000);
-	};
+  const showLoader = () => loader.classList.remove('page-loader--hidden');
+  const hideLoader = () => loader.classList.add('page-loader--hidden');
 
-	const themeToggle = document.getElementById('theme-toggle');
-	const THEME_STORAGE_KEY = 'cdds-theme-mode';
-	const THEMES = {
-		LIGHT: 'light',
-		DARK: 'dark',
-	};
+  const setWidths = (value) => {
+    if (els.bar) { els.bar.style.width = value + '%'; els.bar.setAttribute('aria-valuenow', String(value)); }
+    if (els.line) { els.line.style.width = value + '%'; }
+    if (els.pct) els.pct.textContent = value + '%';
+  };
 
-	const applyTheme = (theme) => {
-		document.body.classList.remove('theme-light', 'theme-dark');
-		document.body.classList.add(`theme-${theme}`);
-		if (themeToggle) {
-			themeToggle.dataset.theme = theme;
-			themeToggle.setAttribute('aria-pressed', theme === THEMES.DARK ? 'true' : 'false');
-		}
-	};
+  const apply = (data) => {
+    if (!data) return;
+    const raw = typeof data.progress === 'number' ? data.progress : lastProgress;
+    const target = raw < lastProgress ? lastProgress : raw; // monotonic
+    if (els.msg) els.msg.textContent = data.message || data.status || 'Processing…';
+    if (target !== lastProgress) {
+      lastProgress = target;
+      setWidths(lastProgress);
+    } else {
+      setWidths(lastProgress);
+    }
+    if (data.status === 'ready' || data.status === 'failed') {
+      clearInterval(pollTimer);
+      // Slight delay to allow final UI update before redirect/hide
+      setTimeout(() => {
+        if (data.status === 'ready' && readyRedirect) {
+          // Avoid redirect loop if already on target
+          const targetUrl = readyRedirect;
+          const current = window.location.pathname + window.location.search;
+          // If current path does not match target path portion, redirect
+          const parser = document.createElement('a');
+          parser.href = targetUrl;
+          if (parser.pathname !== window.location.pathname) {
+            window.location.href = targetUrl;
+            return; // Do not hide loader; new navigation will replace page
+          }
+        }
+        hideLoader();
+      }, 800);
+    }
+  };
 
-	const loadStoredTheme = () => {
-		try {
-			const stored = localStorage.getItem(THEME_STORAGE_KEY);
-			if (stored === THEMES.DARK || stored === THEMES.LIGHT) {
-				return stored;
-			}
-		} catch (err) {
-			return null;
-		}
-		return null;
-	};
+  const poll = () => {
+    if (!statusUrl) return;
+    fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(apply)
+      .catch(() => {});
+  };
 
-	const saveTheme = (theme) => {
-		try {
-			localStorage.setItem(THEME_STORAGE_KEY, theme);
-		} catch (err) {
-			// ignore
-		}
-	};
+  if (staticComplete) {
+    // Non-process pages: show full bar immediately
+    setWidths(100);
+  } else {
+    // Start polling immediately for process-aware pages
+    poll();
+    pollTimer = setInterval(poll, 2000);
+  }
 
-	const detectPreferredTheme = () => {
-		if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-			return THEMES.DARK;
-		}
-		return THEMES.LIGHT;
-	};
+  // Basic navigation & form triggers
+  window.addEventListener('beforeunload', showLoader);
+  document.addEventListener('submit', (e) => { if (e.target instanceof HTMLFormElement) showLoader(); }, true);
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href]');
+    if (!link) return;
+    if (link.getAttribute('target') === '_blank' || link.hasAttribute('download')) return;
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#')) return;
+    showLoader();
+  }, true);
 
-	const toggleTheme = () => {
-		const current = document.body.classList.contains('theme-dark') ? THEMES.DARK : THEMES.LIGHT;
-		const next = current === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK;
-		applyTheme(next);
-		saveTheme(next);
-	};
-
-	const initializeTheme = () => {
-		const stored = loadStoredTheme();
-		const initial = stored || detectPreferredTheme();
-		applyTheme(initial);
-	};
-
-	if (themeToggle) {
-		themeToggle.addEventListener('click', toggleTheme);
-	}
-
-	window.addEventListener('load', () => {
-		// allow small delay so CSS/JS settle before hiding
-		setTimeout(hideLoader, 200);
-	});
-
-	window.addEventListener('beforeunload', () => {
-		showLoader();
-	});
-
-	document.addEventListener('submit', (event) => {
-		const form = event.target;
-		if (!(form instanceof HTMLFormElement)) {
-			return;
-		}
-		if (form.matches('[data-loader-off]')) {
-			suppressLoaderTemporarily();
-			return;
-		}
-		showLoader();
-	}, true);
-
-	document.addEventListener('click', (event) => {
-		const link = event.target.closest('a[href]');
-		if (!link) {
-			return;
-		}
-		if (event.defaultPrevented) {
-			return;
-		}
-		if (link.hasAttribute('data-loader-off')) {
-			suppressLoaderTemporarily();
-			return;
-		}
-		if (link.getAttribute('target') === '_blank' || link.hasAttribute('download')) {
-			return;
-		}
-		const href = link.getAttribute('href');
-		if (!href || href.startsWith('#')) {
-			return;
-		}
-		showLoader();
-	}, true);
-
-	initializeTheme();
+  // Expose minimal API if needed
+  window.CDDSLoader = { show: showLoader, hide: hideLoader };
 });

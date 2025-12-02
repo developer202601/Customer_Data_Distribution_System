@@ -4,9 +4,11 @@ namespace App\Support;
 
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\Eloquent\Builder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MasterDatasetExportService
@@ -61,6 +63,64 @@ class MasterDatasetExportService
         string $filename,
         Builder $query
     ): StreamedResponse {
+        $spreadsheet = $this->buildSpreadsheet($process, $label, $query);
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function storeToDisk(
+        MasterDatasetProcess $process,
+        string $label,
+        Builder $query,
+        Filesystem $disk,
+        string $path
+    ): void {
+        $spreadsheet = $this->buildSpreadsheet($process, $label, $query);
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'export_');
+
+        if ($tempFile === false) {
+            $spreadsheet->disconnectWorksheets();
+            throw new RuntimeException('Unable to allocate temporary storage while generating the export workbook.');
+        }
+
+        try {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save($tempFile);
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+        }
+
+        $directory = trim(dirname($path), '/');
+        if ($directory !== '' && $directory !== '.') {
+            $disk->makeDirectory($directory);
+        }
+
+        $stream = fopen($tempFile, 'rb');
+
+        if ($stream === false) {
+            @unlink($tempFile);
+            throw new RuntimeException('Unable to read the temporary export workbook.');
+        }
+
+        try {
+            if (! $disk->put($path, $stream)) {
+                throw new RuntimeException('Failed to persist the export workbook to storage.');
+            }
+        } finally {
+            fclose($stream);
+            @unlink($tempFile);
+        }
+    }
+
+    private function buildSpreadsheet(MasterDatasetProcess $process, string $label, Builder $query): Spreadsheet
+    {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle($this->truncateSheetTitle($label));
@@ -85,12 +145,7 @@ class MasterDatasetExportService
         $dimension = $sheet->calculateWorksheetDimension();
         $sheet->setAutoFilter($dimension);
 
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        return $spreadsheet;
     }
 
     private function mapRow(MasterDatasetProcess $process, MasterDatasetRow $row): array

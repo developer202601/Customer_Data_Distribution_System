@@ -9,7 +9,13 @@
 </head>
 
 <body class="hold-transition sidebar-mini">
-    @include('partials.page-loader')
+    @if(View::hasSection('loaderAutoRedirect'))
+        @include('partials.page-loader', ['autoRedirect' => true, 'pollStatus' => true])
+    @elseif(View::hasSection('loaderPollStatus'))
+        @include('partials.page-loader', ['pollStatus' => true])
+    @else
+        @include('partials.page-loader', ['pollStatus' => false])
+    @endif
     <div class="wrapper">
 
         <!-- Navbar -->

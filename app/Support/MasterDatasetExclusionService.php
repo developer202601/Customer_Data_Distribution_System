@@ -21,6 +21,8 @@ class MasterDatasetExclusionService
 {
     use ProcessesExcelRows;
 
+    private const ASSIGNMENT_EXCLUDED = 'Excluded';
+
     private Filesystem $disk;
 
     public function __construct()
@@ -114,6 +116,7 @@ class MasterDatasetExclusionService
         try {
             $rows = MasterDatasetRow::query()
                 ->where('process_id', $process->id)
+                ->where('excluded', false)
                 ->whereIn('account_num', array_keys($accountMap))
                 ->lockForUpdate()
                 ->get();
@@ -122,15 +125,11 @@ class MasterDatasetExclusionService
                 $details = $accountMap[$row->account_num] ?? [];
                 $reasonText = $this->buildReasonText($details);
 
-                if (! $row->excluded) {
-                    $matched++;
-                } else {
-                    $alreadyExcluded++;
-                }
+                $matched++;
 
                 $row->excluded = true;
                 $row->exclusion_reason = $reasonText;
-                $row->assigned_to = null;
+                $row->assigned_to = self::ASSIGNMENT_EXCLUDED;
                 $row->exclusion_priority = 10;
                 $row->save();
             }
@@ -332,6 +331,6 @@ class MasterDatasetExclusionService
 
     private function archiveDirectory(string $token): string
     {
-        return 'master-datasets/' . $token . '/exclusions';
+        return 'exports/' . $token . '/exclusions';
     }
 }

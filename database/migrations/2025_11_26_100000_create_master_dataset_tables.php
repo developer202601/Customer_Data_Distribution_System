@@ -78,7 +78,7 @@ return new class extends Migration
             $table->unsignedInteger('exclusion_priority')->default(0);
             $table->timestamps();
 
-            $table->unique(['process_id', 'run_date_raw', 'product_label'], 'mdr_process_run_product_unique');
+            $table->unique(['process_id', 'run_date_raw', 'account_num'], 'mdr_process_run_product_unique');
         });
     }
 

@@ -16,6 +16,7 @@
 @endsection
 
 @section('content')
+@php($exportStatuses = $exports ?? [])
 <div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
@@ -24,10 +25,21 @@
                 <p class="text-muted mb-1">Review the most recent exclusion run and download the workbook containing all excluded rows.</p>
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong></p>
             </div>
+            @php($excludedStatus = $exportStatuses['excluded'] ?? [])
+            @php($excludedState = $excludedStatus['status'] ?? 'processing')
+            @php($excludedReady = $excludedState === 'ready')
+            @php($excludedFailed = $excludedState === 'failed')
             <div class="d-flex flex-wrap gap-2">
                 <a href="{{ route('process.assignments.index') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
                 @if(($summary['total_excluded'] ?? 0) > 0)
-                <a href="{{ route('process.assignments.download', ['group' => 'exclusions', 'bucket' => 'excluded']) }}" class="btn btn-dark" data-loader-off="1">Download workbook</a>
+                    @if($excludedFailed)
+                    <button type="button" class="btn btn-outline-danger" disabled>Generation failed</button>
+                    @elseif($excludedReady)
+                    <a href="{{ route('process.assignments.download', ['group' => 'exclusions', 'bucket' => 'excluded']) }}" class="btn btn-dark" data-loader-off="1">Download workbook</a>
+                    @else
+                    <button type="button" class="btn btn-dark" disabled>Generating…</button>
+                    @endif
+                    <a href="{{ route('process.assignments.download', ['group' => 'exclusions', 'bucket' => 'excluded', 'fresh' => 1]) }}" class="btn btn-outline-secondary" target="_blank" rel="noopener noreferrer" data-loader-off="1">Download live</a>
                 @endif
             </div>
         </div>

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 class MasterDatasetViewService
 {
-    private const REGION_LABEL = 'region billing centre';
+    private const REGION_LABEL = 'regional billing center';
     private const CALL_CENTER_STAFF_LABEL = 'call center staff';
     private const CALL_CENTER_LABEL = 'call center';
     private const STAFF_LABEL = 'staff';
@@ -17,6 +17,9 @@ class MasterDatasetViewService
     private const ENTERPRISE_CODES = ['41', '44', '47', '76'];
     private const SME_CODES = ['31'];
     private const VIP_PREFIX = 'VIP%';
+    private const ENTERPRISE_LABEL = 'enterprise + wholesale';
+    private const SME_LABEL = 'sme';
+    private const VIP_LABEL = 'VIP';
 
     private const GROUP_A_QUOTAS = [
         'call-center-staff' => [
@@ -90,18 +93,31 @@ class MasterDatasetViewService
         ];
     }
 
+    public function groupAQuery(MasterDatasetProcess $process): Builder
+    {
+        return MasterDatasetRow::query()
+            ->where('process_id', $process->id)
+            ->where('excluded', false)
+            ->whereIn('assigned_to', [
+                self::CALL_CENTER_STAFF_LABEL,
+                self::CALL_CENTER_LABEL,
+                self::STAFF_LABEL,
+                self::REGION_LABEL,
+            ]);
+    }
+
     public function groupBSummary(MasterDatasetProcess $process): array
     {
         $enterpriseCount = MasterDatasetRow::query()
             ->where('process_id', $process->id)
             ->where('excluded', false)
-            ->whereIn('slt_business_line_value', self::ENTERPRISE_CODES)
+            ->where('assigned_to', self::ENTERPRISE_LABEL)
             ->count();
 
         $smeCount = MasterDatasetRow::query()
             ->where('process_id', $process->id)
             ->where('excluded', false)
-            ->whereIn('slt_business_line_value', self::SME_CODES)
+            ->where('assigned_to', self::SME_LABEL)
             ->count();
 
         return [
@@ -114,6 +130,23 @@ class MasterDatasetViewService
                 'count' => $smeCount,
             ],
         ];
+    }
+
+    public function groupBQuery(MasterDatasetProcess $process): Builder
+    {
+        return MasterDatasetRow::query()
+            ->where('process_id', $process->id)
+            ->where('excluded', false)
+            ->whereIn('assigned_to', [
+                self::ENTERPRISE_LABEL,
+                self::SME_LABEL,
+            ]);
+    }
+
+    public function overviewQuery(MasterDatasetProcess $process): Builder
+    {
+        return MasterDatasetRow::query()
+            ->where('process_id', $process->id);
     }
 
     public function exclusionSummary(MasterDatasetProcess $process): array
@@ -172,7 +205,7 @@ class MasterDatasetViewService
         return MasterDatasetRow::query()
             ->where('process_id', $process->id)
             ->where('excluded', false)
-            ->whereNull('assigned_to')
+            ->where('assigned_to', self::VIP_LABEL)
             ->whereNotNull('credit_class_name')
             ->where('credit_class_name', 'like', self::VIP_PREFIX);
     }
@@ -183,23 +216,21 @@ class MasterDatasetViewService
 
         $count = (clone $query)->count();
 
-        $businessLines = (clone $query)
-            ->select('slt_business_line_value', DB::raw('count(*) as total'))
-            ->groupBy('slt_business_line_value')
-            ->orderByDesc('total')
-            ->limit(6)
-            ->get()
-            ->map(function ($row) {
-                return [
-                    'business_line' => $row->slt_business_line_value ?: 'Unknown',
-                    'total' => (int) $row->total,
-                ];
-            })
-            ->all();
-
         return [
             'count' => $count,
-            'business_lines' => $businessLines,
+        ];
+    }
+
+    public function assignmentLabelMap(): array
+    {
+        return [
+            self::CALL_CENTER_STAFF_LABEL => 'Call Center Staff',
+            self::CALL_CENTER_LABEL => 'Call Center',
+            self::STAFF_LABEL => 'Staff',
+            self::REGION_LABEL => 'Region Billing Centre',
+            self::ENTERPRISE_LABEL => 'Enterprise & Wholesale',
+            self::SME_LABEL => 'SME',
+            self::VIP_LABEL => 'VIP',
         ];
     }
 
@@ -268,14 +299,14 @@ class MasterDatasetViewService
                 'label' => 'Enterprise & Wholesale',
                 'filename' => 'enterprise_wholesale.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)->whereIn('slt_business_line_value', self::ENTERPRISE_CODES),
+                    fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::ENTERPRISE_LABEL),
                 ],
             ],
             'sme' => [
                 'label' => 'SME',
                 'filename' => 'sme.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)->whereIn('slt_business_line_value', self::SME_CODES),
+                    fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::SME_LABEL),
                 ],
             ],
             'excluded' => [
@@ -291,7 +322,7 @@ class MasterDatasetViewService
                 'scopes' => [
                     fn(Builder $query) => $query
                         ->where('excluded', false)
-                        ->whereNull('assigned_to')
+                        ->where('assigned_to', self::VIP_LABEL)
                         ->whereNotNull('credit_class_name')
                         ->where('credit_class_name', 'like', self::VIP_PREFIX),
                 ],

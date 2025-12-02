@@ -16,17 +16,18 @@
 @endsection
 
 @section('content')
+@php($exportStatuses = $exports ?? [])
 <div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
-                <h1 class="process-preview-title mb-2">Group A Allocation</h1>
+                <h1 class="process-preview-title mb-2">Retail &amp; Micro Allocation</h1>
                 <p class="text-muted mb-1">Retail and Micro Business records that matched the arrears rules have been split into the operational quotas below.</p>
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Evaluated rows: {{ number_format($group['input'] ?? 0) }}</p>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 <a href="{{ route('process.assignments.index') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
-                <a href="{{ route('process.assignments.group-b') }}" class="btn btn-outline-secondary" data-loader-off="1">Group B exports</a>
+                <a href="{{ route('process.assignments.group-b') }}" class="btn btn-outline-secondary" data-loader-off="1">Enterprise &amp; SME exports</a>
             </div>
         </div>
 
@@ -46,47 +47,135 @@
         </div>
         @endif
 
+        @php
+            $assignmentLabels = $assignmentLabels ?? [];
+            $resolveAssignment = function (?string $value) use ($assignmentLabels) {
+                if ($value === null || $value === '') {
+                    return '—';
+                }
 
-        @php($quotas = $group['quotas'] ?? [])
-        @php($region = $group['region'] ?? [])
+                $normalized = strtolower($value);
+
+                foreach ($assignmentLabels as $key => $label) {
+                    if ($normalized === strtolower($key)) {
+                        return $label;
+                    }
+                }
+
+                return ucfirst($value);
+            };
+            $quotas = $group['quotas'] ?? [];
+        @endphp
+
         <div class="group-section mb-5">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2 class="h4 mb-0">Quota allocation</h2>
+                <h2 class="h4 mb-0">Download segments</h2>
                 <span class="text-muted">{{ number_format($group['input'] ?? 0) }} records evaluated</span>
             </div>
 
-            <div class="row g-3">
-                @forelse($quotas as $key => $quota)
-                <div class="col-xl-3 col-md-6">
-                    <div class="process-summary-card h-100 d-flex flex-column">
-                        <div class="mb-3">
-                            <span class="process-summary-label d-block">{{ $quota['label'] }}</span>
-                            <span class="process-summary-value">{{ number_format($quota['actual'] ?? 0) }}</span>
-                        </div>
-                        <p class="text-muted mb-3">Target {{ number_format($quota['target'] ?? 0) }} · {{ ($quota['actual'] ?? 0) >= ($quota['target'] ?? 0) ? 'Quota met.' : ('Short by ' . number_format(max(($quota['target'] ?? 0) - ($quota['actual'] ?? 0), 0)) . '.') }}</p>
-                        <div class="mt-auto">
-                            <a href="{{ route('process.assignments.download', ['group' => 'group-a', 'bucket' => $key]) }}" class="btn btn-dark w-100" data-loader-off="1">Download Excel</a>
-                        </div>
-                    </div>
-                </div>
-                @empty
-                <div class="col-12">
-                    <div class="alert alert-info" role="alert">No Group A quotas available. Regenerate assignments after uploading a dataset.</div>
-                </div>
-                @endforelse
-                <div class="col-xl-3 col-md-6">
-                    <div class="process-summary-card h-100 d-flex flex-column">
-                        <div class="mb-3">
-                            <span class="process-summary-label d-block">{{ $region['label'] ?? 'Region Billing Centre' }}</span>
-                            <span class="process-summary-value">{{ number_format($region['actual'] ?? 0) }}</span>
-                        </div>
-                        <p class="text-muted mb-3">Contains all remaining Group&nbsp;A records not allocated to a quota. Download the combined workbook from the Region Billing Centre page.</p>
-                        <div class="mt-auto">
-                            <a href="{{ route('process.assignments.region') }}" class="btn btn-success w-100 text-white" data-loader-off="1">Open Region Billing Centre</a>
-                        </div>
-                    </div>
+            <div class="process-table-container mb-4">
+                <div class="table-responsive">
+                    <table class="table table-sm process-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Segment</th>
+                                <th scope="col" class="text-end">Rows</th>
+                                <th scope="col" class="text-end">Downloads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($quotas as $key => $quota)
+                            @php($bucketStatus = $exportStatuses[$key] ?? [])
+                            @php($bucketState = $bucketStatus['status'] ?? 'processing')
+                            @php($bucketReady = $bucketState === 'ready')
+                            @php($bucketFailed = $bucketState === 'failed')
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold">{{ $quota['label'] }}</div>
+                                    <div class="text-muted small">Target {{ number_format($quota['target'] ?? 0) }}</div>
+                                </th>
+                                <td class="text-end">{{ number_format($quota['actual'] ?? 0) }}</td>
+                                <td class="text-end">
+                                    <div class="d-flex flex-wrap justify-content-end gap-2">
+                                        @if(($quota['actual'] ?? 0) === 0)
+                                        <span class="btn btn-outline-secondary disabled" aria-disabled="true">No export</span>
+                                        @elseif($bucketFailed)
+                                        <button type="button" class="btn btn-outline-danger" disabled>Generation failed</button>
+                                        @elseif(! $bucketReady)
+                                        <button type="button" class="btn btn-dark" disabled>Generating…</button>
+                                        @else
+                                        <a href="{{ route('process.assignments.download', ['group' => 'group-a', 'bucket' => $key]) }}" class="btn btn-dark" data-loader-off="1">Download</a>
+                                        @endif
+
+                                        @if(($quota['actual'] ?? 0) > 0)
+                                        <a href="{{ route('process.assignments.download', ['group' => 'group-a', 'bucket' => $key, 'fresh' => 1]) }}" class="btn btn-outline-secondary" data-loader-off="1">Download live</a>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="3" class="text-center py-4 text-muted">No retail &amp; micro quotas available. Regenerate assignments after uploading a dataset.</td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
             </div>
+
+            <form method="get" action="{{ route('process.assignments.group-a') }}" class="row g-2 align-items-end mb-4" data-loader-off="1">
+                <div class="col-12 col-lg-6 col-xxl-4">
+                    <label for="group-a-search" class="form-label">Search by customer reference, account number, product, or assignment</label>
+                    <input type="text" class="form-control" id="group-a-search" name="search" value="{{ $search ?? '' }}" placeholder="e.g. 0712345678 or Call Center" autocomplete="off">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </div>
+                @if(($search ?? '') !== '')
+                <div class="col-auto">
+                    <a href="{{ route('process.assignments.group-a') }}" class="btn btn-outline-secondary" data-loader-off="1">Clear</a>
+                </div>
+                @endif
+            </form>
+
+            <div class="process-table-container">
+                <div class="table-responsive">
+                    <table class="table table-striped process-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Customer Reference</th>
+                                <th scope="col">Account Number</th>
+                                <th scope="col">Product Label</th>
+                                <th scope="col">Business Line</th>
+                                <th scope="col">Assignment</th>
+                                <th scope="col" class="text-end">New Arrears (Rs.)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($rows as $row)
+                            <tr>
+                                <td>{{ $row->customer_ref ?? '—' }}</td>
+                                <td>{{ $row->account_num ?? '—' }}</td>
+                                <td>{{ $row->product_label ?? '—' }}</td>
+                                <td>{{ $row->slt_business_line_value ?? '—' }}</td>
+                                <td>{{ $resolveAssignment($row->assigned_to ?? null) }}</td>
+                                <td class="text-end">{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">No records matched your filters.</td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            @if($rows->hasPages())
+            <div class="mt-3">
+                {{ $rows->links('pagination::bootstrap-5') }}
+            </div>
+            @endif
         </div>
     </div>
 </div>

@@ -26,12 +26,7 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
     Route::get('/process/status', [ProcessStatusController::class, 'show'])->name('process.status.current');
     Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
-    Route::get('/process/assignments/group-a', [AssignmentController::class, 'groupA'])->name('process.assignments.group-a');
-    Route::get('/process/assignments/group-b', [AssignmentController::class, 'groupB'])->name('process.assignments.group-b');
-    Route::get('/process/assignments/exclusions', [AssignmentController::class, 'exclusions'])->name('process.assignments.exclusions');
-    Route::get('/process/assignments/vip', [AssignmentController::class, 'vip'])->name('process.assignments.vip');
-    Route::get('/process/assignments/region-billing', [AssignmentController::class, 'regionBilling'])->name('process.assignments.region');
-    Route::get('/process/assignments/filtered-out', [AssignmentController::class, 'filteredOut'])->name('process.assignments.filtered-out');
+    // Consolidated into overview; group-specific pages removed
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });

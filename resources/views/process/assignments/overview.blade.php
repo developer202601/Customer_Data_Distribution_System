@@ -71,7 +71,7 @@
         @endphp
 
         <div class="mb-5">
-            <h2 class="h4 mb-3">Retail &amp; Micro</h2>
+            <h2 class="h4 mb-3">Retail &amp; Micro Business</h2>
             <div class="process-table-container">
                 <div class="table-responsive">
                     <table class="table table-sm process-table align-middle mb-0">
@@ -263,7 +263,7 @@
         @endphp
 
         <div class="mt-5">
-            <form method="get" action="{{ route('process.assignments.index') }}" class="row g-2 align-items-end" data-loader-off="1">
+            <form id="overview-search-form" method="get" action="{{ route('process.assignments.index') }}" class="row g-2 align-items-end" data-loader-off="1">
                 <div class="col-12 col-lg-6 col-xxl-4">
                     <label for="overview-search" class="form-label">Search across all records</label>
                     <input type="text" class="form-control" id="overview-search" name="search" value="{{ $search ?? '' }}" placeholder="e.g. customer reference, account, product, or assignment" autocomplete="off">
@@ -279,49 +279,113 @@
             </form>
 
             @if(! empty($search))
-                @php
-                    $resultItems = isset($rows) ? $rows->items() : [];
-                @endphp
-                <div class="process-table-container mt-4">
-                    <div class="table-responsive">
-                        <table class="table table-striped process-table align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Customer Reference</th>
-                                    <th scope="col">Account Number</th>
-                                    <th scope="col">Product Label</th>
-                                    <th scope="col">Business Line</th>
-                                    <th scope="col">Assignment</th>
-                                    <th scope="col" class="text-end">New Arrears (Rs.)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($resultItems as $row)
-                                <tr>
-                                    <td>{{ $row->customer_ref ?? '—' }}</td>
-                                    <td>{{ $row->account_num ?? '—' }}</td>
-                                    <td>{{ $row->product_label ?? '—' }}</td>
-                                    <td>{{ $row->slt_business_line_value ?? '—' }}</td>
-                                    <td>{{ $resolveAssignment($row) }}</td>
-                                    <td class="text-end">{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
-                                </tr>
-                                @empty
-                                <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">No records matched your search.</td>
-                                </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
+                <div id="overview-results">
+                    @include('process.assignments.partials.overview-results', [
+                        'rows' => $rows ?? null,
+                        'assignmentLabels' => $assignmentLabels ?? [],
+                    ])
                 </div>
-
-                @if(isset($rows) && $rows->hasPages())
-                <div class="mt-3">
-                    {{ $rows->links('pagination::bootstrap-5') }}
-                </div>
-                @endif
             @endif
+        </div>
+
+        <div id="overview-results">
+            <div id="loading-indicator" style="display: none; text-align: center; margin: 20px 0;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <!-- Table content will be dynamically loaded here -->
         </div>
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('JavaScript loaded and DOMContentLoaded event fired.');
+
+  const container = document.getElementById('overview-results');
+  const form = document.getElementById('overview-search-form');
+  const loadingIndicator = document.getElementById('loading-indicator');
+
+  if (!container) {
+    console.error('Container #overview-results not found.');
+    return;
+  }
+
+  if (!form) {
+    console.error('Form #overview-search-form not found.');
+    return;
+  }
+
+  if (!loadingIndicator) {
+    console.error('Loading indicator #loading-indicator not found.');
+    return;
+  }
+
+  console.log('Event listeners are being attached.');
+
+  const fetchAndReplace = (url) => {
+    const target = new URL(url, window.location.origin);
+    console.log('Initiating AJAX request to:', target.toString());
+
+    loadingIndicator.style.display = 'block';
+
+    fetch(target.toString(), {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'text/html',
+      },
+      cache: 'no-store',
+      credentials: 'same-origin',
+    })
+      .then((response) => {
+        console.log('AJAX response status:', response.status);
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.text();
+      })
+      .then((html) => {
+        console.log('AJAX request successful. Updating container content.');
+        container.innerHTML = html;
+        window.history.replaceState({}, '', target.toString());
+        container.scrollIntoView({ behavior: 'smooth' });
+
+        // Debugging: Log the updated container content
+        console.log('Updated container content:', container.innerHTML);
+      })
+      .catch((error) => {
+        console.error('Error during AJAX request:', error);
+      })
+      .finally(() => {
+        console.log('Hiding loading indicator.');
+        loadingIndicator.style.display = 'none';
+      });
+  };
+
+  container.addEventListener('click', (e) => {
+    const link = e.target.closest('a.page-link');
+    if (!link) return;
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#')) return;
+    e.preventDefault();
+    console.log('Pagination link clicked:', href);
+    fetchAndReplace(href);
+  });
+
+  form.addEventListener('submit', (e) => {
+    console.log('Form submission intercepted.');
+    e.preventDefault();
+
+    const data = new FormData(form);
+    const params = new URLSearchParams(data);
+    const url = form.action + '?' + params.toString();
+
+    console.log('Form submitted. AJAX request URL:', url);
+    fetchAndReplace(url);
+  });
+});
+</script>
+@endpush

@@ -56,6 +56,14 @@ class AssignmentController extends Controller
 
         $exports = $this->exportCoordinator->ensureFresh($process);
 
+        // AJAX fragment for search results (pagination without full reload)
+        if ($request->ajax()) {
+            return view('process.assignments.partials.overview-results', [
+                'rows' => $rows,
+                'assignmentLabels' => $this->viewService->assignmentLabelMap(),
+            ]);
+        }
+
         return view('process.assignments.overview', [
             'process' => $process,
             'dataset' => $this->viewService->datasetSummary($process),
@@ -68,197 +76,6 @@ class AssignmentController extends Controller
             'search' => $search,
             'rows' => $rows,
             'assignmentLabels' => $this->viewService->assignmentLabelMap(),
-        ]);
-    }
-
-    public function vip(Request $request): View|RedirectResponse
-    {
-        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review VIP records.');
-
-        if ($process instanceof RedirectResponse) {
-            return $process;
-        }
-
-        $search = trim((string) $request->query('search', ''));
-
-        $query = $this->viewService->vipQuery($process);
-
-        if ($search !== '') {
-            $like = '%' . $search . '%';
-            $query->where(function ($builder) use ($like) {
-                $builder
-                    ->where('customer_ref', 'like', $like)
-                    ->orWhere('account_num', 'like', $like)
-                    ->orWhere('product_label', 'like', $like);
-            });
-        }
-
-        $rows = $query
-            ->orderBy('customer_ref')
-            ->orderBy('account_num')
-            ->paginate(50)
-            ->withQueryString();
-
-        $exports = $this->exportCoordinator->ensureFresh($process);
-
-        return view('process.assignments.vip', [
-            'process' => $process,
-            'dataset' => $this->viewService->datasetSummary($process),
-            'summary' => $this->viewService->vipSummary($process),
-            'rows' => $rows,
-            'search' => $search,
-            'exports' => $exports,
-        ]);
-    }
-
-    public function groupA(Request $request): View|RedirectResponse
-    {
-        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review assignments.');
-
-        if ($process instanceof RedirectResponse) {
-            return $process;
-        }
-
-        $search = trim((string) $request->query('search', ''));
-
-        $query = $this->viewService->groupAQuery($process);
-
-        if ($search !== '') {
-            $like = '%' . $search . '%';
-            $query->where(function ($builder) use ($like) {
-                $builder
-                    ->where('customer_ref', 'like', $like)
-                    ->orWhere('account_num', 'like', $like)
-                    ->orWhere('product_label', 'like', $like)
-                    ->orWhere('slt_business_line_value', 'like', $like)
-                    ->orWhere('assigned_to', 'like', $like);
-            });
-        }
-
-        $rows = $query
-            ->orderBy('customer_ref')
-            ->orderBy('account_num')
-            ->paginate(50)
-            ->withQueryString();
-
-        $exports = $this->exportCoordinator->ensureFresh($process);
-
-        return view('process.assignments.group-a', [
-            'process' => $process,
-            'dataset' => $this->viewService->datasetSummary($process),
-            'group' => $this->viewService->groupASummary($process),
-            'exports' => $exports,
-            'rows' => $rows,
-            'search' => $search,
-            'assignmentLabels' => $this->viewService->assignmentLabelMap(),
-        ]);
-    }
-
-    public function groupB(Request $request): View|RedirectResponse
-    {
-        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review assignments.');
-
-        if ($process instanceof RedirectResponse) {
-            return $process;
-        }
-
-        $search = trim((string) $request->query('search', ''));
-
-        $query = $this->viewService->groupBQuery($process);
-
-        if ($search !== '') {
-            $like = '%' . $search . '%';
-            $query->where(function ($builder) use ($like) {
-                $builder
-                    ->where('customer_ref', 'like', $like)
-                    ->orWhere('account_num', 'like', $like)
-                    ->orWhere('product_label', 'like', $like)
-                    ->orWhere('slt_business_line_value', 'like', $like)
-                    ->orWhere('assigned_to', 'like', $like);
-            });
-        }
-
-        $rows = $query
-            ->orderBy('customer_ref')
-            ->orderBy('account_num')
-            ->paginate(50)
-            ->withQueryString();
-
-        $exports = $this->exportCoordinator->ensureFresh($process);
-
-        return view('process.assignments.group-b', [
-            'process' => $process,
-            'dataset' => $this->viewService->datasetSummary($process),
-            'group' => $this->viewService->groupBSummary($process),
-            'exports' => $exports,
-            'rows' => $rows,
-            'search' => $search,
-            'assignmentLabels' => $this->viewService->assignmentLabelMap(),
-        ]);
-    }
-
-    public function regionBilling(Request $request): View|RedirectResponse
-    {
-        $process = $this->resolveProcessOrRedirect('Upload the master dataset to review Region Billing Centre records.');
-
-        if ($process instanceof RedirectResponse) {
-            return $process;
-        }
-
-        $search = trim((string) $request->query('search', ''));
-
-        $query = $this->viewService->regionQuery($process);
-
-        if ($search !== '') {
-            $like = '%' . $search . '%';
-            $query->where(function ($builder) use ($like) {
-                $builder
-                    ->where('customer_ref', 'like', $like)
-                    ->orWhere('account_num', 'like', $like)
-                    ->orWhere('product_label', 'like', $like);
-            });
-        }
-
-        $rows = $query
-            ->orderBy('customer_ref')
-            ->orderBy('account_num')
-            ->paginate(50)
-            ->withQueryString();
-
-        $exports = $this->exportCoordinator->ensureFresh($process);
-
-        return view('process.assignments.region', [
-            'process' => $process,
-            'dataset' => $this->viewService->datasetSummary($process),
-            'summary' => $this->viewService->regionSummary($process),
-            'rows' => $rows,
-            'search' => $search,
-            'exports' => $exports,
-        ]);
-    }
-
-    public function exclusions(): View|RedirectResponse
-    {
-        $process = $this->resolveProcessOrRedirect('Upload the master dataset before reviewing exclusions.');
-
-        if ($process instanceof RedirectResponse) {
-            return $process;
-        }
-
-        $exports = $this->exportCoordinator->ensureFresh($process);
-
-        return view('process.assignments.exclusions', [
-            'process' => $process,
-            'dataset' => $this->viewService->datasetSummary($process),
-            'summary' => $this->viewService->exclusionSummary($process),
-            'exports' => $exports,
-        ]);
-    }
-
-    public function filteredOut(): RedirectResponse
-    {
-        return redirect()->route('process.assignments.exclusions')->withErrors([
-            'assignments' => 'Filtered-out records are included in the exclusions download.',
         ]);
     }
 
@@ -281,7 +98,7 @@ class AssignmentController extends Controller
             $count = (clone $query)->count();
 
             if ($count === 0) {
-                return $this->redirectForGroup($group)->withErrors([
+                return redirect()->route('process.assignments.index')->withErrors([
                     'assignments' => 'No records are available for the selected download.',
                 ]);
             }
@@ -299,7 +116,7 @@ class AssignmentController extends Controller
         if ($export && $export->status === 'failed') {
             $this->exportCoordinator->ensureFresh($process);
 
-            return $this->redirectForGroup($group)->withErrors([
+            return redirect()->route('process.assignments.index')->withErrors([
                 'assignments' => 'The last export attempt failed and is being regenerated. Please try again shortly.',
             ]);
         }
@@ -307,7 +124,7 @@ class AssignmentController extends Controller
         if (! $export || $export->status !== 'ready') {
             $this->exportCoordinator->ensureFresh($process);
 
-            return $this->redirectForGroup($group)->withErrors([
+            return redirect()->route('process.assignments.index')->withErrors([
                 'assignments' => 'That export is still being generated. Please wait and try again shortly.',
             ]);
         }
@@ -318,7 +135,7 @@ class AssignmentController extends Controller
             $export->update(['status' => 'pending']);
             $this->exportCoordinator->ensureFresh($process);
 
-            return $this->redirectForGroup($group)->withErrors([
+            return redirect()->route('process.assignments.index')->withErrors([
                 'assignments' => 'The export file is being regenerated. Please try again once it finishes.',
             ]);
         }
@@ -364,17 +181,4 @@ class AssignmentController extends Controller
         return in_array($bucket, $map[$group] ?? [], true);
     }
 
-    private function redirectForGroup(string $group): RedirectResponse
-    {
-        $route = match ($group) {
-            'group-a' => 'process.assignments.group-a',
-            'group-b' => 'process.assignments.group-b',
-            'exclusions' => 'process.assignments.exclusions',
-            'vip' => 'process.assignments.vip',
-            'region' => 'process.assignments.region',
-            default => 'process.assignments.index',
-        };
-
-        return redirect()->route($route);
-    }
 }

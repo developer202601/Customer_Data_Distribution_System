@@ -100,14 +100,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Basic navigation & form triggers
-  window.addEventListener('beforeunload', showLoader);
-  document.addEventListener('submit', (e) => { if (e.target instanceof HTMLFormElement) showLoader(); }, true);
+  // Only show the loader on beforeunload if not explicitly opted-out via click/submit handlers
+  window.CDDSLoaderIgnoreBeforeUnload = false;
+  window.addEventListener('beforeunload', (e) => {
+    if (window.CDDSLoaderIgnoreBeforeUnload) return;
+    showLoader();
+  });
+  document.addEventListener('submit', (e) => {
+    try {
+      const form = e.target instanceof HTMLFormElement ? e.target : e.target.closest && e.target.closest('form');
+      if (!form) return;
+      // If ancestor or the form itself has data-loader-off="1", opt out
+      if (form.closest && (form.closest('[data-loader-off="1"]') || form.closest('#overview-results'))) {
+        // If opted out, set a short-lived flag to ignore the upcoming beforeunload event
+        window.CDDSLoaderIgnoreBeforeUnload = true;
+        setTimeout(() => { window.CDDSLoaderIgnoreBeforeUnload = false; }, 2000);
+        return;
+      }
+      // Otherwise show the global page loader
+      window.CDDSLoaderIgnoreBeforeUnload = false;
+      showLoader();
+    } catch (err) {
+      // Fallback to showing loader on unexpected errors
+      showLoader();
+    }
+  }, true);
+
   document.addEventListener('click', (e) => {
-    const link = e.target.closest('a[href]');
+    const link = e.target.closest && e.target.closest('a[href]');
     if (!link) return;
+    // Respect target=_blank and download links
     if (link.getAttribute('target') === '_blank' || link.hasAttribute('download')) return;
     const href = link.getAttribute('href');
     if (!href || href.startsWith('#')) return;
+    // If the link or an ancestor has data-loader-off="1" or is inside the AJAX results container, do not show the full-page loader
+    if (link.closest && (link.closest('[data-loader-off="1"]') || link.closest('#overview-results'))) {
+      // Opt-out: ignore the next beforeunload so download dialogs don't trigger the page loader
+      window.CDDSLoaderIgnoreBeforeUnload = true;
+      setTimeout(() => { window.CDDSLoaderIgnoreBeforeUnload = false; }, 2000);
+      return;
+    }
+    window.CDDSLoaderIgnoreBeforeUnload = false;
     showLoader();
   }, true);
 

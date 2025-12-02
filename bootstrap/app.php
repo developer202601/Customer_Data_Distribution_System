@@ -13,6 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         \App\Console\Commands\RunMasterIngestion::class,
+        \App\Console\Commands\ScanUnused::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

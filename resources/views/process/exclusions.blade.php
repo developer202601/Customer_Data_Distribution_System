@@ -39,7 +39,7 @@
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
                                 <p class="text-muted mb-0">Upload up to {{ $maxFiles }} ZIP archives (each with a single Excel workbook) that list the identifiers you want to remove from the master list.</p>
-                                @if(isset($process))
+                                @if(isset($process) && ! session('hide_dataset_info'))
                                 <p class="text-muted mb-0 mt-2">Active dataset token: <strong>{{ $process->token }}</strong> ({{ number_format((int) $process->row_count) }} rows)</p>
                                 @endif
                             </div>
@@ -54,7 +54,7 @@
                     </div>
 
                     <div id="exclusion-errors" class="mt-4">
-                        @if(session('status'))
+                        @if(session('status') && ! session('hide_dataset_info'))
                         <div class="alert alert-info" role="alert">
                             {{ session('status') }}
                         </div>

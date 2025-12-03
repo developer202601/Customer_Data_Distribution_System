@@ -6,15 +6,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 
-class Configuration extends Model
+class Configurations extends Model
 {
     use HasFactory;
 
-    protected $table = 'configuration';
+    protected $table = 'configurations';
 
     protected $fillable = [
-        'upper_range',
-        'lower_range',
-        'user_id'
+        'value',
+        'changedby_id'
     ];    
 }

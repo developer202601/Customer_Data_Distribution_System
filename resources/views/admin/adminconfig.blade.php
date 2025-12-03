@@ -10,6 +10,8 @@
 </form>
 @endsection
 
+
+
 @section('content')
 <div class="admin-config-page-con">
     <div class="admin-config-visual-panel">
@@ -25,20 +27,26 @@
                 </div>
 
                 <div class="admin-config-right">
-                    <div class="admin-config-form is-active" data-config-block="latest-bill-range">
-                        <p class="admin-config-hint">Here you can change the current values</p>
-                        <div class="admin-config-field">
-                            <label for="name">Upper Range :</label>
-                            <input type="number" id="name" placeholder="Current value is 4000" required />
-                        </div>
+                    <form action="{{ route('configurations.billrange') }}" method="POST">
+                            @csrf
+                            @method('post')
+                        <div class="admin-config-form is-active" data-config-block="latest-bill-range">
+                            <p class="admin-config-hint">Here you can change the current values</p>
+                            
+                            <div class="admin-config-field">
+                                <label for="name">Upper Range :</label>
+                                <input type="number" name="upper_range" id="upper_range" placeholder="Current value is 4000" required />
+                            </div>
 
-                        <div class="admin-config-field">
-                            <label for="lowername">Lower Range :</label>
-                            <input type="number" id="lowername" placeholder="Current value is 2000" required />
-                        </div>
+                            <div class="admin-config-field">
+                                <label for="lowername">Lower Range :</label>
+                                <input type="number" name="lower_range" id="lower_range" placeholder="Current value is 2000" required />
+                            </div>
 
-                        <button type="button" class="config-btn-range">Save</button>
-                    </div>
+                            <button type="submit" class="config-btn-range">Save</button>
+                            
+                        </div>
+                    </form>
 
                     <div class="admin-config-form" data-config-block="bill-arears-quota">
                         <p class="admin-config-hint">Here you can change the Bill Areas Quota</p>
@@ -103,7 +111,7 @@
     </div>
 </div>
 </div>
-@endsection
+@endsection  
 
 <style>
     .admin-config-layout {
@@ -436,6 +444,8 @@
     }
 </style>
 
+
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var buttons = document.querySelectorAll('.admin-config-btn[data-config-target]');
@@ -470,7 +480,7 @@
             activate(buttons[0].getAttribute('data-config-target'));
         }
     });
-</script>
+</script>  
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var addBtn = document.querySelector('.user-account-add-btn');
@@ -570,4 +580,4 @@
             });
         }
     });
-</script>
+</script>  

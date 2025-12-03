@@ -21,6 +21,8 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
     Route::post('/configurations/billrange', [BillRangeController::class, 'createRange'])->name('configurations.billrange');
     
+    Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');
+    
     
 });
 

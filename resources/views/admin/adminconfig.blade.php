@@ -19,8 +19,8 @@
             <div class="admin-config-layout">
                 <div class="admin-config-left">
                     <h1 class="admin_config-title">Configurations</h1>
-                    <div class="admin-config-btn-col">
-                        <button type="button" class="admin-config-btn is-active" data-config-target="latest-bill-range">Latest Bill Range</button>
+                    <div class="admin-config-btn-col config-admin-btn">
+                        <button type="button" class="admin-config-btn is-active  config-side-btn" data-config-target="latest-bill-range">Latest Bill Range</button>
                         <button type="button" class="admin-config-btn" data-config-target="bill-arears-quota">Bill Arears Quota</button>
                         <button type="button" class="admin-config-btn" data-config-target="user-account">User Account</button>
                     </div>
@@ -49,24 +49,28 @@
                     </form>
 
                     <div class="admin-config-form" data-config-block="bill-arears-quota">
+                        <form action="{{ route('configurations.billarears') }}" method="POST">
+                            @csrf
+                            @method('post')
                         <p class="admin-config-hint">Here you can change the Bill Areas Quota</p>
-                        <div class="admin-config-field">
+                        <div class="admin-config-field admin_config_staff">
                             <label for="call-centre-staff">Call Centre Staff :</label>
-                            <input type="text" id="call-centre-staff" />
+                            <input type="text" name="ccs" id="call-centre-staff" />
                         </div>
 
-                        <div class="admin-config-field">
+                        <div class="admin-config-field admin_config_staff">
                             <label for="call-centre" class="admin-config-label-two-line">Call<br />Centre :</label>
-                            <input type="text" id="call-centre" />
+                            <input type="text" name="cc" id="call-centre" />
                         </div>
 
-                        <div class="admin-config-field">
+                        <div class="admin-config-field  admin_config_staff">
                             <label for="staff">Staff :</label>
-                            <input type="text" id="staff" />
+                            <input type="text" name="s" id="staff" />
                         </div>
 
-                        <button type="button" class="config-btn-range">Save</button>
+                        <button type="submit" class="config-btn-range staff-submit-btn">Save</button>
                     </div>
+                    <form>
 
                     <div class="admin-config-form" data-config-block="user-account">
                         <p class="admin-config-hint">Here you can change the user account</p>
@@ -114,6 +118,35 @@
 @endsection  
 
 <style>
+
+
+    
+
+    .admin-config-field .input{
+        margin: 50px;
+    }
+
+    .staff-submit-btn{
+        margin-top: 40px;
+        text-align-last: center;
+        padding: 0px 20px;
+        gap: 20px;
+        margin-left: 130px;
+    }
+    
+    .admin_config_staff{
+        margin-top: 50px;
+    }
+
+    .config-admin-btn{
+        margin-top: 40px;
+        text-align-last: center;
+        padding: 0px 20px;
+        gap: 20px;
+    }
+
+    
+
     .admin-config-layout {
         display: flex;
         align-items: flex-start;
@@ -377,6 +410,7 @@
         cursor: pointer;
         font-weight: bold;
         align-self: center;
+        
     }
 
     .config-btn-range:hover {

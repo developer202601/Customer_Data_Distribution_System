@@ -9,9 +9,13 @@ use App\Support\MasterDatasetExportService;
 use App\Support\MasterDatasetViewService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Throwable;
 
 class AssignmentController extends Controller
 {
@@ -56,6 +60,8 @@ class AssignmentController extends Controller
 
         $exports = $this->exportCoordinator->ensureFresh($process);
 
+        $reportGroups = $this->reportGroups();
+
         // AJAX fragment for search results (pagination without full reload)
         if ($request->ajax()) {
             return view('process.assignments.partials.overview-results', [
@@ -76,7 +82,107 @@ class AssignmentController extends Controller
             'search' => $search,
             'rows' => $rows,
             'assignmentLabels' => $this->viewService->assignmentLabelMap(),
+            'reportGroups' => $reportGroups,
         ]);
+    }
+
+    public function reports(Request $request): View
+    {
+        $reportGroups = $this->reportGroups();
+        $monthOptions = $reportGroups->keys();
+        $selectedMonth = null;
+
+        if ($monthOptions->isNotEmpty()) {
+            $requestedMonth = $request->query('month');
+
+            if ($requestedMonth && $monthOptions->contains($requestedMonth)) {
+                $selectedMonth = $requestedMonth;
+            } else {
+                $selectedMonth = $monthOptions->first();
+            }
+        }
+
+        $filteredProcesses = $selectedMonth ? $reportGroups->get($selectedMonth, collect()) : collect();
+
+        $generatorOptions = $filteredProcesses
+            ->mapWithKeys(function (MasterDatasetProcess $entry) {
+                $key = (string) ($entry->user_id ?? 0);
+                $label = $entry->user?->username ?? $entry->user_name ?? 'System';
+
+                return [$key => $label];
+            })
+            ->unique();
+
+        $selectedGenerator = $request->query('generator');
+
+        if ($selectedGenerator && $generatorOptions->has($selectedGenerator)) {
+            $filteredProcesses = $filteredProcesses->filter(function (MasterDatasetProcess $entry) use ($selectedGenerator) {
+                return (string) ($entry->user_id ?? 0) === $selectedGenerator;
+            });
+        } else {
+            $selectedGenerator = null;
+        }
+
+        return view('process.assignments.reports', [
+            'reportGroups' => $reportGroups,
+            'monthOptions' => $monthOptions,
+            'selectedMonth' => $selectedMonth,
+            'filteredProcesses' => $filteredProcesses,
+            'generatorOptions' => $generatorOptions,
+            'selectedGenerator' => $selectedGenerator,
+        ]);
+    }
+
+    public function destroy(MasterDatasetProcess $process): RedirectResponse
+    {
+        $isAdmin = session('user.is_admin') ?? false;
+
+        if (! $isAdmin) {
+            return redirect()->route('process.assignments.reports')->withErrors([
+                'reports' => 'Only administrators can remove datasets.',
+            ]);
+        }
+
+        $disk = $process->storage_disk ?: config('filesystems.default', 'local');
+        $token = $process->token;
+
+        try {
+            DB::transaction(function () use ($process, $disk, $token) {
+                foreach ($process->exports as $export) {
+                    if ($export->file_disk && $export->file_path) {
+                        Storage::disk($export->file_disk)->delete($export->file_path);
+                    }
+                }
+
+                Storage::disk($disk)->deleteDirectory('exports/' . $token);
+
+                if ($process->master_archive_path) {
+                    Storage::disk($disk)->delete($process->master_archive_path);
+                }
+
+                if ($process->master_workbook_path) {
+                    Storage::disk($disk)->delete($process->master_workbook_path);
+                }
+
+                $process->exports()->delete();
+                $process->delete();
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('process.assignments.reports')->withErrors([
+                'reports' => 'Unable to delete the selected dataset. Please try again.',
+            ]);
+        }
+
+        return redirect()->route('process.assignments.reports')->with('status', 'Dataset and exports deleted.');
+    }
+
+    public function report(MasterDatasetProcess $process): RedirectResponse
+    {
+        session(['master.dataset.process_id' => $process->id]);
+
+        return redirect()->route('process.assignments.index');
     }
 
     public function download(Request $request, string $group, string $bucket): RedirectResponse|StreamedResponse
@@ -91,22 +197,6 @@ class AssignmentController extends Controller
             return redirect()->route('process.assignments.index')->withErrors([
                 'assignments' => 'The requested download is not available.',
             ]);
-        }
-
-        if ($request->boolean('fresh')) {
-            $query = $this->viewService->bucketQuery($process, $bucket);
-            $count = (clone $query)->count();
-
-            if ($count === 0) {
-                return redirect()->route('process.assignments.index')->withErrors([
-                    'assignments' => 'No records are available for the selected download.',
-                ]);
-            }
-
-            $label = $this->viewService->bucketLabel($bucket);
-            $filename = $this->viewService->bucketFilename($bucket);
-
-            return $this->exportService->stream($process, $bucket, $label, $filename, $query);
         }
 
         $export = DatasetExport::where('token', $process->token)
@@ -168,12 +258,25 @@ class AssignmentController extends Controller
         return $process;
     }
 
+    private function reportGroups(): Collection
+    {
+        return MasterDatasetProcess::with(['exports', 'user'])
+            ->orderByDesc('run_date')
+            ->get()
+            ->groupBy(function (MasterDatasetProcess $item) {
+                $reference = $item->run_date ?? $item->dataset_month ?? $item->created_at ?? now();
+                $date = Carbon::parse($reference)->startOfMonth();
+
+                return $date->format('F Y');
+            });
+    }
+
     private function bucketAllowed(string $group, string $bucket): bool
     {
         $map = [
             'group-a' => ['call-center-staff', 'call-center', 'staff'],
             'group-b' => ['enterprise-wholesale', 'sme'],
-            'exclusions' => ['excluded'],
+            'exclusions' => ['excluded', 'excluded-copper-retail-micro'],
             'vip' => ['vip'],
             'region' => ['region-billing'],
         ];

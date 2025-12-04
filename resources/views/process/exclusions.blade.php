@@ -7,9 +7,6 @@
     <span class="process-step active"></span>
     <span class="process-step"></span>
 </div>
-@if(session('user.is_admin'))
-<a href="#" class="btn btn-outline-secondary">Configurations</a>
-@endif
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf
     <button type="submit" class="btn btn-outline-secondary">Logout</button>
@@ -47,7 +44,7 @@
                         <div class="text-end">
                             <div class="d-flex justify-content-end align-items-center gap-2">
                                 <a href="#" class="btn btn-outline-secondary" data-loader-off="true" onclick="history.back(); return false;">Back</a>
-                                <button type="submit" class="btn btn-dark px-4">Apply exclusions</button>
+                                <button type="submit" class="btn btn-dark px-4" disabled>Apply exclusions</button>
                             </div>
                             <p class="text-muted mb-0 mt-2">You can add files one at a time or all at once.</p>
                         </div>
@@ -141,9 +138,19 @@
         const submitButton = form.querySelector('button[type="submit"]');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+        const toggleSubmitState = () => {
+            if (!submitButton) {
+                return;
+            }
+
+            submitButton.disabled = selectedFiles.length === 0;
+        };
+
         if (!dropzone || !fileInput || !form) {
             return;
         }
+
+        toggleSubmitState();
 
         const renderList = () => {
             if (!fileList) {
@@ -291,6 +298,7 @@
 
             syncInputFiles();
             renderList();
+            toggleSubmitState();
         };
 
         const removeFile = (index) => {
@@ -302,6 +310,7 @@
             updateHelperText();
             syncInputFiles();
             renderList();
+            toggleSubmitState();
         };
 
         dropzone.addEventListener('click', (event) => {

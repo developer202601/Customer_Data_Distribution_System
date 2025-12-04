@@ -160,7 +160,6 @@ class MasterDatasetImporter
             'storage_disk' => $disk,
             'master_filesize' => $archive->getSize(),
             'user_id' => $userContext['id'] ?? null,
-            'user_name' => $userContext['name'] ?? null,
             'status' => 'awaiting_exclusions',
             'failure_reason' => null,
         ]);
@@ -277,7 +276,6 @@ class MasterDatasetImporter
                 'storage_disk' => $process->storage_disk ?: config('filesystems.default', 'local'),
                 'master_filesize' => $process->master_filesize ?: $this->disk->size($zipPath),
                 'user_id' => $userContext['id'] ?? $process->user_id,
-                'user_name' => $userContext['name'] ?? $process->user_name,
                 'failure_reason' => null,
             ]);
 

@@ -167,6 +167,17 @@ class MasterDatasetViewService
             'total_excluded' => (int) MasterDatasetRow::query()
                 ->where('process_id', $process->id)
                 ->where('excluded', true)
+                ->where(function ($query) {
+                    $query
+                        ->whereNull('exclusion_reason')
+                        ->orWhere('exclusion_reason', '=', '')
+                        ->orWhere('exclusion_reason', 'not like', 'Medium is Copper%');
+                })
+                ->count(),
+            'retail_micro_copper_count' => (int) MasterDatasetRow::query()
+                ->where('process_id', $process->id)
+                ->where('excluded', true)
+                ->where('exclusion_reason', 'like', 'Medium is Copper%')
                 ->count(),
             'archives' => array_values($archives),
             'latest_archive' => $latest,
@@ -313,7 +324,14 @@ class MasterDatasetViewService
                 'label' => 'Excluded Records',
                 'filename' => 'excluded.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', true),
+                    fn(Builder $query) => $this->applyExcludedWithoutRetailMicroCopper($query),
+                ],
+            ],
+            'excluded-copper-retail-micro' => [
+                'label' => 'Copper - Retail & Micro Business',
+                'filename' => 'copper_retail_micro.xlsx',
+                'scopes' => [
+                    fn(Builder $query) => $this->applyRetailMicroCopperScope($query),
                 ],
             ],
             'vip' => [
@@ -330,5 +348,28 @@ class MasterDatasetViewService
         ];
 
         return $map[$bucket] ?? $map['region-billing'];
+    }
+
+    private function applyRetailMicroCopperScope(Builder $query): Builder
+    {
+        return $query
+            ->where('excluded', true)
+            ->where(function (Builder $subQuery) {
+                // Only include rows auto-excluded due to Copper for Retail/Micro
+                $subQuery->where('exclusion_reason', 'like', 'Medium is Copper%');
+            });
+    }
+
+    private function applyExcludedWithoutRetailMicroCopper(Builder $query): Builder
+    {
+        return $query
+            ->where('excluded', true)
+            ->where(function (Builder $subQuery) {
+                // Keep everything except the auto-excluded Copper rows (null/blank reasons included)
+                $subQuery
+                    ->whereNull('exclusion_reason')
+                    ->orWhere('exclusion_reason', '=', '')
+                    ->orWhere('exclusion_reason', 'not like', 'Medium is Copper%');
+            });
     }
 }

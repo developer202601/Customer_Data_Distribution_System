@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AssignmentController;
+use App\Http\Controllers\DatasetReportsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\BillRangeController;
 Route::middleware('session.auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/master/upload', [MasterDatasetUploadController::class, 'create'])->name('master.upload.create');
+    Route::get('/master/upload/config', [MasterDatasetUploadController::class, 'assignmentConfig'])->name('master.upload.assignment.config');
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
@@ -28,6 +30,9 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
     Route::get('/process/status', [ProcessStatusController::class, 'show'])->name('process.status.current');
     Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
+    Route::get('/process/assignments/reports', [AssignmentController::class, 'reports'])->name('process.assignments.reports');
+    Route::get('/process/assignments/report/{process}', [AssignmentController::class, 'report'])->name('process.assignments.report');
+    Route::delete('/process/assignments/reports/{process}', [AssignmentController::class, 'destroy'])->name('process.assignments.destroy');
     // Consolidated into overview; group-specific pages removed
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

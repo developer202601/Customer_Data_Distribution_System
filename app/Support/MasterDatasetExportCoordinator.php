@@ -21,6 +21,7 @@ class MasterDatasetExportCoordinator
         'sme' => ['group' => 'group-b'],
         'vip' => ['group' => 'vip'],
         'excluded' => ['group' => 'exclusions'],
+        'excluded-copper-retail-micro' => ['group' => 'exclusions'],
     ];
 
     public function __construct(

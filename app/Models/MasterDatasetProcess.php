@@ -4,7 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+
+use App\Models\DatasetExport;
+use App\Models\User;
 
 class MasterDatasetProcess extends Model
 {
@@ -55,6 +59,16 @@ class MasterDatasetProcess extends Model
     public function rows(): HasMany
     {
         return $this->hasMany(MasterDatasetRow::class, 'process_id');
+    }
+
+    public function exports(): HasMany
+    {
+        return $this->hasMany(DatasetExport::class, 'token', 'token');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function scopeForMonth($query, string $month)

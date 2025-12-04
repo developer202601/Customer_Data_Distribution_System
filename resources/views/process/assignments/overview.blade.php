@@ -62,9 +62,7 @@
                     echo '<a href="' . route('process.assignments.download', ['group' => $groupKey, 'bucket' => $bucket]) . '" class="btn btn-dark" data-loader-off="1">Download</a>';
                 }
 
-                if ($count > 0) {
-                    echo '<a href="' . route('process.assignments.download', ['group' => $groupKey, 'bucket' => $bucket, 'fresh' => 1]) . '" class="btn btn-outline-secondary" data-loader-off="1">Download live</a>';
-                }
+                // Removed live download option per new requirement.
 
                 echo '</div>';
             };
@@ -221,7 +219,10 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @php $excludedCount = (int) ($exclusions['total_excluded'] ?? 0); @endphp
+                            @php
+                                $excludedCount = (int) ($exclusions['total_excluded'] ?? 0);
+                                $retailMicroCopperCount = (int) ($exclusions['retail_micro_copper_count'] ?? 0);
+                            @endphp
                             <tr>
                                 <th scope="row">
                                     <div class="fw-semibold mb-0">
@@ -231,6 +232,17 @@
                                 </th>
                                 <td class="text-end align-middle">
                                     @php $renderDownloadButtons('exclusions', 'excluded', $excludedCount); @endphp
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Copper - Retail &amp; Micro Business
+                                        <span class="text-muted">({{ number_format($retailMicroCopperCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('exclusions', 'excluded-copper-retail-micro', $retailMicroCopperCount); @endphp
                                 </td>
                             </tr>
                         </tbody>

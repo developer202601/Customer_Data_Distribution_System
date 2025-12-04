@@ -6,9 +6,6 @@
     <span class="process-step"></span>
     <span class="process-step"></span>
 </div>
-@if(session('user.is_admin'))
-<a href="#" class="btn btn-outline-secondary">Configurations</a>
-@endif
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf
     <button type="submit" class="btn btn-outline-secondary">Logout</button>
@@ -37,7 +34,7 @@
                         </div>
                         <div class="d-flex gap-2">
                             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Back</a>
-                            <button type="submit" class="btn btn-dark px-4">Submit</button>
+                            <button type="submit" class="btn btn-dark px-4" id="master-upload-submit" disabled>Submit</button>
                         </div>
                     </div>
 
@@ -71,6 +68,43 @@
                             <li>Optional columns may be empty, but required columns must be present for every populated row.</li>
                         </ul>
                     </div>
+
+                    @if(!empty($assignmentConfig))
+                    <div class="process-config mt-4" id="assignment-config-block">
+                        <h2 class="process-guidelines-title">Current allocation values</h2>
+                        <div class="row g-3" id="assignment-config-cards">
+                            <div class="col-md-6">
+                                <div class="border rounded p-3 h-100 bg-light">
+                                    <p class="text-muted mb-1">Retail / Micro arrears window</p>
+                                    <p class="h5 mb-0">
+                                        <span id="assignment-lower-range-value">{{ number_format($assignmentConfig['lower_range']) }}</span> –
+                                        <span id="assignment-upper-range-value">{{ number_format($assignmentConfig['upper_range']) }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="border rounded p-3 h-100 bg-light">
+                                    <p class="text-muted mb-1">Call centre quotas</p>
+                                    <p class="mb-0">
+                                        <strong>Call center staff:</strong>
+                                        <span id="assignment-call-center-staff">{{ number_format($assignmentConfig['call_center_staff_quota']) }}</span><br>
+                                        <strong>Call center:</strong>
+                                        <span id="assignment-call-center">{{ number_format($assignmentConfig['call_center_quota']) }}</span><br>
+                                        <strong>Staff:</strong>
+                                        <span id="assignment-staff">{{ number_format($assignmentConfig['staff_quota']) }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="assignment-config-refresh">
+                                Refresh numbers
+                            </button>
+                            <span class="text-muted small mb-0">Click refresh to load the latest updated numbers.</span>
+                        </div>
+                        <p class="text-muted small mt-1 mb-0" id="assignment-config-status" aria-live="polite"></p>
+                    </div>
+                    @endif
                 </div>
             </div>
         </form>
@@ -84,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('master-upload-form');
     const dropzone = document.getElementById('master-dropzone');
     const fileInput = document.getElementById('upload');
+    const submitButton = document.getElementById('master-upload-submit');
     const helper = document.getElementById('master-dropzone-helper');
     const errorsContainer = document.getElementById('master-upload-errors');
 
@@ -106,6 +141,14 @@ document.addEventListener('DOMContentLoaded', () => {
         errorsContainer.innerHTML = '';
         errorsContainer.appendChild(alert);
         alert.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const updateSubmitState = () => {
+        if (!submitButton) {
+            return;
+        }
+
+        submitButton.disabled = !(fileInput?.files?.length);
     };
 
     if (dropzone) {
@@ -140,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateHelper(null);
                 renderError('Please upload a ZIP file that contains your master Excel workbook.');
             }
+            updateSubmitState();
         });
     }
 
@@ -154,12 +198,99 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderError('Please upload a ZIP file that contains your master Excel workbook.');
             }
         }
+
+        updateSubmitState();
     });
 
     form?.addEventListener('submit', (event) => {
         if (!fileInput?.files?.length) {
             event.preventDefault();
             renderError('Please choose a ZIP file before submitting.');
+        }
+    });
+
+    updateSubmitState();
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const refreshButton = document.getElementById('assignment-config-refresh');
+    const status = document.getElementById('assignment-config-status');
+    const route = @json(route('master.upload.assignment.config'));
+    const lower = document.getElementById('assignment-lower-range-value');
+    const upper = document.getElementById('assignment-upper-range-value');
+    const callCenterStaff = document.getElementById('assignment-call-center-staff');
+    const callCenter = document.getElementById('assignment-call-center');
+    const staff = document.getElementById('assignment-staff');
+
+    const formatNumber = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return value;
+        }
+        return new Intl.NumberFormat('en-US').format(Number(value));
+    };
+
+    const updateNumbers = (config) => {
+        if (!config) {
+            return;
+        }
+
+        if (lower) {
+            lower.textContent = formatNumber(config.lower_range);
+        }
+        if (upper) {
+            upper.textContent = formatNumber(config.upper_range);
+        }
+        if (callCenterStaff) {
+            callCenterStaff.textContent = formatNumber(config.call_center_staff_quota);
+        }
+        if (callCenter) {
+            callCenter.textContent = formatNumber(config.call_center_quota);
+        }
+        if (staff) {
+            staff.textContent = formatNumber(config.staff_quota);
+        }
+    };
+
+    if (!refreshButton) {
+        return;
+    }
+
+    refreshButton.addEventListener('click', async () => {
+        refreshButton.disabled = true;
+        if (status) {
+            status.textContent = 'Refreshing values…';
+        }
+
+        try {
+            const response = await fetch(route, {
+                headers: {
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw new Error('Unable to reach the server.');
+            }
+
+            const payload = await response.json();
+            const config = payload?.assignmentConfig;
+
+            if (!config) {
+                throw new Error('Server returned an unexpected payload.');
+            }
+
+            updateNumbers(config);
+            if (status) {
+                status.textContent = 'Values refreshed at ' + new Date().toLocaleTimeString();
+            }
+        } catch (error) {
+            if (status) {
+                status.textContent = `Refresh failed: ${error instanceof Error ? error.message : 'unknown error'}`;
+            }
+        } finally {
+            refreshButton.disabled = false;
         }
     });
 });

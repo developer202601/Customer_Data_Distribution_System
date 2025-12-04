@@ -15,6 +15,7 @@ use App\Http\Controllers\BillRangeController;
 Route::middleware('session.auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/master/upload', [MasterDatasetUploadController::class, 'create'])->name('master.upload.create');
+    Route::get('/master/upload/config', [MasterDatasetUploadController::class, 'assignmentConfig'])->name('master.upload.assignment.config');
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');

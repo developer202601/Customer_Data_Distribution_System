@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
+use App\Support\MasterDatasetAssignmentConfiguration;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -19,13 +20,14 @@ class MasterDatasetAssignmentService
     private const SME_LABEL = 'sme';
     private const VIP_LABEL = 'VIP';
     private const EXCLUDED_LABEL = 'Excluded';
-
-    private const CALL_CENTER_STAFF_QUOTA = 30000;
-    private const CALL_CENTER_QUOTA = 5000;
-    private const STAFF_QUOTA = 3000;
-    private const MIN_ARREARS_THRESHOLD = 3000;
-    private const BASE_ARREARS_UPPER = 10000;
     private const ARREARS_EXPANSION_STEP = 1000;
+
+    private MasterDatasetAssignmentConfiguration $configuration;
+
+    public function __construct(MasterDatasetAssignmentConfiguration $configuration)
+    {
+        $this->configuration = $configuration;
+    }
 
     public function assign(MasterDatasetProcess $process): array
     {
@@ -90,7 +92,10 @@ class MasterDatasetAssignmentService
 
     private function assignRetailArrearsBands(MasterDatasetProcess $process): void
     {
-        $desiredTotal = self::CALL_CENTER_STAFF_QUOTA + self::CALL_CENTER_QUOTA + self::STAFF_QUOTA;
+        $desiredTotal = $this->configuration->getTotalRetailSelectionGoal();
+
+        $retailMin = $this->configuration->getRetailLowerBound();
+        $retailMax = $this->configuration->getRetailUpperBound();
 
         $candidates = MasterDatasetRow::query()
             ->where('process_id', $process->id)
@@ -98,7 +103,7 @@ class MasterDatasetAssignmentService
             ->whereNull('assigned_to')
             ->where('latest_bill_mny', '<', 5000)
             ->whereNotNull('new_arrears_value')
-            ->where('new_arrears_value', '>', self::MIN_ARREARS_THRESHOLD)
+            ->where('new_arrears_value', '>', $retailMin)
             ->orderBy('new_arrears_value')
             ->get(['id', 'new_arrears_value', 'slt_gl_sub_segment']);
 
@@ -108,16 +113,16 @@ class MasterDatasetAssignmentService
             return;
         }
 
-        $upperBound = self::BASE_ARREARS_UPPER;
+        $upperBound = $retailMax;
         $maxArrears = (float) $candidates->max('new_arrears_value');
 
         while ($upperBound < $maxArrears && $this->countBelowThreshold($candidates, $upperBound) < $desiredTotal) {
             $upperBound += self::ARREARS_EXPANSION_STEP;
         }
 
-        $filtered = $candidates->filter(function ($row) use ($upperBound) {
+        $filtered = $candidates->filter(function ($row) use ($upperBound, $retailMin) {
             $value = (float) $row->new_arrears_value;
-            return $value > self::MIN_ARREARS_THRESHOLD && $value < $upperBound;
+            return $value > $retailMin && $value < $upperBound;
         })->values();
 
         if ($filtered->isEmpty()) {
@@ -128,13 +133,13 @@ class MasterDatasetAssignmentService
         $start = max(0, intdiv($filtered->count() - $sliceSize, 2));
         $selection = $filtered->slice($start, $sliceSize)->values();
 
-        $callCenterStaffIds = $selection->slice(0, self::CALL_CENTER_STAFF_QUOTA)->pluck('id')->all();
+        $callCenterStaffIds = $selection->slice(0, $this->configuration->getCallCenterStaffQuota())->pluck('id')->all();
         $offset = count($callCenterStaffIds);
 
-        $callCenterIds = $selection->slice($offset, self::CALL_CENTER_QUOTA)->pluck('id')->all();
+        $callCenterIds = $selection->slice($offset, $this->configuration->getCallCenterQuota())->pluck('id')->all();
         $offset += count($callCenterIds);
 
-        $staffIds = $selection->slice($offset, self::STAFF_QUOTA)->pluck('id')->all();
+        $staffIds = $selection->slice($offset, $this->configuration->getStaffQuota())->pluck('id')->all();
 
         if (! empty($callCenterStaffIds)) {
             MasterDatasetRow::query()

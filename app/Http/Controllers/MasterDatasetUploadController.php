@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MasterDatasetProcess;
+use App\Support\MasterDatasetAssignmentConfiguration;
 use App\Support\MasterDatasetWorkflowService;
 use App\Support\SessionUserResolver;
 use Illuminate\Http\RedirectResponse;
@@ -11,9 +12,11 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
 
+use Illuminate\Http\JsonResponse;
+
 class MasterDatasetUploadController extends Controller
 {
-    public function create(Request $request): View
+    public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View
     {
         $process = null;
         $processId = $request->session()->get('master.dataset.process_id');
@@ -24,6 +27,14 @@ class MasterDatasetUploadController extends Controller
 
         return view('process.master-upload', [
             'process' => $process,
+            'assignmentConfig' => $configuration->toArray(),
+        ]);
+    }
+
+    public function assignmentConfig(MasterDatasetAssignmentConfiguration $configuration): JsonResponse
+    {
+        return response()->json([
+            'assignmentConfig' => $configuration->toArray(),
         ]);
     }
 

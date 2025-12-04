@@ -20,8 +20,8 @@
                 <div class="admin-config-left">
                     <h1 class="admin_config-title">Configurations</h1>
                     <div class="admin-config-btn-col config-admin-btn">
-                        <button type="button" class="admin-config-btn is-active  config-side-btn" data-config-target="latest-bill-range">Latest Bill Range</button>
-                        <button type="button" class="admin-config-btn" data-config-target="bill-arears-quota">Bill Arears Quota</button>
+                        <button type="button" class="admin-config-btn is-active  config-side-btn" data-config-target="latest-bill-range">Bill Value Range</button>
+                        <button type="button" class="admin-config-btn" data-config-target="bill-arears-quota">No Of Accounts</button>
                         <button type="button" class="admin-config-btn" data-config-target="user-account">User Account</button>
                     </div>
                 </div>

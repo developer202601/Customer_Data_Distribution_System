@@ -6,6 +6,7 @@ use App\Jobs\ProcessExclusionUpload;
 use App\Models\MasterDatasetProcess;
 use App\Support\MasterDatasetExportCoordinator;
 use App\Support\MasterDatasetWorkflowService;
+use App\Support\SessionUserResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,7 +50,7 @@ class ExclusionUploadController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse|JsonResponse
+    public function store(Request $request, SessionUserResolver $resolver): RedirectResponse|JsonResponse
     {
         $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
 
@@ -93,11 +94,7 @@ class ExclusionUploadController extends Controller
                 ->withInput();
         }
 
-        $user = $request->user();
-        $userContext = [
-            'id' => $user?->getAuthIdentifier(),
-            'name' => $user?->username ?? $user?->name ?? $user?->email ?? null,
-        ];
+        $userContext = $resolver->resolve($request);
 
         // Release the PHP session lock so concurrent polling requests can read
         // the process id while the queued job is running.

@@ -20,10 +20,10 @@
 
     <div class="dashboard-grid row g-4">
         <div class="col-lg-6">
-            <a href="{{ route('process.assignments.index') }}" class="dashboard-card h-100" role="button" aria-label="Open assignments and downloads">
+            <a href="{{ route('process.assignments.reports') }}" class="dashboard-card h-100" role="button" aria-label="Open past reports">
                 <div class="dashboard-card-body">
-                    <h2 class="dashboard-card-title">Assignments &amp; Downloads</h2>
-                    <p class="dashboard-card-description">Review the latest quotas, segment summaries, and download the generated Excel workbooks.</p>
+                    <h2 class="dashboard-card-title">Past Reports</h2>
+                    <p class="dashboard-card-description">Here, you can find past generated reports and download them.</p>
                 </div>
             </a>
         </div>

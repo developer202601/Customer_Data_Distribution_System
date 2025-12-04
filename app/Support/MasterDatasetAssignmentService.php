@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 class MasterDatasetAssignmentService
 {
-    private const RETAIL_SEGMENTS = ['retail', 'microbusiness'];
+    private const RETAIL_SEGMENTS = ['retail', 'micro business', 'microbusiness'];
     private const REGION_LABEL = 'regional billing center';
     private const CALL_CENTER_STAFF_LABEL = 'call center staff';
     private const CALL_CENTER_LABEL = 'call center';
@@ -31,6 +31,7 @@ class MasterDatasetAssignmentService
     {
         return DB::transaction(function () use ($process) {
             $this->resetAssignableRows($process);
+            $this->excludeRetailMicroCopper($process);
             $this->assignRetailHighBillToRegion($process);
             $this->assignRetailArrearsBands($process);
             $this->assignNonRetailHighBill($process);
@@ -45,6 +46,24 @@ class MasterDatasetAssignmentService
                 'statistics' => $statistics,
             ];
         });
+    }
+
+    private function excludeRetailMicroCopper(MasterDatasetProcess $process): void
+    {
+        $query = MasterDatasetRow::query()
+            ->where('process_id', $process->id)
+            ->where('excluded', false)
+            ->whereNull('assigned_to');
+
+        $query = $this->applyRetailOrMicroFilter($query)
+            ->whereRaw('LOWER(COALESCE(medium, "")) = ?', ['copper']);
+
+        $query->update([
+            'excluded' => true,
+            'assigned_to' => self::EXCLUDED_LABEL,
+            'exclusion_reason' => 'Medium is Copper (Retail/Micro)',
+            'exclusion_priority' => 5,
+        ]);
     }
 
     private function resetAssignableRows(MasterDatasetProcess $process): void

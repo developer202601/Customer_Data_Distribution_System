@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MasterDatasetProcess;
 use App\Support\MasterDatasetWorkflowService;
+use App\Support\SessionUserResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -26,18 +27,14 @@ class MasterDatasetUploadController extends Controller
         ]);
     }
 
-    public function store(Request $request, MasterDatasetWorkflowService $workflow): RedirectResponse
+    public function store(Request $request, MasterDatasetWorkflowService $workflow, SessionUserResolver $resolver): RedirectResponse
     {
         $data = $request->validate([
             'upload' => 'required|file|mimes:zip|max:51200',
         ]);
 
         try {
-            $user = $request->user();
-            $userContext = [
-                'id' => $user?->getAuthIdentifier(),
-                'name' => $user?->username ?? $user?->name ?? $user?->email ?? null,
-            ];
+            $userContext = $resolver->resolve($request);
 
             $process = $workflow->queueMasterArchive($request->file('upload'), $userContext);
         } catch (ValidationException $exception) {

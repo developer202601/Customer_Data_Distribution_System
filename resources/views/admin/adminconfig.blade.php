@@ -17,12 +17,12 @@
     <div class="admin-config-visual-panel">
         <div class="admin-config-visual-inner">
             <div class="admin-config-layout">
-                <div class="admin-config-left">
+                <div class="admin-config-left width-auto">
                     <h1 class="admin_config-title">Configurations</h1>
                     <div class="admin-config-btn-col config-admin-btn">
-                        <button type="button" class="admin-config-btn is-active  config-side-btn" data-config-target="latest-bill-range">Bill Value Range</button>
-                        <button type="button" class="admin-config-btn" data-config-target="bill-arears-quota">No Of Accounts</button>
-                        <button type="button" class="admin-config-btn" data-config-target="user-account">User Account</button>
+                        <button type="button" class="admin-config-btn is-active  config-side-btn button" data-config-target="latest-bill-range">Bill Value Range</button>
+                        <button type="button" class="admin-config-btn button" data-config-target="bill-arears-quota">No Of Accounts</button>
+                        <button type="button" class="admin-config-btn button" data-config-target="user-account">User Account</button>
                     </div>
                 </div>
 
@@ -30,18 +30,19 @@
                     <form action="{{ route('configurations.billrange') }}" method="POST">
                             @csrf
                             @method('post')
-                        <div class="admin-config-form is-active" data-config-block="latest-bill-range">
+                        <div class="admin-config-form is-active bill_range-config" data-config-block="latest-bill-range">
                             <p class="admin-config-hint">Here you can change the current values</p>
                             
                             <div class="admin-config-field">
-                                <label for="name">Upper Range :</label>
+                                <label class="bill-upper" for="name">Upper Range :</label>
                                 <input type="number" name="upper_range" id="upper_range" placeholder="Current value is 4000" required />
                             </div>
 
                             <div class="admin-config-field">
-                                <label for="lowername">Lower Range :</label>
+                                <label class="bill-lower" for="lowername">Lower Range :</label>
                                 <input type="number" name="lower_range" id="lower_range" placeholder="Current value is 2000" required />
                             </div>
+
 
                             <button type="submit" class="config-btn-range">Save</button>
                             
@@ -54,18 +55,18 @@
                             @method('post')
                         <p class="admin-config-hint">Here you can change the Bill Areas Quota</p>
                         <div class="admin-config-field admin_config_staff">
-                            <label for="call-centre-staff">Call Centre Staff :</label>
-                            <input type="text" name="ccs" id="call-centre-staff" />
+                            <label for="call-centre-staff" class="config-bill-areas">Call Centre Staff :</label>
+                            <input type="text" name="ccs" id="call-centre-staff" placeholder="Enter Call Centre Staff" />
                         </div>
 
                         <div class="admin-config-field admin_config_staff">
-                            <label for="call-centre" class="admin-config-label-two-line">Call<br />Centre :</label>
-                            <input type="text" name="cc" id="call-centre" />
+                            <label for="call-centre" class="config-bill-areas">Call Centre :</label>
+                            <input type="text" name="cc" id="call-centre" placeholder="Enter Call Centre" />
                         </div>
 
                         <div class="admin-config-field  admin_config_staff">
-                            <label for="staff">Staff :</label>
-                            <input type="text" name="s" id="staff" />
+                            <label for="staff" class="config-bill-areas">Staff :</label>
+                            <input type="text" name="s" id="staff" placeholder="Enter Staff" />
                         </div>
 
                         <button type="submit" class="config-btn-range staff-submit-btn">Save</button>
@@ -77,7 +78,7 @@
 
                         <div class="user-account-panel">
                             <div class="user-account-add">
-                                <input type="text" id="user-account-input" placeholder="Enter name or id" />
+                                <input type="text" id="user-account-input" class="user-acc-input" placeholder="Enter name or id" />
                                 <button type="button" class="user-account-add-btn">Add</button>
                             </div>
 
@@ -119,8 +120,64 @@
 
 <style>
 
+    .user-account-item-controls .user-account-item-edit{
+        background: #00b4eb;   
+    }
 
-    
+    .user-account-item-controls .user-account-item-edit:hover{
+        background: #33c9ff;   
+    }
+
+    .user-account-item-controls .user-account-item-block{
+        background: red;    
+    }
+
+    .user-account-item-controls .user-account-item-block:hover{
+        background: #ff4c4c;
+
+    }
+
+    .user-account-add button{
+        background: #11760a;
+    }
+
+    .user-account-add button:hover{
+        background: #15940c;
+    }
+
+
+    .config-bill-areas{
+        font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .bill-upper, .bill-lower{  
+        font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .config-admin-btn .button{
+        margin-bottom: 30px;
+    }
+
+
+    .admin-config-field input {
+        width: 100%;   /* or 300px */
+        padding: 10px;
+        border-radius: 50px;
+    }
+
+
+    .admin-config-field {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.admin-config-field label {
+    width: 140px;      /* Adjust label width */
+}
+
+
+
 
     .admin-config-field .input{
         margin: 50px;
@@ -131,7 +188,7 @@
         text-align-last: center;
         padding: 0px 20px;
         gap: 20px;
-        margin-left: 130px;
+        margin-left: 160px;
     }
     
     .admin_config_staff{
@@ -207,13 +264,13 @@
         display: none;
         flex-direction: column;
         gap: 32px;
-        width: min(420px, 100%);
+        width: min(520px, 100%);
         padding: clamp(1.75rem, 4vw, 2.5rem);
         border-radius: 24px;
         background: var(--surface-card);
         border: 1px solid var(--surface-border);
         box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;  
     }
 
     .admin-config-form.is-active {
@@ -465,6 +522,14 @@
             text-align: center;
             padding: 12px;
         }
+        
+        .staff-submit-btn{
+        margin-top: 40px;
+        text-align-last: center;
+        padding: 12px;
+        gap: 20px;
+        margin-left: 0px;
+    }
     }
 
     @media (max-width: 480px) {
@@ -474,6 +539,13 @@
 
         .config-btn-range {
             padding: 10px;
+        }
+
+
+        .user-acc-input{
+            padding: 10px 12px;
+            padding-left: 50px; 
+            margin-left: 50px;  
         }
     }
 </style>

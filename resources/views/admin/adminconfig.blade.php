@@ -359,6 +359,7 @@
         justify-content: flex-end;
         align-items: center;
         margin-bottom: 12px;
+        margin-right: 70px;
     }
 
     .user-account-add input {
@@ -542,10 +543,9 @@
         }
 
 
-        .user-acc-input{
-            padding: 10px 12px;
-            padding-left: 50px; 
-            margin-left: 50px;  
+        .user-account-add input {
+            min-width: 100px;
+            
         }
     }
 </style>

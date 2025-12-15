@@ -277,8 +277,8 @@
         <div class="mt-5">
             <form id="overview-search-form" method="get" action="{{ route('process.assignments.index') }}" class="row g-2 align-items-end" data-loader-off="1">
                 <div class="col-12 col-lg-6 col-xxl-4">
-                    <label for="overview-search" class="form-label">Search across all records</label>
-                    <input type="text" class="form-control" id="overview-search" name="search" value="{{ $search ?? '' }}" placeholder="e.g. customer reference, account, product, or assignment" autocomplete="off">
+                    <label for="overview-search" class="form-label">Search by account number</label>
+                    <input type="text" class="form-control" id="overview-search" name="search" value="{{ $search ?? '' }}" placeholder="Enter account number" autocomplete="off">
                 </div>
                 <div class="col-auto">
                     <button type="submit" class="btn btn-primary">Search</button>

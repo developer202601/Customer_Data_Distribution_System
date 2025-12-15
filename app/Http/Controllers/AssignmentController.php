@@ -43,12 +43,7 @@ class AssignmentController extends Controller
             $like = '%' . $search . '%';
 
             $query->where(function ($builder) use ($like) {
-                $builder
-                    ->where('customer_ref', 'like', $like)
-                    ->orWhere('account_num', 'like', $like)
-                    ->orWhere('product_label', 'like', $like)
-                    ->orWhere('slt_business_line_value', 'like', $like)
-                    ->orWhere('assigned_to', 'like', $like);
+                $builder->where('account_num', 'like', $like);
             });
 
             $rows = $query

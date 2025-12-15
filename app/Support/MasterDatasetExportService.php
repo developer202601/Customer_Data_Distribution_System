@@ -27,7 +27,6 @@ class MasterDatasetExportService
         'full_address' => 'Full Address',
         'latest_bill_mny' => 'LATEST_BILL_MNY',
         'new_arrears_value' => 'ARREARS_VALUE',
-        'new_arrears_column' => 'ARREARS_COLUMN',
         'mobile_contact_tel' => 'Mobile Contact',
         'email_address' => 'Email Address',
         'credit_score' => 'Credit Score',
@@ -50,10 +49,7 @@ class MasterDatasetExportService
         'bill_handling_code' => 'Bill Handling Code',
         'slt_business_line_value' => 'Business Line Value',
         'sales_channel' => 'Sales Channel',
-        'assigned_to' => 'Assigned To',
-        'excluded' => 'Excluded',
         'exclusion_reason' => 'Exclusion Reason',
-        'exclusion_priority' => 'Exclusion Priority',
     ];
 
     public function stream(
@@ -121,19 +117,20 @@ class MasterDatasetExportService
 
     private function buildSpreadsheet(MasterDatasetProcess $process, string $label, Builder $query): Spreadsheet
     {
+        $columns = $this->exportColumnsWithArrearsLabel($query);
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle($this->truncateSheetTitle($label));
 
-        $sheet->fromArray(array_values(self::EXPORT_COLUMNS), null, 'A1');
+        $sheet->fromArray(array_values($columns), null, 'A1');
         $sheet->freezePane('A2');
 
         $rowPointer = 2;
 
-        (clone $query)->chunkById(500, function ($rows) use (&$rowPointer, $sheet, $process) {
+        (clone $query)->chunkById(500, function ($rows) use (&$rowPointer, $sheet, $process, $columns) {
             /** @var MasterDatasetRow $row */
             foreach ($rows as $row) {
-                $sheet->fromArray($this->mapRow($process, $row), null, 'A' . $rowPointer);
+                $sheet->fromArray($this->mapRow($process, $row, $columns), null, 'A' . $rowPointer);
                 $rowPointer++;
             }
         });
@@ -148,15 +145,32 @@ class MasterDatasetExportService
         return $spreadsheet;
     }
 
-    private function mapRow(MasterDatasetProcess $process, MasterDatasetRow $row): array
+    private function mapRow(MasterDatasetProcess $process, MasterDatasetRow $row, array $columns): array
     {
         $values = [];
 
-        foreach (self::EXPORT_COLUMNS as $attribute => $label) {
+        foreach ($columns as $attribute => $label) {
             $values[] = $this->formatValue($process, $row, $attribute);
         }
 
         return $values;
+    }
+
+    private function exportColumnsWithArrearsLabel(Builder $query): array
+    {
+        $columns = self::EXPORT_COLUMNS;
+        $arrearsLabel = $this->resolveArrearsLabel($query);
+
+        $columns['new_arrears_value'] = $arrearsLabel;
+
+        return $columns;
+    }
+
+    private function resolveArrearsLabel(Builder $query): string
+    {
+        $label = (clone $query)->limit(1)->value('new_arrears_column');
+
+        return $label && is_string($label) ? $label : 'ARREARS_VALUE';
     }
 
     private function formatValue(MasterDatasetProcess $process, MasterDatasetRow $row, string $attribute): mixed
@@ -172,7 +186,7 @@ class MasterDatasetExportService
             'next_bill_dtm', 'latest_bill_dtm' => $this->formatDate($value),
             'latest_bill_mny', 'new_arrears_value' => $value !== null ? number_format((float) $value, 2, '.', '') : null,
             'credit_score' => $value !== null ? number_format((float) $value, 2, '.', '') : null,
-            'excluded' => $row->excluded ? 'Yes' : 'No',
+                'exclusion_reason' => $row->excluded ? $value : null,
             default => $value,
         };
     }

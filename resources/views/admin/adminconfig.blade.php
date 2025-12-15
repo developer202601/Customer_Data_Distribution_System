@@ -20,58 +20,84 @@
                 <div class="admin-config-left width-auto">
                     <h1 class="admin_config-title">Configurations</h1>
                     <div class="admin-config-btn-col config-admin-btn">
-                        <button type="button" class="admin-config-btn is-active  config-side-btn button" data-config-target="latest-bill-range">Bill Value Range</button>
+                        <button type="button" class="admin-config-btn is-active config-side-btn button" data-config-target="latest-bill-range">Bill Value Range</button>
                         <button type="button" class="admin-config-btn button" data-config-target="bill-arears-quota">No Of Accounts</button>
                         <button type="button" class="admin-config-btn button" data-config-target="user-account">User Account</button>
                     </div>
                 </div>
 
                 <div class="admin-config-right">
-                    <form action="{{ route('configurations.billrange') }}" method="POST">
+                    <form action="{{ route('configurations.billrange') }}" method="POST" class="card shadow-sm border-0">
                             @csrf
                             @method('post')
                         <div class="admin-config-form is-active bill_range-config" data-config-block="latest-bill-range">
-                            <p class="admin-config-hint">Here you can change the current values</p>
-                            
-                            <div class="admin-config-field">
-                                <label class="bill-upper" for="name">Upper Range :</label>
-                                <input type="number" name="upper_range" id="upper_range" placeholder="Current value is 4000" required />
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                    <div>
+                                        <p class="admin-config-hint mb-1">Here you can change the current values.</p>
+                                        <p class="text-muted mb-0 small">Current values load from the database.</p>
+                                    </div>
+                                    @if(!empty($billRangeUpdated['timestamp']))
+                                        <div class="text-end small text-muted">
+                                            <div>Last edited: {{ optional($billRangeUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
+                                            <div>By: {{ $billRangeUpdated['editor']->username ?? $billRangeUpdated['editor']->name ?? 'Unknown' }}</div>
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div class="admin-config-field">
+                                    <label class="bill-upper" for="upper_range">Upper Range :</label>
+                                    <input type="number" name="upper_range" id="upper_range" value="{{ $configs['upper_range']->value ?? '' }}" placeholder="Current value" required />
+                                </div>
+
+                                <div class="admin-config-field">
+                                    <label class="bill-lower" for="lower_range">Lower Range :</label>
+                                    <input type="number" name="lower_range" id="lower_range" value="{{ $configs['lower_range']->value ?? '' }}" placeholder="Current value" required />
+                                </div>
+
+
+                                <button type="submit" class="btn btn-primary px-4">Save</button>
                             </div>
-
-                            <div class="admin-config-field">
-                                <label class="bill-lower" for="lowername">Lower Range :</label>
-                                <input type="number" name="lower_range" id="lower_range" placeholder="Current value is 2000" required />
-                            </div>
-
-
-                            <button type="submit" class="config-btn-range">Save</button>
-                            
                         </div>
                     </form>
 
                     <div class="admin-config-form" data-config-block="bill-arears-quota">
-                        <form action="{{ route('configurations.billarears') }}" method="POST">
+                        <form action="{{ route('configurations.billarears') }}" method="POST" class="card shadow-sm border-0">
                             @csrf
                             @method('post')
-                        <p class="admin-config-hint">Here you can change the Bill Areas Quota</p>
-                        <div class="admin-config-field admin_config_staff">
-                            <label for="call-centre-staff" class="config-bill-areas">Call Centre Staff :</label>
-                            <input type="text" name="ccs" id="call-centre-staff" placeholder="Enter Call Centre Staff" />
-                        </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                    <div>
+                                        <p class="admin-config-hint mb-1">Change the Bill Areas quota.</p>
+                                        <p class="text-muted mb-0 small">Current values load from the database.</p>
+                                    </div>
+                                    @if(!empty($staffUpdated['timestamp']))
+                                        <div class="text-end small text-muted">
+                                            <div>Last edited: {{ optional($staffUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
+                                            <div>By: {{ $staffUpdated['editor']->username ?? $staffUpdated['editor']->name ?? 'Unknown' }}</div>
+                                        </div>
+                                    @endif
+                                </div>
 
-                        <div class="admin-config-field admin_config_staff">
-                            <label for="call-centre" class="config-bill-areas">Call Centre :</label>
-                            <input type="text" name="cc" id="call-centre" placeholder="Enter Call Centre" />
-                        </div>
+                                <div class="admin-config-field admin_config_staff">
+                                    <label for="call-centre-staff" class="config-bill-areas">Call Centre Staff :</label>
+                                    <input type="text" name="ccs" id="call-centre-staff" value="{{ $configs['ccs']->value ?? '' }}" placeholder="Enter Call Centre Staff" />
+                                </div>
 
-                        <div class="admin-config-field  admin_config_staff">
-                            <label for="staff" class="config-bill-areas">Staff :</label>
-                            <input type="text" name="s" id="staff" placeholder="Enter Staff" />
-                        </div>
+                                <div class="admin-config-field admin_config_staff">
+                                    <label for="call-centre" class="config-bill-areas">Call Centre :</label>
+                                    <input type="text" name="cc" id="call-centre" value="{{ $configs['cc']->value ?? '' }}" placeholder="Enter Call Centre" />
+                                </div>
 
-                        <button type="submit" class="config-btn-range staff-submit-btn">Save</button>
+                                <div class="admin-config-field  admin_config_staff">
+                                    <label for="staff" class="config-bill-areas">Staff :</label>
+                                    <input type="text" name="s" id="staff" value="{{ $configs['s']->value ?? '' }}" placeholder="Enter Staff" />
+                                </div>
+
+                                <button type="submit" class="btn btn-primary px-4">Save</button>
+                            </div>
+                        </form>
                     </div>
-                    <form>
 
                     <div class="admin-config-form" data-config-block="user-account">
                         <p class="admin-config-hint">Here you can change the user account</p>
@@ -231,25 +257,28 @@
     .admin-config-btn-col .admin-config-btn {
         padding: 12px 16px;
         font-size: 16px;
-        border: none;
-        background: #00b4eb;
-        color: white;
-        border-radius: 50px;
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        background: var(--bs-body-bg, #fff);
+        color: var(--bs-body-color, #212529);
+        border-radius: 12px;
         cursor: pointer;
         transition: 0.2s ease;
-        font-weight: 500;
+        font-weight: 600;
         text-align: left;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.06);
     }
 
     .admin-config-btn-col .admin-config-btn:hover {
-        background-color: var(--btn-primary-hover-bg);
-        color: var(--btn-light-bg);
+        background-color: var(--bs-primary-bg-subtle, #e7f1ff);
+        color: var(--bs-primary, #0d6efd);
+        border-color: var(--bs-primary, #0d6efd);
     }
 
     .admin-config-btn.is-active {
-        background: #11760a;
-        color: white;
-        box-shadow: 0 12px 26px rgba(17, 118, 10, 0.35);
+        background: var(--bs-primary, #0d6efd);
+        color: #fff;
+        border-color: var(--bs-primary, #0d6efd);
+        box-shadow: 0 10px 28px rgba(13, 110, 253, 0.25);
     }
 
     .admin-config-right {

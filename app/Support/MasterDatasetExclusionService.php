@@ -58,30 +58,37 @@ class MasterDatasetExclusionService
 
                 $stored = $this->storeArchive($upload, $archiveDirectory);
                 $savedArchives[] = $stored;
+                $multipleEntries = count($stored['extracted_paths']) > 1;
 
-                $worksheetRows = $this->loadWorksheetRows($stored['extracted_path']);
-                if (empty($worksheetRows)) {
-                    continue;
-                }
-
-                [$headers, $dataRows] = $this->separateHeaderAndRows($worksheetRows);
-                $headerMap = $this->buildHeaderMap($headers);
-
-                foreach ($dataRows as $columns) {
-                    if (! $this->rowHasData($columns)) {
+                foreach ($stored['extracted_paths'] as $extracted) {
+                    $worksheetRows = $this->loadWorksheetRows($extracted['path']);
+                    if (empty($worksheetRows)) {
                         continue;
                     }
 
-                    $account = $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM');
-                    if ($account === '') {
-                        continue;
-                    }
+                    [$headers, $dataRows] = $this->separateHeaderAndRows($worksheetRows);
+                    $headerMap = $this->buildHeaderMap($headers);
 
-                    $reason = $this->extractExclusionReason($columns, $headerMap);
-                    $accountMap[$account][] = [
-                        'file' => $stored['original_name'],
-                        'reason' => $reason,
-                    ];
+                    foreach ($dataRows as $columns) {
+                        if (! $this->rowHasData($columns)) {
+                            continue;
+                        }
+
+                        $account = $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM');
+                        if ($account === '') {
+                            continue;
+                        }
+
+                        $reason = $this->extractExclusionReason($columns, $headerMap);
+                        $fileLabel = $multipleEntries
+                            ? sprintf('%s :: %s', $stored['original_name'], $extracted['entry_name'])
+                            : $stored['original_name'];
+
+                        $accountMap[$account][] = [
+                            'file' => $fileLabel,
+                            'reason' => $reason,
+                        ];
+                    }
                 }
             }
         } catch (Throwable $exception) {
@@ -91,8 +98,12 @@ class MasterDatasetExclusionService
             ]);
         } finally {
             foreach ($savedArchives as $archive) {
-                if (! empty($archive['extracted_path']) && file_exists($archive['extracted_path'])) {
-                    @unlink($archive['extracted_path']);
+                if (! empty($archive['extracted_paths'])) {
+                    foreach ($archive['extracted_paths'] as $extracted) {
+                        if (! empty($extracted['path']) && file_exists($extracted['path'])) {
+                            @unlink($extracted['path']);
+                        }
+                    }
                 }
             }
         }
@@ -168,17 +179,20 @@ class MasterDatasetExclusionService
         $this->disk->makeDirectory($archiveDirectory);
         $this->disk->putFileAs($archiveDirectory, $upload, $filename);
 
-        $extractedPath = $this->extractWorkbook($storedPath);
+        $extractedPaths = $this->extractWorkbooks($storedPath);
 
         return [
             'stored_path' => $storedPath,
-            'extracted_path' => $extractedPath,
+            'extracted_paths' => $extractedPaths,
             'original_name' => $upload->getClientOriginalName(),
             'size' => $upload->getSize(),
         ];
     }
 
-    private function extractWorkbook(string $storedPath): string
+    /**
+     * Extract up to 3 Excel files from the uploaded ZIP.
+     */
+    private function extractWorkbooks(string $storedPath): array
     {
         $absoluteZip = $this->disk->path($storedPath);
         $zip = new ZipArchive();
@@ -187,31 +201,41 @@ class MasterDatasetExclusionService
             throw new RuntimeException('Unable to open one of the exclusion ZIP archives.');
         }
 
+        $entries = [];
+
         try {
-            $entry = $this->locateExcelEntry($zip);
-            $target = storage_path('app/tmp/exclusion_' . uniqid('', true) . '.xlsx');
-            $directory = dirname($target);
+            $excelEntries = $this->locateExcelEntries($zip);
 
-            if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
-                throw new RuntimeException('Unable to prepare a temporary directory for exclusions.');
-            }
+            foreach ($excelEntries as $entry) {
+                $target = storage_path('app/tmp/exclusion_' . uniqid('', true) . '.xlsx');
+                $directory = dirname($target);
 
-            $stream = $zip->getStream($entry);
-            if (! $stream) {
-                throw new RuntimeException(sprintf('Unable to read "%s" inside the ZIP archive.', $entry));
-            }
+                if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
+                    throw new RuntimeException('Unable to prepare a temporary directory for exclusions.');
+                }
 
-            $handle = fopen($target, 'wb');
-            if (! $handle) {
+                $stream = $zip->getStream($entry);
+                if (! $stream) {
+                    throw new RuntimeException(sprintf('Unable to read "%s" inside the ZIP archive.', $entry));
+                }
+
+                $handle = fopen($target, 'wb');
+                if (! $handle) {
+                    fclose($stream);
+                    throw new RuntimeException('Unable to extract exclusion workbook.');
+                }
+
+                stream_copy_to_stream($stream, $handle);
                 fclose($stream);
-                throw new RuntimeException('Unable to extract exclusion workbook.');
+                fclose($handle);
+
+                $entries[] = [
+                    'path' => $target,
+                    'entry_name' => $entry,
+                ];
             }
 
-            stream_copy_to_stream($stream, $handle);
-            fclose($stream);
-            fclose($handle);
-
-            return $target;
+            return $entries;
         } finally {
             $zip->close();
         }
@@ -301,7 +325,7 @@ class MasterDatasetExclusionService
         }
     }
 
-    private function locateExcelEntry(ZipArchive $zip): string
+    private function locateExcelEntries(ZipArchive $zip): array
     {
         $entries = [];
 
@@ -319,14 +343,14 @@ class MasterDatasetExclusionService
         }
 
         if (empty($entries)) {
-            throw new RuntimeException('Each exclusion ZIP must contain exactly one Excel (.xlsx) workbook.');
+            throw new RuntimeException('Each exclusion ZIP must contain at least one Excel (.xlsx) workbook.');
         }
 
-        if (count($entries) > 1) {
-            throw new RuntimeException('Each exclusion ZIP must contain exactly one Excel (.xlsx) workbook.');
+        if (count($entries) > 3) {
+            throw new RuntimeException('Each exclusion ZIP can include up to 3 Excel (.xlsx) workbooks.');
         }
 
-        return $entries[0];
+        return $entries;
     }
 
     private function archiveDirectory(string $token): string

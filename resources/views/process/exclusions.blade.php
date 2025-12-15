@@ -44,6 +44,7 @@
                         <div class="text-end">
                             <div class="d-flex justify-content-end align-items-center gap-2">
                                 <a href="#" class="btn btn-outline-secondary" data-loader-off="true" onclick="history.back(); return false;">Back</a>
+                                <button type="button" class="btn btn-outline-secondary" id="exclusion-clear">Clear selected</button>
                                 <button type="submit" class="btn btn-dark px-4" disabled>Apply exclusions</button>
                             </div>
                             <p class="text-muted mb-0 mt-2">You can add files one at a time or all at once.</p>
@@ -133,6 +134,7 @@
         const fileList = document.getElementById('exclusion-file-list');
         const errorContainer = document.getElementById('exclusion-errors');
         const form = document.getElementById('exclusion-upload-form');
+        const clearButton = document.getElementById('exclusion-clear');
         const selectedFiles = [];
         let loaderActive = false;
         const submitButton = form.querySelector('button[type="submit"]');
@@ -183,6 +185,14 @@
                 details.appendChild(size);
 
                 item.appendChild(details);
+
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'btn btn-sm btn-outline-danger';
+                remove.textContent = 'Remove';
+                remove.addEventListener('click', () => removeFile(index));
+                item.appendChild(remove);
+
                 list.appendChild(item);
             });
 
@@ -343,7 +353,19 @@
             addFiles(fileInput.files);
         });
 
-        // Removal of files from the list is currently disabled in the UI.
+        const clearAll = () => {
+            selectedFiles.length = 0;
+            syncInputFiles();
+            renderList();
+            updateHelperText();
+            toggleSubmitState();
+            clearErrors();
+        };
+
+        clearButton?.addEventListener('click', (event) => {
+            event.preventDefault();
+            clearAll();
+        });
 
         const renderNotice = (message, variant = 'success') => {
             if (!errorContainer) {
@@ -442,10 +464,7 @@
                     submitButton.disabled = false;
                 }
 
-                selectedFiles.length = 0;
-                syncInputFiles();
-                renderList();
-                updateHelperText();
+                clearAll();
             } catch (error) {
                     window.CDDSLoader?.hide?.();
                 loaderActive = false;
@@ -456,8 +475,7 @@
             }
         });
 
-        renderList();
-        updateHelperText();
+        clearAll();
     });
 </script>
 @endpush

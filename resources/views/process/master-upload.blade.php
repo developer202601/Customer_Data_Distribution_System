@@ -34,6 +34,7 @@
                         </div>
                         <div class="d-flex gap-2">
                             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Back</a>
+                            <button type="button" class="btn btn-outline-secondary px-4" id="master-upload-clear">Remove file</button>
                             <button type="submit" class="btn btn-dark px-4" id="master-upload-submit" disabled>Submit</button>
                         </div>
                     </div>
@@ -119,6 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropzone = document.getElementById('master-dropzone');
     const fileInput = document.getElementById('upload');
     const submitButton = document.getElementById('master-upload-submit');
+    const clearButton = document.getElementById('master-upload-clear');
     const helper = document.getElementById('master-dropzone-helper');
     const errorsContainer = document.getElementById('master-upload-errors');
 
@@ -149,6 +151,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         submitButton.disabled = !(fileInput?.files?.length);
+    };
+
+    const clearSelection = () => {
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        updateHelper(null);
+        if (errorsContainer) {
+            errorsContainer.innerHTML = '';
+        }
+        updateSubmitState();
     };
 
     if (dropzone) {
@@ -202,6 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSubmitState();
     });
 
+    clearButton?.addEventListener('click', (event) => {
+        event.preventDefault();
+        clearSelection();
+    });
+
     form?.addEventListener('submit', (event) => {
         if (!fileInput?.files?.length) {
             event.preventDefault();
@@ -209,6 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    clearSelection();
     updateSubmitState();
 });
 </script>

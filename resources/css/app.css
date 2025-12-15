@@ -1679,6 +1679,36 @@ body.theme-dark .process-dropzone {
     color: var(--text-primary);
 }
 
+/* Dark mode tweaks for allocation cards and helper text */
+body.theme-dark #assignment-config-block .bg-light,
+body.theme-dark #assignment-config-block .border {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--surface-border) !important;
+}
+
+body.theme-dark #assignment-config-block .text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Table contrast in dark mode */
+body.theme-dark .table,
+body.theme-dark .table th,
+body.theme-dark .table td {
+    background-color: var(--surface-card);
+    color: var(--text-primary);
+    border-color: var(--surface-border);
+}
+
+body.theme-dark .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+body.theme-dark .table-hover tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
 body.theme-dark .process-dropzone-title+p {
     color: var(--text-muted) !important;
 }
@@ -1686,6 +1716,19 @@ body.theme-dark .process-dropzone-title+p {
 body.theme-dark .process-guidelines {
     background: var(--surface-muted);
     border-color: var(--surface-border);
+}
+
+/* Tame light utility surfaces in dark mode for readability */
+body.theme-dark .bg-light,
+body.theme-dark .bg-white {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--surface-border) !important;
+}
+
+body.theme-dark .bg-light .text-muted,
+body.theme-dark .bg-white .text-muted {
+    color: var(--text-muted) !important;
 }
 
 body.theme-dark .process-toast__icon {
@@ -1708,6 +1751,46 @@ body.theme-dark .btn-danger {
 body.theme-dark .btn-light {
     color: #f5f9ff;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Make .text-muted readable in dark mode across the app */
+body.theme-dark .text-muted,
+body.theme-dark small,
+body.theme-dark .small {
+    color: var(--text-muted) !important;
+    opacity: 1 !important;
+}
+
+/* Some components used very faint secondary variables; ensure legibility */
+body.theme-dark .text-muted a,
+body.theme-dark .text-muted strong {
+    color: var(--text-muted) !important;
+}
+
+/* Make elevated card surfaces slightly lighter in dark mode for better separation */
+body.theme-dark .card,
+body.theme-dark .process-upload-card,
+body.theme-dark .process-summary-card,
+body.theme-dark .process-table-container,
+body.theme-dark .dashboard-card,
+body.theme-dark .process-preview,
+body.theme-dark .login-card {
+    background: rgba(6, 22, 36, 0.72) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.theme-dark .card .card-body,
+body.theme-dark .process-summary-card,
+body.theme-dark .process-table-container {
+    background: transparent !important;
+}
+
+/* Slightly brighter inner panels (e.g., the two big cards on the home screen) */
+body.theme-dark .home-panel,
+body.theme-dark .master-panel {
+    background: rgba(10, 28, 44, 0.78) !important;
+    border: 1px solid rgba(255,255,255,0.04) !important;
 }
 
 body.theme-dark .btn-outline-primary,

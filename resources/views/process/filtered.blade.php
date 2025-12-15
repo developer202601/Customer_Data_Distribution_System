@@ -7,7 +7,7 @@
     <span class="process-step"></span>
 </div>
 @if(session('user.is_admin'))
-<a href="#" class="btn btn-outline-secondary">Configurations</a>
+<a href="{{ route('admin.config') }}" class="btn btn-outline-secondary">Configurations</a>
 @endif
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf

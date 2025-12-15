@@ -31,18 +31,18 @@
                             @csrf
                             @method('post')
                         <div class="admin-config-form is-active bill_range-config" data-config-block="latest-bill-range">
-                            <div class="card-body">
+                            <div class="card-body config-card">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                                     <div>
                                         <p class="admin-config-hint mb-1">Here you can change the current values.</p>
                                         <p class="text-muted mb-0 small">Current values load from the database.</p>
+                                        @if(!empty($billRangeUpdated['timestamp']))
+                                            <div class="small text-muted mt-2">
+                                                <div>Last edited: {{ optional($billRangeUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
+                                                <div>By: {{ $billRangeUpdated['editor']->username ?? $billRangeUpdated['editor']->name ?? 'Unknown' }}</div>
+                                            </div>
+                                        @endif
                                     </div>
-                                    @if(!empty($billRangeUpdated['timestamp']))
-                                        <div class="text-end small text-muted">
-                                            <div>Last edited: {{ optional($billRangeUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
-                                            <div>By: {{ $billRangeUpdated['editor']->username ?? $billRangeUpdated['editor']->name ?? 'Unknown' }}</div>
-                                        </div>
-                                    @endif
                                 </div>
 
                                 <div class="admin-config-field">
@@ -61,22 +61,22 @@
                         </div>
                     </form>
 
-                    <div class="admin-config-form" data-config-block="bill-arears-quota">
-                        <form action="{{ route('configurations.billarears') }}" method="POST" class="card shadow-sm border-0">
-                            @csrf
-                            @method('post')
-                            <div class="card-body">
+                    <form action="{{ route('configurations.billarears') }}" method="POST" class="card shadow-sm border-0">
+                        @csrf
+                        @method('post')
+                        <div class="admin-config-form" data-config-block="bill-arears-quota">
+                            <div class="card-body config-card">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                                     <div>
                                         <p class="admin-config-hint mb-1">Change the Bill Areas quota.</p>
                                         <p class="text-muted mb-0 small">Current values load from the database.</p>
+                                        @if(!empty($staffUpdated['timestamp']))
+                                            <div class="small text-muted mt-2">
+                                                <div>Last edited: {{ optional($staffUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
+                                                <div>By: {{ $staffUpdated['editor']->username ?? $staffUpdated['editor']->name ?? 'Unknown' }}</div>
+                                            </div>
+                                        @endif
                                     </div>
-                                    @if(!empty($staffUpdated['timestamp']))
-                                        <div class="text-end small text-muted">
-                                            <div>Last edited: {{ optional($staffUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
-                                            <div>By: {{ $staffUpdated['editor']->username ?? $staffUpdated['editor']->name ?? 'Unknown' }}</div>
-                                        </div>
-                                    @endif
                                 </div>
 
                                 <div class="admin-config-field admin_config_staff">
@@ -96,42 +96,44 @@
 
                                 <button type="submit" class="btn btn-primary px-4">Save</button>
                             </div>
-                        </form>
-                    </div>
+                        </div>
+                    </form>
 
                     <div class="admin-config-form" data-config-block="user-account">
-                        <p class="admin-config-hint">Here you can change the user account</p>
+                        <div class="config-card">
+                            <p class="admin-config-hint">Here you can change the user account</p>
 
-                        <div class="user-account-panel">
-                            <div class="user-account-add">
-                                <input type="text" id="user-account-input" class="user-acc-input" placeholder="Enter name or id" />
-                                <button type="button" class="user-account-add-btn">Add</button>
-                            </div>
+                            <div class="user-account-panel">
+                                <div class="user-account-add">
+                                    <input type="text" id="user-account-input" class="user-acc-input" placeholder="Enter name or id" />
+                                    <button type="button" class="user-account-add-btn">Add</button>
+                                </div>
 
-                            <div class="user-account-list" aria-live="polite">
-                                <div class="user-account-item" data-user-id="1" data-blocked="false">
-                                    <div class="user-account-item-label">User 1</div>
-                                    <div class="user-account-item-controls">
-                                        <button type="button" class="user-account-item-edit">Edit</button>
-                                        <button type="button" class="user-account-item-block">Block</button>
-                                        <button type="button" class="user-account-item-remove" aria-label="Remove">×</button>
+                                <div class="user-account-list" aria-live="polite">
+                                    <div class="user-account-item" data-user-id="1" data-blocked="false">
+                                        <div class="user-account-item-label">User 1</div>
+                                        <div class="user-account-item-controls">
+                                            <button type="button" class="user-account-item-edit">Edit</button>
+                                            <button type="button" class="user-account-item-block">Block</button>
+                                            <button type="button" class="user-account-item-remove" aria-label="Remove">×</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="user-account-item" data-user-id="2" data-blocked="false">
+                                        <div class="user-account-item-label">User 2</div>
+                                        <div class="user-account-item-controls">
+                                            <button type="button" class="user-account-item-edit">Edit</button>
+                                            <button type="button" class="user-account-item-block">Block</button>
+                                            <button type="button" class="user-account-item-remove" aria-label="Remove">×</button>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div class="user-account-item" data-user-id="2" data-blocked="false">
-                                    <div class="user-account-item-label">User 2</div>
-                                    <div class="user-account-item-controls">
-                                        <button type="button" class="user-account-item-edit">Edit</button>
-                                        <button type="button" class="user-account-item-block">Block</button>
-                                        <button type="button" class="user-account-item-remove" aria-label="Remove">×</button>
-                                    </div>
+                                <div class="user-account-actions">
+                                    <div class="user-account-save-status" aria-live="polite"></div>
+                                    <button type="button" class="user-account-save-btn">Save</button>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="user-account-actions">
-                            <div class="user-account-save-status" aria-live="polite"></div>
-                            <button type="button" class="user-account-save-btn">Save</button>
                         </div>
 
                     </div>
@@ -145,6 +147,20 @@
 @endsection  
 
 <style>
+    :root {
+        --config-border: rgba(0, 0, 0, 0.08);
+    }
+
+    .config-card {
+        border: 1px solid var(--config-border);
+        border-radius: 12px;
+        padding: 18px 20px;
+        background: transparent;
+    }
+
+    .config-card h5 {
+        font-weight: 600;
+    }
 
     .user-account-item-controls .user-account-item-edit{
         background: #00b4eb;   
@@ -217,9 +233,9 @@
         margin-left: 160px;
     }
     
-    .admin_config_staff{
+    /* .admin_config_staff{
         margin-top: 50px;
-    }
+    } */
 
     .config-admin-btn{
         margin-top: 40px;
@@ -293,7 +309,7 @@
         display: none;
         flex-direction: column;
         gap: 32px;
-        width: min(520px, 100%);
+        /* width: min(520px, 100%); */
         padding: clamp(1.75rem, 4vw, 2.5rem);
         border-radius: 24px;
         background: var(--surface-card);

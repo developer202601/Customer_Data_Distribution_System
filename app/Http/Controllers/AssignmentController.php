@@ -255,15 +255,29 @@ class AssignmentController extends Controller
 
     private function reportGroups(): Collection
     {
-        return MasterDatasetProcess::with(['exports', 'user'])
-            ->orderByDesc('run_date')
-            ->get()
-            ->groupBy(function (MasterDatasetProcess $item) {
-                $reference = $item->run_date ?? $item->dataset_month ?? $item->created_at ?? now();
-                $date = Carbon::parse($reference)->startOfMonth();
+        $items = MasterDatasetProcess::with(['exports', 'user'])->get();
 
-                return $date->format('F Y');
-            });
+        // Sort each process by its run date (or created_at) descending so newest appear first
+        $sorted = $items->sortByDesc(function (MasterDatasetProcess $item) {
+            $reference = $item->run_date ?? $item->created_at ?? now();
+            return Carbon::parse($reference)->getTimestamp();
+        });
+
+        // Group by month label (e.g. "December 2025")
+        $grouped = $sorted->groupBy(function (MasterDatasetProcess $item) {
+            $reference = $item->run_date ?? $item->dataset_month ?? $item->created_at ?? now();
+            $date = Carbon::parse($reference)->startOfMonth();
+
+            return $date->format('F Y');
+        });
+
+        // Ensure the month groups themselves are ordered newest-first
+        $grouped = $grouped->sortByDesc(function ($group, $key) {
+            // Parse the key (e.g. "December 2025") back to a date for reliable sorting
+            return Carbon::parse($key)->getTimestamp();
+        });
+
+        return $grouped;
     }
 
     private function bucketAllowed(string $group, string $bucket): bool

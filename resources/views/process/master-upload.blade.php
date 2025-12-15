@@ -73,27 +73,30 @@
                     @if(!empty($assignmentConfig))
                     <div class="process-config mt-4" id="assignment-config-block">
                         <h2 class="process-guidelines-title">Current allocation values</h2>
-                        <div class="row g-3" id="assignment-config-cards">
-                            <div class="col-md-6">
-                                <div class="border rounded p-3 h-100 bg-light">
-                                    <p class="text-muted mb-1">Retail / Micro arrears window</p>
-                                    <p class="h5 mb-0">
-                                        <span id="assignment-lower-range-value">{{ number_format($assignmentConfig['lower_range']) }}</span> –
-                                        <span id="assignment-upper-range-value">{{ number_format($assignmentConfig['upper_range']) }}</span>
-                                    </p>
+                        <!-- Outer grey panel for current allocation values -->
+                        <div class="p-3" style="background:var(--surface-muted); border-radius:1rem;">
+                            <div class="row g-3" id="assignment-config-cards">
+                                <div class="col-md-6">
+                                    <div class="border p-3 h-100 bg-light" style="border-radius:1rem;">
+                                        <p class="text-muted mb-1">Retail / Micro arrears window</p>
+                                        <p class="h5 mb-0">
+                                            <span id="assignment-lower-range-value">{{ number_format($assignmentConfig['lower_range']) }}</span> –
+                                            <span id="assignment-upper-range-value">{{ number_format($assignmentConfig['upper_range']) }}</span>
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="border rounded p-3 h-100 bg-light">
-                                    <p class="text-muted mb-1">Call centre quotas</p>
-                                    <p class="mb-0">
-                                        <strong>Call center staff:</strong>
-                                        <span id="assignment-call-center-staff">{{ number_format($assignmentConfig['call_center_staff_quota']) }}</span><br>
-                                        <strong>Call center:</strong>
-                                        <span id="assignment-call-center">{{ number_format($assignmentConfig['call_center_quota']) }}</span><br>
-                                        <strong>Staff:</strong>
-                                        <span id="assignment-staff">{{ number_format($assignmentConfig['staff_quota']) }}</span>
-                                    </p>
+                                <div class="col-md-6">
+                                    <div class="border p-3 h-100 bg-light" style="border-radius:1rem;">
+                                        <p class="text-muted mb-1">Call centre quotas</p>
+                                        <p class="mb-0">
+                                            <strong>Call center staff:</strong>
+                                            <span id="assignment-call-center-staff">{{ number_format($assignmentConfig['call_center_staff_quota']) }}</span><br>
+                                            <strong>Call center:</strong>
+                                            <span id="assignment-call-center">{{ number_format($assignmentConfig['call_center_quota']) }}</span><br>
+                                            <strong>Staff:</strong>
+                                            <span id="assignment-staff">{{ number_format($assignmentConfig['staff_quota']) }}</span>
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

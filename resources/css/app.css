@@ -35,6 +35,9 @@
     --btn-success-bg: #1bb80f;
     --btn-success-hover-bg: #15940c;
     --btn-success-active-bg: #11760a;
+    --btn-warning-bg: #ffb300;
+    --btn-warning-hover-bg: #ffa100;
+    --btn-warning-active-bg: #e08f00;
     --btn-danger-bg: #d64545;
     --btn-danger-hover-bg: #b73232;
     --btn-danger-active-bg: #9d2424;
@@ -48,6 +51,8 @@
     --pagination: #0d6efd;
     --table-loading: rgba(83, 83, 83, 0.234);
     --no-data: #5c6478;
+    /* standard navbar height used by layouts */
+    --navbar-height: 72px;
 }
 
 :root.theme-dark,
@@ -78,6 +83,9 @@ body.theme-dark {
     --btn-danger-bg: #ff6f6f;
     --btn-danger-hover-bg: #ff5454;
     --btn-danger-active-bg: #f23939;
+    --btn-warning-bg: #ffb300;
+    --btn-warning-hover-bg: #ffa100;
+    --btn-warning-active-bg: #e08f00;
     --btn-light-bg: rgb(255, 255, 255);
     --btn-light-hover-bg: rgba(255, 255, 255, 0.18);
     --btn-light-active-bg: rgba(255, 255, 255, 0.22);
@@ -89,6 +97,204 @@ body.theme-dark {
     --table-loading: rgba(0, 0, 0, 0.45);
     --no-data: rgba(245, 249, 255, 0.72);
 }
+
+/* Ensure wrapper fills viewport and footer sticks to bottom for CC layout */
+.wrapper {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+.content-wrapper {
+    flex: 1 0 auto;
+}
+
+/* CC layout: keep content (excluding navbar/footer/sidebar) inset by 29px at top/left/right. Bottom stays flush. */
+.cc-layout .content-wrapper {
+    padding: 29px 29px 0 29px !important;
+}
+
+/* Do not apply horizontal padding to the footer inside CC layout */
+.cc-layout .main-footer {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+}
+.main-footer {
+    flex-shrink: 0;
+    margin-top: auto; /* push footer to bottom of wrapper */
+}
+
+/* CC offcanvas alignment and styling to match master page */
+.cc-offcanvas {
+    left: 0;
+    /* place the offcanvas under the navbar plus a small visual gap */
+    top: calc(var(--navbar-height) + 25px);
+    height: calc(100vh - (var(--navbar-height) + 25px));
+    width: 280px;
+    background: var(--surface-card);
+    color: var(--text-primary);
+    border-right: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-soft);
+}
+
+/* Ensure the offcanvas close button is readable in both light and dark themes */
+.cc-offcanvas .btn-close {
+    /* default: dark close icon for light background */
+    filter: none !important;
+    opacity: 0.85;
+}
+.theme-dark .cc-offcanvas .btn-close {
+    /* invert the default icon to make it white on dark backgrounds */
+    filter: invert(1) !important;
+    opacity: 0.95;
+}
+
+/* Stronger override to beat Bootstrap's .offcanvas.offcanvas-start default (top:0) */
+.offcanvas.offcanvas-start.cc-offcanvas,
+.offcanvas.cc-offcanvas.offcanvas-start {
+    top: calc(var(--navbar-height) + 25px) !important;
+    height: calc(100vh - (var(--navbar-height) + 25px)) !important;
+    left: 0 !important;
+    padding: 10px;
+    border-radius: 0rem 1rem 1rem 0rem;
+}
+.cc-offcanvas .offcanvas-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+.cc-sidebar-header h5 {
+    letter-spacing: 0.25rem;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    margin: 0;
+}
+.cc-sidebar-header .cc-sidebar-status {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.68);
+}
+.cc-sidebar-meta {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.65);
+}
+.cc-sidebar-meta a {
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: underline;
+}
+.cc-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0;
+    margin: 0;
+}
+.cc-sidebar-nav .nav-link {
+    border-radius: 0.85rem;
+    font-weight: 600;
+    padding: 0.65rem 0.8rem;
+    color: inherit; /* follow cc-offcanvas color */
+    transition: background .25s ease, color .25s ease;
+}
+.cc-sidebar-nav .nav-link:hover,
+.cc-sidebar-nav .nav-link:focus,
+.cc-sidebar-nav .nav-link.active {
+    text-decoration: none;
+}
+
+/* Dark theme specifics */
+.theme-dark .cc-offcanvas {
+    /* single consistent dark surface color for sidebar in dark mode */
+    background: #021826; /* deep navy-teal */
+    color: #ffffff;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+}
+.theme-dark .cc-sidebar-nav .nav-link:hover,
+.theme-dark .cc-sidebar-nav .nav-link:focus,
+.theme-dark .cc-sidebar-nav .nav-link.active {
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+}
+
+/* Light theme hover */
+.cc-offcanvas .cc-sidebar-nav .nav-link:hover,
+.cc-offcanvas .cc-sidebar-nav .nav-link:focus,
+.cc-offcanvas .cc-sidebar-nav .nav-link.active {
+    background: rgba(0,0,0,0.04);
+    color: var(--text-primary);
+}
+.cc-sidebar-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+
+/* Position the small floating sidebar toggle under the navbar and aligned with container */
+.cc-sidebar-toggle {
+    position: fixed;
+    left: 12px;
+    top: calc(var(--navbar-height) + 37px);
+    z-index: 1100;
+    padding: 0.45rem 0.65rem !important;
+    border-radius: 999px !important;
+    min-width: 40px !important;
+    width: auto !important;
+    height: 40px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: var(--surface-card) !important;
+    border: 1px solid var(--surface-border) !important;
+    box-shadow: var(--shadow-soft) !important;
+}
+
+/* Hide toggle smoothly while sidebar is open */
+.cc-toggle-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(12px) !important;
+    transition: opacity .18s ease, transform .2s ease !important;
+}
+
+/* Also hide toggle whenever sidebar-open class is set on body */
+.cc-sidebar-open .cc-sidebar-toggle {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(320px) !important; /* move it fully outside viewport area */
+    z-index: 1000 !important; /* sit below offcanvas (1150) */
+}
+
+/* When offcanvas opens, slide the toggle along with it (offcanvas is before the toggle in DOM) */
+.cc-sidebar-toggle {
+    transition: transform .25s ease, box-shadow .2s ease;
+}
+
+/* Use a body-level class so movement works regardless of DOM order or Bootstrap internals */
+.cc-sidebar-open .cc-sidebar-toggle {
+    transform: translateX(320px) !important;
+    z-index: 1000 !important;
+}
+
+/* Remove extra bottom gap on process card so footer is closer */
+.process-upload-card { margin-bottom: 0.75rem; }
+
+/* Keep navbar above the offcanvas/backdrop so it does not darken */
+.main-header.navbar {
+    position: relative;
+    z-index: 1200 !important;
+}
+.offcanvas {
+    z-index: 1150 !important; /* sit above the floating toggle */
+    /* default offcanvas surface should match site cards */
+    background: var(--surface-card);
+    color: var(--text-primary);
+}
+.offcanvas-backdrop {
+    z-index: 1140 !important;
+}
+
 
 /* Prevent small layout overflows and ensure height calculations are reliable */
 html,
@@ -194,6 +400,53 @@ body.guest-layout {
     border: 3px solid var(--loader-track);
 }
 
+.cc-report-loader {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 27, 61, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+.cc-report-loader--visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+.cc-report-loader__inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    border-radius: 1.5rem;
+    background: var(--surface-card);
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--surface-border);
+}
+.cc-report-loader__spinner {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--loader-track);
+    position: relative;
+    animation: cc-report-spin 0.75s linear infinite;
+}
+.cc-report-loader__spinner::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--loader-primary, #1bb80f);
+}
+@keyframes cc-report-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .page-loader__spinner::after {
     border: 3px solid transparent;
     border-top-color: var(--loader-primary);
@@ -216,6 +469,26 @@ body.guest-layout {
     min-width: 220px;
     flex: 1; /* allow progress line to expand */
 }
+
+/* Call Center transparent card variant used to create a single large overlay section */
+.process-upload-card--transparent {
+    background: rgba(255,255,255,0.75);
+    border-radius: 1.25rem;
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-soft);
+}
+.theme-dark .process-upload-card--transparent,
+body.theme-dark .process-upload-card--transparent {
+    background: rgba(3,6,12,0.55);
+}
+
+/* Ensure action buttons in CC user list follow main button tokens */
+.process-upload-card .btn {
+    border-radius: 999px;
+}
+
+/* Toast top-center small tweak */
+.top-center-toast { left: 50%; transform: translateX(-50%); top: 0.75rem; position: fixed; z-index: 2100; }
 
 /* Thin gradient progress line */
 .page-loader__line-track {
@@ -912,6 +1185,31 @@ body.guest-layout .content-wrapper {
 .btn-success:active {
     background: var(--btn-success-active-bg);
     border-color: var(--btn-success-active-bg);
+}
+
+/* Warning button (outline + filled) */
+.btn-warning {
+    background: var(--btn-warning-bg);
+    border-color: var(--btn-warning-bg);
+    color: #ffffff;
+    box-shadow: 0 12px 24px rgba(255, 179, 0, 0.16);
+}
+
+.btn-warning:hover,
+.btn-warning:focus {
+    background: var(--btn-warning-hover-bg);
+    border-color: var(--btn-warning-hover-bg);
+}
+
+.btn-warning:active {
+    background: var(--btn-warning-active-bg);
+    border-color: var(--btn-warning-active-bg);
+}
+
+.btn-outline-warning:hover,
+.btn-outline-warning:focus {
+    background: rgba(255, 179, 0, 0.12);
+    color: var(--text-primary);
 }
 
 .btn-danger {

@@ -3,12 +3,14 @@
 namespace App\Support;
 
 use App\Jobs\BuildMasterDatasetExports;
+use App\Models\CallCenterReport;
 use App\Models\DatasetExport;
 use App\Models\MasterDatasetProcess;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 use App\Support\MasterDatasetProcessStatus;
+use Illuminate\Database\Eloquent\Builder;
 
 class MasterDatasetExportCoordinator
 {
@@ -170,6 +172,10 @@ class MasterDatasetExportCoordinator
                     'file_size' => $size ?: null,
                     'file_hash' => $hash,
                 ]);
+
+                if ($bucket === 'call-center') {
+                    $this->recordCallCenterReport($freshProcess, $query);
+                }
             } catch (Throwable $exception) {
                 $meta = $record->meta ?? [];
                 $meta['error'] = $exception->getMessage();
@@ -248,5 +254,21 @@ class MasterDatasetExportCoordinator
     public static function expectedBuckets(): array
     {
         return array_keys(self::EXPORT_BUCKETS);
+    }
+
+    private function recordCallCenterReport(MasterDatasetProcess $process, Builder $query): void
+    {
+        $rowIds = (clone $query)->pluck('id')->map(function ($value) {
+            return is_numeric($value) ? (int) $value : $value;
+        })->toArray();
+
+        CallCenterReport::updateOrCreate([
+            'master_dataset_process_id' => $process->id,
+        ], [
+            'token' => $process->token,
+            'dataset_month' => $process->dataset_month,
+            'row_count' => count($rowIds),
+            'row_ids' => $rowIds,
+        ]);
     }
 }

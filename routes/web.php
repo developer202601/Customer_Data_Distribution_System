@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\AssignmentController;
+use App\Http\Controllers\CallCenter\DashboardController as CallCenterDashboardController;
+use App\Http\Controllers\CallCenter\ReportController as CallCenterReportController;
+use App\Http\Controllers\CallCenter\UserController as CallCenterUserController;
 use App\Http\Controllers\DatasetReportsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
@@ -40,6 +43,34 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/configurations/billrange', [BillRangeController::class, 'createRange'])->name('configurations.billrange');
     
     Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');
+
+    Route::prefix('cc')->name('cc.')->middleware('session.cc_user')->group(function () {
+        Route::get('/', [CallCenterDashboardController::class, 'index'])->name('dashboard');
+
+        // Call center staff assignment endpoints
+        Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
+        Route::post('/assignments/{id}/claim', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'claim'])->name('assignments.claim');
+        Route::post('/assignments/{id}/complete', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'complete'])->name('assignments.complete');
+        Route::post('/assignments/{id}/interactions', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'storeInteraction'])->name('assignments.interactions.store');
+        Route::post('/assignments/{id}/accept', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'accept'])->name('assignments.accept');
+        Route::post('/assignments/{id}/reject', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'reject'])->name('assignments.reject');
+
+        Route::middleware('session.cc_admin')->group(function () {
+            Route::get('/users', [CallCenterUserController::class, 'index'])->name('users.index');
+            Route::post('/users', [CallCenterUserController::class, 'store'])->name('users.store');
+            Route::get('/users/{ccUser}/edit', [CallCenterUserController::class, 'edit'])->name('users.edit');
+            Route::put('/users/{ccUser}', [CallCenterUserController::class, 'update'])->name('users.update');
+            Route::put('/users/{ccUser}/disable', [CallCenterUserController::class, 'disable'])->name('users.disable');
+            Route::delete('/users/{ccUser}', [CallCenterUserController::class, 'destroy'])->name('users.destroy');
+            Route::get('/reports', [CallCenterReportController::class, 'index'])->name('reports');
+            Route::post('/reports/{report}/distribute', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'distribute'])->name('reports.distribute');
+            Route::get('/reports/{report}/distribute/cancel/{token}', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'cancelDistribute'])->name('reports.distribute.cancel');
+            Route::post('/reports/{report}/recall', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recall'])->name('reports.recall');
+            Route::get('/reports/{report}/recall/preview', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recallPreview'])->name('reports.recall.preview');
+            Route::post('/reports/{report}/reassign', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'reassign'])->name('reports.reassign');
+            Route::get('/reports/{report}/download', [CallCenterReportController::class, 'download'])->name('reports.download');
+        });
+    });
     
     
 });

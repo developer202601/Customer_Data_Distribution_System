@@ -56,7 +56,7 @@
                                 </div>
 
 
-                                <button type="submit" class="btn btn-primary px-4">Save</button>
+                                <button type="submit" class="btn btn-primary px-4 range_btn">Save</button>
                             </div>
                         </div>
                     </form>
@@ -147,6 +147,26 @@
 @endsection  
 
 <style>
+
+    .bill-upper .bill-lower label{
+        color: black;
+    }
+
+    .range_btn{
+        justify-content: center;
+        margin-left: 170px;
+        margin-top: 30px;
+    }
+
+    .config-card .btn{
+        margin-left: 170px;
+        margin-top: 30px;
+    }
+
+    .admin_config_staff{
+        color: black;
+    }
+
     :root {
         --config-border: rgba(0, 0, 0, 0.08);
     }
@@ -194,6 +214,7 @@
 
     .bill-upper, .bill-lower{  
         font-family: Arial, Helvetica, sans-serif;
+        color: black;
     }
 
     .config-admin-btn .button{
@@ -209,14 +230,14 @@
 
 
     .admin-config-field {
-    display: flex;
-    align-items: center;
-    margin-bottom: 12px;
-}
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+    }
 
-.admin-config-field label {
-    width: 140px;      /* Adjust label width */
-}
+    .admin-config-field label {
+        width: 140px;      /* Adjust label width */
+    }
 
 
 
@@ -492,12 +513,29 @@
 
     /* Center save area in user account panel */
     .user-account-actions {
+
+                                        
+
         margin-top: 12px;
         display: flex;
         justify-content: center;
         gap: 12px;
         align-items: center;
     }
+
+    /* Dark mode: make specific labels white for better contrast */
+    /* legacy rule kept commented for reference
+    @media (prefers-color-scheme: dark) {
+        label[for="call-centre"].config-bill-areas,
+        label[for="call-centre-staff"].config-bill-areas,
+        label[for="upper_range"].bill-upper,
+        label[for="lower_range"].bill-lower {
+            color: #ffffff;
+        }
+    }
+    */
+
+   
 
     .user-account-save-status {
         font-size: 13px;
@@ -593,6 +631,9 @@
             
         }
     }
+
+    
+    
 </style>
 
 

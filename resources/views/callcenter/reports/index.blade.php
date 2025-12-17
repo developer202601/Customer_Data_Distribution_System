@@ -436,12 +436,6 @@
 
             const recallBtn = document.getElementById('cc-recall-preview-btn');
 
-            userSearch?.addEventListener('input', () => {
-                refreshDistribution();
-            });
-
-            refreshDistribution();
-
             const recallBtn = document.getElementById('cc-recall-preview-btn');
             const recallForm = document.getElementById('cc-recall-form');
             const recallModalEl = document.createElement('div');

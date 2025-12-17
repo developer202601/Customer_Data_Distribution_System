@@ -11,52 +11,61 @@
 @endsection
 
 @section('content')
-<div class="process-upload py-4">
-    <div class="container-fluid">
-        <div id="cc-report-loader" class="cc-report-loader">
-            <div class="cc-report-loader__inner">
-                <span class="cc-report-loader__spinner"></span>
-                <div>
-                    <p class="mb-0 fw-semibold">Preparing Excel download...</p>
-                    <p class="small text-muted mb-0">Do not close the page until the file starts downloading.</p>
-                </div>
-            </div>
-        </div>
-        <div class="card process-upload-card process-upload-card--transparent shadow-sm">
-            <div class="card-body p-4 p-lg-5">
-                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                    <div>
-                        <p class="text-uppercase text-muted mb-1">Call Center Reports</p>
-                        <h1 class="process-upload-title mb-1">Reports</h1>
-                        <form method="get" class="d-flex gap-2 align-items-center">
-                            <label for="report" class="mb-0 text-muted small" style="width: 175px;">Select report</label>
-                            <select id="report" name="report" class="form-select form-select-sm rounded-pill" onchange="this.form.submit()">
-                                @foreach($reports->take(2) as $report)
-                                    @php
-                                        $dm = $report->dataset_month;
-                                        $label = ($dm && strlen($dm) === 6)
-                                            ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report'
-                                            : ($report->dataset_month ?: 'Unknown report');
-                                    @endphp
-                                    <option value="{{ $report->id }}" {{ optional($selectedReport)->id === $report->id ? 'selected' : '' }}>
-                                        {{ $label }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </form>
+    <div class="process-upload py-4">
+        <div class="container-fluid">
+            <div class="card shadow-sm" style="border-radius: 1rem;">
+                <div class="card-body p-4 p-lg-5">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <div>
+                            <p class="text-uppercase text-muted small mb-1">Call Center</p>
+                            <h1 class="h4 mb-0">Reports</h1>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <div id="cc-report-loader" class="cc-report-loader">
+                                <div class="cc-report-loader__inner">
+                                    <span class="cc-report-loader__spinner"></span>
+                                    <div>
+                                        <p class="mb-0 fw-semibold">Preparing Excel download...</p>
+                                        <p class="small text-muted mb-0">Do not close the page until the file starts downloading.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            @if($selectedReport)
+                                @php $recallDisabled = $acceptedAssignments->isNotEmpty(); @endphp
+                                <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
+                                <button type="button" id="cc-recall-preview-btn" class="btn {{ $recallDisabled ? 'btn-outline-secondary text-muted' : 'btn-outline-warning' }} rounded-pill px-3" data-report-id="{{ $selectedReport->id }}" {{ $recallDisabled ? 'disabled aria-disabled="true" title="Recall disabled once rows are accepted"' : '' }}>Recall preview</button>
+                                <form method="post" action="{{ route('cc.reports.recall', $selectedReport->id) }}" id="cc-recall-form" class="d-none">
+                                    @csrf
+                                </form>
+                            @endif
+                        </div>
                     </div>
-                    <div class="d-flex gap-2 align-items-center">
-                        @if($selectedReport && ($anyAssigned ?? false))
-                            <button id="cc-recall-preview-btn" data-report-id="{{ $selectedReport->id }}" class="btn btn-outline-warning rounded-pill px-4">Recall assignments</button>
-                        @endif
-                        @if($selectedReport)
-                            <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
-                            <form method="post" action="{{ route('cc.reports.recall', $selectedReport->id) }}" id="cc-recall-form" class="d-none">
-                                @csrf
+                    <div class="row g-3 mt-3 align-items-center">
+                        <div class="col-md-8">
+                            <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
+                                <label for="report" class="mb-0 text-muted small me-2" style="min-width: 180px;">Select report</label>
+                                <select id="report" name="report" class="form-select form-select-sm rounded-pill" onchange="this.form.submit()">
+                                    @foreach($reports->take(2) as $report)
+                                        @php
+                                            $dm = $report->dataset_month;
+                                            $label = ($dm && strlen($dm) === 6)
+                                                ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report'
+                                                : sprintf('Report #%s', $report->id);
+                                        @endphp
+                                        <option value="{{ $report->id }}" {{ optional($selectedReport)->id === $report->id ? 'selected' : '' }}>
+                                            {{ $label }}
+                                        </option>
+                                    @endforeach
+                                </select>
                             </form>
-                        @endif
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            @if($selectedReport && ($anyAssigned ?? false))
+                                <p class="small text-uppercase text-muted mb-0">Assigned rows ready</p>
+                            @endif
+                        </div>
                     </div>
-                </div>
+
                 @if(session('status'))
                     <div class="alert alert-success mt-4">{{ session('status') }}</div>
                 @endif
@@ -193,11 +202,15 @@
                                     <div class="card-body flex-grow-1">
                                         <h6 class="small text-uppercase text-muted mb-2">Pending approvals</h6>
                                         <ul class="list-unstyled mb-0">
+                                            @php $acceptedUserIds = $acceptedAssignments->pluck('assigned_user_id')->unique()->filter()->values()->all(); @endphp
                                             @foreach($ccUsers as $user)
-                                                <li class="d-flex justify-content-between align-items-center py-1">
-                                                    <div class="small">{{ $user->username }} — {{ $user->name }}</div>
-                                                    <span class="badge bg-secondary text-white small">{{ $pendingCounts[$user->id] ?? 0 }}</span>
-                                                </li>
+                                                @php $pending = (int) ($pendingCounts[$user->id] ?? 0); @endphp
+                                                @if($pending > 0 && ! in_array($user->id, $acceptedUserIds))
+                                                    <li class="d-flex justify-content-between align-items-center py-1">
+                                                        <div class="small">{{ $user->username }} — {{ $user->name }}</div>
+                                                        <span class="badge bg-secondary text-white small">{{ $pending }}</span>
+                                                    </li>
+                                                @endif
                                             @endforeach
                                         </ul>
                                     </div>
@@ -210,30 +223,18 @@
                                         @if($acceptedAssignments->isEmpty())
                                             <p class="text-muted small mb-0">No approved rows for this report yet.</p>
                                         @else
-                                            <div class="table-responsive">
-                                                <table class="table table-striped table-bordered mb-0">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Row</th>
-                                                            <th>Agent</th>
-                                                            <th>Accepted at</th>
-                                                            <th>Interactions</th>
-                                                            <th>Last note</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach($acceptedAssignments as $assignment)
-                                                            <tr>
-                                                                <td>#{{ $assignment->row->id ?? $assignment->id }}</td>
-                                                                <td>{{ optional($assignment->agent)->username ?? 'Unassigned' }} — {{ optional($assignment->agent)->name }}</td>
-                                                                <td>{{ optional($assignment->accepted_at)->toDayDateTimeString() ?? '—' }}</td>
-                                                                <td>{{ $assignment->interactions->count() }}</td>
-                                                                <td>{{ optional($assignment->interactions->last())->note ?? '—' }}</td>
-                                                            </tr>
-                                                        @endforeach
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                            @php
+                                                $acceptedGrouped = $acceptedAssignments->groupBy(fn($a) => $a->assigned_user_id);
+                                            @endphp
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach($acceptedGrouped as $uid => $group)
+                                                    @php $agent = optional($group->first()->agent); @endphp
+                                                    <li class="d-flex justify-content-between align-items-center py-1 cc-approved-user" data-user-id="{{ $uid }}" style="cursor:pointer;">
+                                                            <div class="small">{{ $agent->username ?? 'User '.$uid }} — {{ $agent->name ?? '' }}</div>
+                                                            <span class="badge bg-secondary text-white small">{{ $group->count() }}</span>
+                                                        </li>
+                                                @endforeach
+                                            </ul>
                                         @endif
                                     </div>
                                 </div>
@@ -247,7 +248,7 @@
         </div>
         <div class="row mt-4">
             <div class="col-12">
-                <div class="card shadow-sm border-0">
+                <div class="card shadow-sm border-0" style="border-radius: 1rem;">
                     <div class="card-body">
                         <h2 class="h5 mb-3">Recent reports</h2>
                         <div class="list-group">
@@ -267,6 +268,69 @@
                             @empty
                                 <div class="text-muted small">The system will list reports as soon as call center exports are generated.</div>
                             @endforelse
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="ccAssignmentRowModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content card shadow-sm">
+            <div class="modal-header">
+                <h5 class="modal-title">Accepted rows</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row gy-4">
+                    <div class="col-lg-6">
+                        <p class="small text-uppercase text-muted mb-2">Assigned rows for this agent</p>
+                        <div id="ccAssignmentRowList" class="list-group shadow-sm" style="max-height: 380px; overflow:auto;"></div>
+                        <div id="ccAssignmentDetailPane" class="mt-3">
+                            <p class="small text-uppercase text-muted mb-1">Selected row</p>
+                            <div id="ccAssignmentDetailFields" class="border rounded-3 p-3 bg-light small text-muted">Select a row to see the details.</div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <div id="ccSelectedName" class="fw-semibold">&nbsp;</div>
+                                <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
+                            </div>
+                            <div>
+                                <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+                            </div>
+                        </div>
+                        <div class="card-body bg-white rounded-3">
+                        <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
+                            <input type="hidden" name="assignment_id" id="ccCallAssignmentId">
+                            <div class="col-12">
+                                <label class="form-label small">Outcome</label>
+                                <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
+                                    <option value="number invalid">number invalid</option>
+                                    <option value="user not authorized">user not authorized</option>
+                                    <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
+                                    <option value="agreed to pay within 7 days">agreed to pay within 7 days</option>
+                                    <option value="Not answered">Not answered</option>
+                                </select>
+                            </div>
+                            <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
+                                <label class="form-label small">Payment expected at</label>
+                                <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" disabled>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Note (optional)</label>
+                                <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" disabled></textarea>
+                            </div>
+                            <div class="col-12 d-flex gap-2">
+                                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save call</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                            </div>
+                            <div class="col-12">
+                                <div id="ccCallStatus" class="small text-muted"></div>
+                            </div>
+                        </form>
                         </div>
                     </div>
                 </div>
@@ -466,6 +530,10 @@
             if (recallBtn && recallForm) {
                 recallBtn.addEventListener('click', async (e) => {
                     e.preventDefault();
+                    if (recallBtn.disabled) {
+                        alert('Recall preview is disabled once rows have already been accepted. You can reassign those rows from the Assigned Rows page.');
+                        return;
+                    }
                     const reportId = recallBtn.dataset.reportId;
                     try {
                         const res = await fetch(`/cc/reports/${reportId}/recall/preview`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -497,6 +565,228 @@
                     }
                 });
             }
+
+                        const approvedUserEls = document.querySelectorAll('.cc-approved-user');
+                        if (!approvedUserEls.length) return;
+
+                        const assignmentRowModal = document.getElementById('ccAssignmentRowModal');
+                        const assignmentList = document.getElementById('ccAssignmentRowList');
+                        const assignmentDetailFields = document.getElementById('ccAssignmentDetailFields');
+                        const callForm = document.getElementById('ccAssignmentCallForm');
+                        const outcomeEl = document.getElementById('ccCallOutcome');
+                        const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
+                        const paymentInput = document.getElementById('ccPaymentExpected');
+                        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                        let assignmentModalInstance = null;
+                        if (assignmentRowModal && window.bootstrap) assignmentModalInstance = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
+
+                        function showModalOrFallback(node, bsInstance) {
+                            if (!node) return;
+                            if (bsInstance && typeof bsInstance.show === 'function') {
+                                node.style.display = '';
+                                bsInstance.show();
+                                return;
+                            }
+                            node.style.display = 'block';
+                            node.classList.add('cc-fallback-modal');
+                            if (!document.getElementById('cc-fallback-backdrop')) {
+                                const backdrop = document.createElement('div');
+                                backdrop.id = 'cc-fallback-backdrop';
+                                backdrop.className = 'cc-fallback-backdrop';
+                                backdrop.addEventListener('click', () => hideModalOrFallback(node));
+                                document.body.appendChild(backdrop);
+                            }
+                        }
+
+                        function hideModalOrFallback(node) {
+                            if (!node) return;
+                            node.style.display = 'none';
+                            node.classList.remove('cc-fallback-modal');
+                            const back = document.getElementById('cc-fallback-backdrop');
+                            if (back) back.remove();
+                        }
+
+                        document.addEventListener('click', function (ev) {
+                            const btn = ev.target.closest('[data-bs-dismiss="modal"]');
+                            if (!btn) return;
+                            const modal = btn.closest('.modal');
+                            if (modal) hideModalOrFallback(modal);
+                        });
+
+                        async function loadUserAccepted(userId) {
+                            const params = new URLSearchParams();
+                            if (typeof {{ json_encode($selectedReport->id ?? null) }} !== 'undefined' && {{ json_encode($selectedReport->id ?? null) }}) {
+                                params.set('report', '{{ $selectedReport->id ?? '' }}');
+                            }
+                            const res = await fetch(`/cc/assignments/${userId}/rows?${params.toString()}`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            if (!res.ok) return null;
+                            return await res.json();
+                        }
+
+                        async function loadAssignmentDetails(assignmentId) {
+                            if (!assignmentId) return null;
+                            const res = await fetch(`/cc/assignments/${assignmentId}/details`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            if (!res.ok) return null;
+                            return await res.json();
+                        }
+
+                        function renderDetails(data) {
+                            if (!assignmentDetailFields) return;
+                            // reset form disabled state and visual wrapper
+                            const outcome = document.getElementById('ccCallOutcome');
+                            const note = document.getElementById('ccCallNote');
+                            const pay = document.getElementById('ccPaymentExpected');
+                            const saveBtn = document.getElementById('ccSaveCallBtn');
+                            const startBtn = document.getElementById('ccStartCallBtn');
+                            const wrapper = document.getElementById('ccCallFormWrapper');
+                            if (outcome) outcome.disabled = true;
+                            if (note) note.disabled = true;
+                            if (pay) pay.disabled = true;
+                            if (saveBtn) {
+                                saveBtn.disabled = true;
+                                saveBtn.classList.add('d-none');
+                            }
+                            if (startBtn) startBtn.disabled = false;
+                            if (wrapper) wrapper.classList.add('cc-disabled');
+
+                            if (!data) {
+                                assignmentDetailFields.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
+                                document.getElementById('ccSelectedName').textContent = '';
+                                document.getElementById('ccSelectedAmounts').textContent = '';
+                                return;
+                            }
+
+                            // populate left detail pane
+                            assignmentDetailFields.innerHTML = `
+                                <div class="mb-2"><strong>Phone:</strong> ${data.phone ?? '—'}</div>
+                                <div class="mb-2"><strong>Address:</strong> ${data.address ?? '—'}</div>
+                                <div class="mb-2"><strong>RTOM:</strong> ${data.rtom ?? '—'}</div>
+                                <div class="mb-2"><strong>Customer ref:</strong> ${data.customer_ref ?? '—'}</div>
+                                <div class="mb-2"><strong>Account #:</strong> ${data.account_num ?? '—'}</div>
+                                <div class="mb-2"><strong>Sales person:</strong> ${data.sales_person ?? '—'}</div>
+                                <div class="mb-2"><strong>Sales channel:</strong> ${data.sales_channel ?? '—'}</div>
+                                <div class="mb-2"><strong>Full address:</strong> ${data.full_address ?? '—'}</div>
+                            `;
+
+                            // interactions history (descending)
+                            if (Array.isArray(data.interactions) && data.interactions.length) {
+                                let hist = '<div class="mt-3"><div class="small text-muted mb-2">Recent interactions</div><div class="list-group list-group-flush">';
+                                data.interactions.forEach(i => {
+                                    hist += `<div class="list-group-item small">`;
+                                    hist += `<div class="fw-semibold">${i.agent_name ? i.agent_name : ('Agent #'+(i.agent_id||'—'))} <span class="text-muted small">${i.created_at ? ' — '+i.created_at : ''}</span></div>`;
+                                    hist += `<div class="text-muted">${i.outcome ? i.outcome : '—'}`;
+                                    if (i.account_number) hist += ` — Acc: ${i.account_number}`;
+                                    hist += `</div>`;
+                                    if (i.note) hist += `<div class="mt-1">${i.note}</div>`;
+                                    hist += `</div>`;
+                                });
+                                hist += '</div></div>';
+                                assignmentDetailFields.innerHTML += hist;
+                            }
+
+                            // set selected name and amounts in right column
+                            const selName = document.getElementById('ccSelectedName');
+                            const selAmt = document.getElementById('ccSelectedAmounts');
+                            if (selName) selName.textContent = data.address_name || data.name || '';
+                            if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls: ${data.call_count}` : '');
+
+                            // wire Start Call button to enable form
+                            const startBtnEl = document.getElementById('ccStartCallBtn');
+                            if (startBtnEl) {
+                                startBtnEl.onclick = () => {
+                                    if (outcome) outcome.disabled = false;
+                                    if (note) note.disabled = false;
+                                    if (pay) pay.disabled = false;
+                                    if (saveBtn) {
+                                        saveBtn.disabled = false;
+                                        saveBtn.classList.remove('d-none');
+                                    }
+                                    if (wrapper) wrapper.classList.remove('cc-disabled');
+                                    startBtnEl.disabled = true;
+                                };
+                            }
+                        }
+
+                        approvedUserEls.forEach(el => {
+                            el.addEventListener('click', async function () {
+                                const userId = this.dataset.userId;
+                                const payload = await loadUserAccepted(userId);
+                                if (!assignmentList) return;
+                                assignmentList.innerHTML = '';
+                                if (!payload || !payload.rows || !payload.rows.length) {
+                                    assignmentList.innerHTML = '<div class="small text-muted p-3">No accepted rows.</div>';
+                                } else {
+                                    payload.rows.forEach(async r => {
+                                        const btn = document.createElement('button');
+                                        btn.type = 'button';
+                                        btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-start';
+                                        btn.dataset.assignmentId = r.assignment_id;
+                                        btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'}</div></div><div class="text-muted small">#${r.row_id}</div>`;
+                                        btn.addEventListener('click', async () => {
+                                            const assignmentId = btn.dataset.assignmentId;
+                                            document.getElementById('ccCallAssignmentId').value = assignmentId;
+                                            const details = await loadAssignmentDetails(assignmentId);
+                                            renderDetails(details);
+                                        });
+                                        assignmentList.appendChild(btn);
+                                    });
+                                }
+                                showModalOrFallback(assignmentRowModal, assignmentModalInstance);
+                            });
+                        });
+
+                        outcomeEl?.addEventListener('change', function () {
+                            const v = this.value;
+                            if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
+                                paymentWrap.style.display = 'block';
+                                const days = v.includes('3') ? 3 : 7;
+                                const d = new Date();
+                                d.setDate(d.getDate() + days);
+                                paymentInput.value = d.toISOString().slice(0,10);
+                            } else {
+                                paymentWrap.style.display = 'none';
+                                paymentInput.value = '';
+                            }
+                        });
+
+                        callForm?.addEventListener('submit', async function (ev) {
+                            ev.preventDefault();
+                            const aid = document.getElementById('ccCallAssignmentId').value;
+                            if (!aid) {
+                                document.getElementById('ccCallStatus').textContent = 'Select a row first.';
+                                return;
+                            }
+                            const formData = new FormData(this);
+                            try {
+                                const res = await fetch(`/cc/assignments/${aid}/interactions`, { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });
+                                if (!res.ok) throw new Error('failed');
+                                document.getElementById('ccCallStatus').textContent = 'Saved.';
+                                // clear the call form so values don't persist after save
+                                try {
+                                    callForm.reset();
+                                    if (paymentWrap) paymentWrap.style.display = 'none';
+                                    if (paymentInput) paymentInput.value = '';
+                                    if (outcomeEl) outcomeEl.selectedIndex = 0;
+                                    const saveBtn = document.getElementById('ccSaveCallBtn');
+                                    if (saveBtn) {
+                                        saveBtn.disabled = true;
+                                        saveBtn.classList.add('d-none');
+                                    }
+                                    const wrapper = document.getElementById('ccCallFormWrapper');
+                                    if (wrapper) wrapper.classList.add('cc-disabled');
+                                    const startBtn = document.getElementById('ccStartCallBtn');
+                                    if (startBtn) startBtn.disabled = false;
+                                } catch (e) {
+                                    console.error('Error clearing form after save', e);
+                                }
+                                // refresh details to show new interaction on top
+                                const updated = await loadAssignmentDetails(aid);
+                                renderDetails(updated);
+                            } catch (err) {
+                                document.getElementById('ccCallStatus').textContent = 'Save failed.';
+                            }
+                        });
+                }
         });
     </script>
 @endsection
@@ -542,10 +832,71 @@
         padding: 3rem;
     }
 
-    @media (max-width: 768px) {
+    #cc-report-loader {
+        display: none;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 999px;
+        background: rgba(248, 249, 252, 0.9);
+    }
+
+    #cc-report-loader.cc-report-loader--visible {
+        display: inline-flex;
+    }
+
+    .cc-report-loader__inner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .cc-report-loader__spinner {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid rgba(22, 22, 22, 0.1);
+        border-top-color: #0d6efd;
+        animation: cc-report-spinner 0.8s linear infinite;
+    }
+
+    @keyframes cc-report-spinner {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* fallback modal styles when Bootstrap CSS isn't available */
         .process-upload-card.process-upload-card--transparent .card-body {
             padding: 2rem;
         }
+    }
+
+    /* fallback modal styles when Bootstrap CSS isn't available */
+    .cc-fallback-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 1070;
+    }
+    .cc-fallback-modal {
+        position: fixed !important;
+        inset: 50% auto auto 50% !important;
+        transform: translate(-50%, -50%) !important;
+        z-index: 1080 !important;
+        max-width: 940px !important;
+        width: calc(100% - 40px) !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        border-radius: 0.5rem;
+        background: #fff;
+    }
+    /* disabled form wrapper visual */
+    #ccCallFormWrapper.cc-disabled {
+        opacity: 0.6;
+        pointer-events: none;
     }
 </style>
 @endpush

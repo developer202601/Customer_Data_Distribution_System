@@ -9,7 +9,9 @@
         @endphp
         <ul class="navbar-nav flex-row align-items-center gap-2 ms-3">
             @foreach($navLinks as $link)
-            @php($isActive = request()->routeIs(...$link['active']))
+            @php
+                $isActive = request()->routeIs(...$link['active']);
+            @endphp
             <li class="nav-item">
                 <a href="{{ route($link['route']) }}" class="nav-link {{ $isActive ? 'active fw-semibold' : '' }}" aria-current="{{ $isActive ? 'page' : 'false' }}">
                     {{ $link['label'] }}
@@ -23,10 +25,40 @@
                 <span class="theme-toggle__icon theme-toggle__icon--moon">☾</span>
                 <span class="visually-hidden">Toggle theme</span>
             </button>
-            @if($navbarRight !== '')
-            <div class="d-flex align-items-center" style="gap: 1rem;">
-                {!! $navbarRight !!}
-            </div>
+            @php
+                $sessionUser = session('user');
+                $showMinimalLogout = false;
+                if ($sessionUser && (isset($sessionUser['system']) && $sessionUser['system'] === 'cc')) {
+                    $uid = $sessionUser['id'] ?? null;
+                    if ($uid) {
+                        try {
+                            $dbUser = \App\Models\CallCenter\CallCenterUser::find($uid);
+                            if ($dbUser) {
+                                $showMinimalLogout = empty(trim((string)$dbUser->name));
+                            } else {
+                                $showMinimalLogout = empty($sessionUser['name']);
+                            }
+                        } catch (\Throwable $e) {
+                            $showMinimalLogout = empty($sessionUser['name']);
+                        }
+                    } else {
+                        $showMinimalLogout = empty($sessionUser['name']);
+                    }
+                }
+            @endphp
+            @if($showMinimalLogout)
+                <div class="d-flex align-items-center" style="gap: 1rem;">
+                    <form action="{{ route('logout') }}" method="post" class="d-inline">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-secondary">Logout</button>
+                    </form>
+                </div>
+            @else
+                @if($navbarRight !== '')
+                <div class="d-flex align-items-center" style="gap: 1rem;">
+                    {!! $navbarRight !!}
+                </div>
+                @endif
             @endif
         </div>
     </div>

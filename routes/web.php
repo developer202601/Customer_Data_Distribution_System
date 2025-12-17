@@ -46,9 +46,18 @@ Route::middleware('session.auth')->group(function () {
 
     Route::prefix('cc')->name('cc.')->middleware('session.cc_user')->group(function () {
         Route::get('/', [CallCenterDashboardController::class, 'index'])->name('dashboard');
+        // allow callers to set their display name on first login
+        Route::post('/profile/name', [CallCenterUserController::class, 'setName'])->name('profile.setName');
+        Route::get('/payments/list', [CallCenterDashboardController::class, 'paymentList'])->name('payments.list');
+        Route::get('/caller/{id}/calls7', [CallCenterDashboardController::class, 'callerCalls7'])->name('caller.calls7');
 
         // Call center staff assignment endpoints
         Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
+        Route::get('/assignments/manage', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'manage'])->name('assignments.manage');
+        Route::post('/assignments/{user}/accept-all', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'acceptAll'])->name('assignments.acceptAll');
+        Route::post('/assignments/{user}/reject-all', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'rejectAll'])->name('assignments.rejectAll');
+        Route::get('/assignments/{user}/rows', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'userRows'])->name('assignments.userRows');
+        Route::get('/assignments/{assignment}/details', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'assignmentDetails'])->name('assignments.details');
         Route::post('/assignments/{id}/claim', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'claim'])->name('assignments.claim');
         Route::post('/assignments/{id}/complete', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'complete'])->name('assignments.complete');
         Route::post('/assignments/{id}/interactions', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'storeInteraction'])->name('assignments.interactions.store');

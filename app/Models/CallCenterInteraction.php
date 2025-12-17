@@ -14,17 +14,20 @@ class CallCenterInteraction extends Model
     protected $fillable = [
         'assignment_id',
         'agent_id',
+        'account_number',
         'outcome',
         'note',
         'payment_expected_at',
         'paid',
         'payment_date',
+        'paid_amount',
     ];
 
     protected $casts = [
         'paid' => 'boolean',
         'payment_expected_at' => 'date',
         'payment_date' => 'date',
+        'paid_amount' => 'decimal:2',
     ];
 
     public function assignment()

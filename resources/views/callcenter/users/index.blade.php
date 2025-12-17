@@ -44,7 +44,7 @@
                         <h2 class="h6 mb-0">Existing Users</h2>
                         <span class="text-muted small">{{ $users->count() }} users</span>
                     </div>
-                        <div class="table-responsive">
+                        <div class="table-responsive cc-table-container">
                             <table class="table align-middle mb-0">
                                 <thead>
                                     <tr>

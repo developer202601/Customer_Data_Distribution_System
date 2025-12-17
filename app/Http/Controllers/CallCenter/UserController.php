@@ -97,4 +97,33 @@ class UserController extends Controller
 
         return redirect()->route('cc.users.index')->with('status', 'User deleted successfully.');
     }
+
+    /**
+     * Set the current caller's display name (used for first-login flow).
+     */
+    public function setName(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $sessionUser = session('user');
+        if (!$sessionUser || empty($sessionUser['id'])) {
+            return response()->json(['error' => 'Not authenticated'], 403);
+        }
+
+        $user = CallCenterUser::find($sessionUser['id']);
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+
+        $user->name = $validated['name'];
+        $user->save();
+
+        // update session copy
+        $sessionUser['name'] = $user->name;
+        session(['user' => $sessionUser]);
+
+        return response()->json(['success' => true, 'name' => $user->name]);
+    }
 }

@@ -6,8 +6,11 @@
     <div class="offcanvas-body">
         <nav class="nav flex-column cc-sidebar-nav">
             <a class="nav-link" href="{{ route('cc.dashboard') }}">Overview</a>
-            <a class="nav-link" href="{{ route('cc.users.index') }}">Manage Users</a>
-            <a class="nav-link" href="{{ route('cc.reports') }}">Reports</a>
+            @if(session('user.is_admin'))
+                <a class="nav-link" href="{{ route('cc.users.index') }}">Manage Users</a>
+                <a class="nav-link" href="{{ route('cc.reports') }}">Reports</a>
+            @endif
+            <a class="nav-link" href="{{ route('cc.assignments.manage') }}">Assigned Rows</a>
             <a class="nav-link" href="#">Queues</a>
         </nav>
     </div>

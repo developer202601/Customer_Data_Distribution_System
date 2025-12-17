@@ -487,6 +487,43 @@ body.theme-dark .process-upload-card--transparent {
     border-radius: 999px;
 }
 
+/* Call center table container to give rounded table surfaces matching process cards */
+.cc-table-container {
+    border-radius: 1.25rem;
+    overflow: hidden;
+    border: 1px solid var(--surface-border);
+    background: var(--table-body);
+}
+.cc-table-container .table {
+    margin-bottom: 0; /* ensure no extra gaps inside the rounded container */
+}
+
+/* Add horizontal padding so table content doesn't touch rounded edges */
+.cc-table-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+@media (min-width: 992px) {
+    .cc-table-container { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+/* View mode: when container data-mode is month or all, toggle visibility of primary/secondary pieces */
+.cc-table-container[data-mode="month"] .cc-month-primary { display: block; }
+.cc-table-container[data-mode="month"] .cc-all-primary { display: none; }
+.cc-table-container[data-mode="month"] .cc-all-secondary { display: block; color: var(--text-muted); }
+.cc-table-container[data-mode="month"] .cc-month-secondary { display: none; }
+
+.cc-table-container[data-mode="all"] .cc-month-primary { display: none; }
+.cc-table-container[data-mode="all"] .cc-all-primary { display: block; }
+.cc-table-container[data-mode="all"] .cc-all-secondary { display: none; }
+.cc-table-container[data-mode="all"] .cc-month-secondary { display: block; color: var(--text-muted); }
+
+.cc-table-container .cc-month-primary,
+.cc-table-container .cc-all-primary { font-weight: 700; }
+.cc-table-container .cc-month-secondary,
+.cc-table-container .cc-all-secondary { font-size: .9rem; }
+
 /* Toast top-center small tweak */
 .top-center-toast { left: 50%; transform: translateX(-50%); top: 0.75rem; position: fixed; z-index: 2100; }
 

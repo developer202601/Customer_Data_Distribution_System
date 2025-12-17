@@ -24,6 +24,9 @@ class CallCenterAssignment extends Model
         'rejected_at',
         'rejected_by',
         'rejection_note',
+        'paid',
+        'payment_date',
+        'paid_amount',
     ];
 
     protected $casts = [
@@ -32,6 +35,9 @@ class CallCenterAssignment extends Model
         'accepted_at' => 'datetime',
         'rejected' => 'boolean',
         'rejected_at' => 'datetime',
+        'paid' => 'boolean',
+        'payment_date' => 'date',
+        'paid_amount' => 'decimal:2',
     ];
 
     public function report()

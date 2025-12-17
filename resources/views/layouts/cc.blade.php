@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Call Center')</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
 </head>
@@ -62,6 +63,91 @@
             }
         })();
     </script>
+
+    @php
+        $ccUsernameMissing = false;
+        $sessionUser = session('user');
+        if ($sessionUser && (isset($sessionUser['system']) && $sessionUser['system'] === 'cc')) {
+            $uid = $sessionUser['id'] ?? null;
+            if ($uid) {
+                try {
+                    $dbUser = \App\Models\CallCenter\CallCenterUser::find($uid);
+                    if ($dbUser) {
+                        $ccUsernameMissing = empty(trim((string)$dbUser->name));
+                    } else {
+                        $ccUsernameMissing = empty($sessionUser['name']);
+                    }
+                } catch (\Throwable $e) {
+                    $ccUsernameMissing = empty($sessionUser['name']);
+                }
+            } else {
+                $ccUsernameMissing = empty($sessionUser['name']);
+            }
+        }
+    @endphp
+    @if($ccUsernameMissing)
+    <!-- Modal forcing callers to set display name on first login -->
+    <div class="modal fade" id="ccSetNameModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Welcome — please set your display name</h5>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">This name will be shown to customers and can be changed later in settings.</p>
+                    <div class="mb-3">
+                        <label for="ccDisplayName" class="form-label">Display name</label>
+                        <input id="ccDisplayName" type="text" class="form-control" maxlength="255" />
+                        <div id="ccDisplayNameError" class="form-text text-danger" style="display:none"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <form action="{{ route('logout') }}" method="post" class="d-inline me-auto">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-secondary">Logout</button>
+                    </form>
+                    <button type="button" id="ccSaveDisplayName" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            document.addEventListener('DOMContentLoaded', function () {
+                var modalEl = document.getElementById('ccSetNameModal');
+                var input = document.getElementById('ccDisplayName');
+                var saveBtn = document.getElementById('ccSaveDisplayName');
+                var err = document.getElementById('ccDisplayNameError');
+                // show modal (static backdrop) and prevent closing except via Save or Logout
+                var bs = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+                bs.show();
+
+                saveBtn.addEventListener('click', function () {
+                    var name = input.value.trim();
+                    if (!name) { err.style.display = 'block'; err.textContent = 'Please enter a name'; return; }
+                    fetch("{{ route('cc.profile.setName') }}", {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                        body: JSON.stringify({ name: name })
+                    }).then(function (r) { return r.json(); }).then(function (json) {
+                        if (json && json.success) {
+                            // reload page so server-side renders with name and navbar restored
+                            window.location.reload();
+                        } else {
+                            err.style.display = 'block';
+                            err.textContent = json.error || 'Failed to save name';
+                        }
+                    }).catch(function () {
+                        err.style.display = 'block';
+                        err.textContent = 'Failed to save name';
+                    });
+                });
+            });
+        })();
+    </script>
+    @endif
 
     <script>
         (function () {

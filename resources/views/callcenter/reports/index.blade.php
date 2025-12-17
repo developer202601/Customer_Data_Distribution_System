@@ -618,6 +618,69 @@
                 }
         });
     </script>
+<div class="modal fade" id="ccAssignmentRowModal" tabindex="-1" aria-labelledby="ccAssignmentRowModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="ccAssignmentRowModalLabel">Accepted rows</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row gy-4">
+          <div class="col-lg-6">
+            <p class="small text-uppercase text-muted mb-2">Assigned rows for this agent</p>
+            <div id="ccAssignmentRowList" class="list-group shadow-sm" style="max-height: 380px; overflow:auto;"></div>
+            <div id="ccAssignmentDetailPane" class="mt-3">
+              <p class="small text-uppercase text-muted mb-1">Selected row</p>
+              <div id="ccAssignmentDetailFields" class="border rounded-3 p-3 bg-light small text-muted">Select a row to see the details.</div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div id="ccSelectedName" class="fw-semibold">&nbsp;</div>
+                <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
+              </div>
+              <div>
+                <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+              </div>
+            </div>
+            <div id="ccCallFormWrapper" class="card-body bg-white rounded-3">
+            <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
+              <input type="hidden" name="assignment_id" id="ccCallAssignmentId">
+              <div class="col-12">
+                <label class="form-label small">Outcome</label>
+                <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
+                  <option value="number invalid">number invalid</option>
+                  <option value="user not authorized">user not authorized</option>
+                  <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
+                  <option value="agreed to pay within 7 days">agreed to pay within 7 days</option>
+                  <option value="Not answered">Not answered</option>
+                </select>
+              </div>
+              <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
+                <label class="form-label small">Payment expected at</label>
+                <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" disabled>
+              </div>
+              <div class="col-12">
+                <label class="form-label small">Note (optional)</label>
+                <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" disabled></textarea>
+              </div>
+              <div class="col-12 d-flex gap-2">
+                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save call</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+              </div>
+              <div class="col-12">
+                <div id="ccCallStatus" class="small text-muted"></div>
+              </div>
+            </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 @endsection
 
 @push('styles')

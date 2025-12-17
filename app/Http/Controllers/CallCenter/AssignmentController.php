@@ -43,6 +43,8 @@ class AssignmentController extends Controller
     {
         $reportId = $request->query('report');
 
+        $currentUserId = auth()->id() ?? session('user.id') ?? null;
+
         $q = CallCenterAssignment::with(['row', 'agent', 'report'])
             ->whereNotNull('assigned_user_id');
 
@@ -56,6 +58,9 @@ class AssignmentController extends Controller
             $q->where('call_center_report_id', (int) $reportId);
         }
 
+        if ($currentUserId) {
+            $q->where('assigned_user_id', $currentUserId);
+        }
         $assignments = $q->orderBy('assigned_user_id')->orderBy('id')->get();
 
         // Build per-assignment metadata for filtering by call activity and promise status within the report period
@@ -73,43 +78,43 @@ class AssignmentController extends Controller
 
         foreach ($assignments as $assignment) {
             $filterCounts['all']++;
+            // Count calls only after the user explicitly accepted this assignment.
+            // If the assignment is not yet accepted, calls-since count is zero.
             $row = $assignment->row;
-            $startDate = null;
-            if ($row && ! empty($row->new_arrears_column)) {
-                if (preg_match('/(\d{8})/', $row->new_arrears_column, $m)) {
-                    $d = $m[1];
+            $acct = $row->account_num ?? $row->customer_ref ?? null;
+            $callQBase = CallCenterInteraction::query();
+            if ($acct) {
+                $callQBase->where('account_number', $acct);
+            } else {
+                $callQBase->where('assignment_id', $assignment->id);
+            }
+
+            // Latest overall interaction (for display purposes)
+            $latestOverall = (clone $callQBase)->orderBy('created_at', 'desc')->first();
+
+            $callCount = 0;
+            $calledInPeriod = false;
+                if (! empty($assignment->accepted_at)) {
                     try {
-                        $startDate = Carbon::createFromFormat('Ymd', $d)->startOfDay();
-                    } catch (\Exception $e) {
-                        $startDate = null;
-                    }
+                        $startDate = Carbon::parse($assignment->accepted_at);
+                        $callQSince = (clone $callQBase)->where('created_at', '>=', $startDate->format('Y-m-d H:i:s'));
+                    $callCount = (clone $callQSince)->count();
+                    $calledInPeriod = $callCount > 0;
+                } catch (\Exception $e) {
+                    $callCount = 0;
+                    $calledInPeriod = false;
                 }
             }
 
-            $acct = $row->account_num ?? $row->customer_ref ?? null;
-            $callQ = CallCenterInteraction::query();
-            if ($acct) {
-                $callQ->where('account_number', $acct);
-            } else {
-                $callQ->where('assignment_id', $assignment->id);
-            }
-            if ($startDate) {
-                $callQ->where('created_at', '>=', $startDate->format('Y-m-d H:i:s'));
-            }
-
-            $latest = (clone $callQ)->orderBy('created_at', 'desc')->first();
-            $callCount = (clone $callQ)->count();
-            $calledInPeriod = $callCount > 0;
-
-            $latestOutcome = $latest->outcome ?? null;
-            $latestPaymentExpected = $latest && $latest->payment_expected_at ? Carbon::parse($latest->payment_expected_at)->toDateString() : null;
-            $latestPaid = (bool) ($latest->paid ?? false);
+            $latestOutcome = $latestOverall->outcome ?? null;
+            $latestPaymentExpected = $latestOverall && $latestOverall->payment_expected_at ? Carbon::parse($latestOverall->payment_expected_at)->toDateString() : null;
+            $latestPaid = (bool) ($latestOverall->paid ?? false);
 
             $promiseOverdue = false;
-            if ($latest && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
-                if (! $latestPaid && $latest->payment_expected_at) {
+            if ($latestOverall && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
+                if (! $latestPaid && $latestOverall->payment_expected_at) {
                     try {
-                        $due = Carbon::parse($latest->payment_expected_at)->endOfDay();
+                        $due = Carbon::parse($latestOverall->payment_expected_at)->endOfDay();
                         if ($due->lt($now)) {
                             $promiseOverdue = true;
                         }
@@ -155,6 +160,21 @@ class AssignmentController extends Controller
             }
         }
 
+        // Determine if the current user has assignments from multiple reports
+        $userReportIds = $assignments->pluck('call_center_report_id')->filter()->unique()->values();
+        $latestReportId = $userReportIds->isNotEmpty() ? $userReportIds->max() : null;
+        $latestReportCount = $latestReportId ? $assignments->where('call_center_report_id', $latestReportId)->count() : 0;
+        // count only unaccepted (pending) rows from the latest report for the banner
+        $latestReportPending = $latestReportId ? $assignments->where('call_center_report_id', $latestReportId)->where('accepted', false)->count() : 0;
+        $latestReportLabel = null;
+        if ($latestReportId) {
+            $lr = \App\Models\CallCenterReport::find((int) $latestReportId);
+            if ($lr) {
+                $dm = $lr->dataset_month;
+                $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm,0,4).'/'.substr($dm,4,2).' report' : ($lr->dataset_month ?: 'Report #'.$lr->id);
+            }
+        }
+
         return view('callcenter.assignments.manage', [
             'assignments' => $assignments,
             'grouped' => $grouped,
@@ -162,6 +182,12 @@ class AssignmentController extends Controller
             'reportLabel' => $reportLabel,
             'assignmentMeta' => $assignmentMeta,
             'filterCounts' => $filterCounts,
+            'userReportIds' => $userReportIds,
+            'latestReportId' => $latestReportId,
+            'latestReportCount' => $latestReportCount,
+            'latestReportPending' => $latestReportPending,
+            'latestReportLabel' => $latestReportLabel,
+            'currentUserId' => $currentUserId,
         ]);
     }
 
@@ -175,11 +201,13 @@ class AssignmentController extends Controller
         if ($reportId) $query->where('call_center_report_id', (int) $reportId);
 
         $assignments = $query->get();
+        $acceptedIds = [];
+        $masterRowIds = [];
         foreach ($assignments as $assignment) {
             $assignment->update([
                 'accepted' => true,
                 'accepted_at' => now(),
-                'status' => 'completed',
+                'status' => 'pending',
                 'locked_at' => null,
                 'locked_by' => null,
             ]);
@@ -189,13 +217,56 @@ class AssignmentController extends Controller
                 'outcome' => 'accepted',
                 'note' => 'Bulk accepted by admin/user',
             ]);
+            $acceptedIds[] = $assignment->id;
+            if ($assignment->master_dataset_row_id) $masterRowIds[] = $assignment->master_dataset_row_id;
+        }
+
+        // If these accepted assignments correspond to master dataset rows that were
+        // previously assigned from earlier reports, mark those older assignments
+        // as completed so they no longer appear as active/pending rows.
+        if (!empty($masterRowIds)) {
+            $masterRowIds = array_values(array_unique($masterRowIds));
+            $prevQuery = CallCenterAssignment::where('assigned_user_id', $userId)
+                ->whereIn('master_dataset_row_id', $masterRowIds)
+                ->where(function ($q) use ($reportId) {
+                    if ($reportId) {
+                        $q->where('call_center_report_id', '<>', (int) $reportId);
+                    }
+                })
+                ->whereNotIn('id', $acceptedIds)
+                ->where('status', '<>', 'completed');
+
+            $prevQuery->update([
+                'status' => 'completed',
+                'locked_at' => null,
+                'locked_by' => null,
+            ]);
         }
 
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['accepted' => $assignments->count()]);
+            $totalPending = CallCenterAssignment::where('assigned_user_id', $userId)
+                ->where('accepted', true)
+                ->where('status', 'pending')
+                ->count();
+            $latestReportAccepted = 0;
+            if ($reportId) {
+                $latestReportAccepted = CallCenterAssignment::where('assigned_user_id', $userId)
+                    ->where('call_center_report_id', (int) $reportId)
+                    ->where('accepted', true)
+                    ->where('status', 'pending')
+                    ->count();
+            }
+            return response()->json([
+                'accepted' => $assignments->count(),
+                'total_pending' => $totalPending,
+                'latest_report_id' => $reportId,
+                'latest_report_accepted' => $latestReportAccepted,
+            ]);
         }
 
-        return Redirect::route('cc.assignments.manage', ['report' => $reportId])->with('status', 'Accepted '.$assignments->count().' assignments.');
+        // Non-AJAX redirect: use a neutral flash message to avoid exposing
+        // implementation or host details in the UI toast.
+        return Redirect::route('cc.assignments.manage', ['report' => $reportId])->with('status', 'Assignments updated.');
     }
 
     /**
@@ -227,10 +298,18 @@ class AssignmentController extends Controller
         }
 
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['rejected' => $assignments->count()]);
+            $totalPending = CallCenterAssignment::where('assigned_user_id', $userId)
+                ->where('accepted', true)
+                ->where('status', 'pending')
+                ->count();
+            return response()->json([
+                'rejected' => $assignments->count(),
+                'total_pending' => $totalPending,
+            ]);
         }
 
-        return Redirect::route('cc.assignments.manage', ['report' => $reportId])->with('status', 'Rejected '.$assignments->count().' assignments.');
+        // Non-AJAX redirect: neutral flash message
+        return Redirect::route('cc.assignments.manage', ['report' => $reportId])->with('status', 'Assignments updated.');
     }
 
     /**
@@ -244,13 +323,23 @@ class AssignmentController extends Controller
         }
 
         $reportId = $request->query('report');
+        $includeCompleted = filter_var($request->query('include_completed', false), FILTER_VALIDATE_BOOLEAN);
         $perPage = max(1, min((int) $request->query('per_page', 50), 200));
         $page = max(1, (int) $request->query('page', 1));
         $offset = ($page - 1) * $perPage;
 
         $q = CallCenterAssignment::with('row')
-            ->where('assigned_user_id', $userId)
-            ->where('accepted', true);
+            ->where('assigned_user_id', $userId);
+        // When include_completed is requested we want to return either accepted
+        // assignments (active) or historical completed assignments so previous
+        // report rows remain visible. Otherwise only return accepted+pending rows.
+        if ($includeCompleted) {
+            $q->where(function ($qq) {
+                $qq->where('accepted', true)->orWhere('status', 'completed');
+            });
+        } else {
+            $q->where('accepted', true)->where('status', 'pending');
+        }
         if ($reportId) $q->where('call_center_report_id', (int) $reportId);
 
         $total = (clone $q)->count();
@@ -261,40 +350,40 @@ class AssignmentController extends Controller
             ->get()
             ->map(function ($a) {
                 $row = $a->row;
-                $startDate = null;
-                if ($row && ! empty($row->new_arrears_column)) {
-                    if (preg_match('/(\d{8})/', $row->new_arrears_column, $m)) {
-                        try {
-                            $startDate = Carbon::createFromFormat('Ymd', $m[1])->startOfDay();
-                        } catch (\Exception $e) {
-                            $startDate = null;
-                        }
+                // Count calls only after the assignment was accepted by the user.
+                $acct = $row->account_num ?? $row->customer_ref ?? null;
+                $callQBase = CallCenterInteraction::query();
+                if ($acct) {
+                    $callQBase->where('account_number', $acct);
+                } else {
+                    $callQBase->where('assignment_id', $a->id);
+                }
+
+                // latest overall for display purposes
+                $latestOverall = (clone $callQBase)->orderBy('created_at', 'desc')->first();
+
+                $callCount = 0;
+                $calledInPeriod = false;
+                if (! empty($a->accepted_at)) {
+                    try {
+                        $startDate = Carbon::parse($a->accepted_at);
+                        $callQSince = (clone $callQBase)->where('created_at', '>=', $startDate->format('Y-m-d H:i:s'));
+                        $callCount = (clone $callQSince)->count();
+                        $calledInPeriod = $callCount > 0;
+                    } catch (\Exception $e) {
+                        $callCount = 0;
+                        $calledInPeriod = false;
                     }
                 }
 
-                $acct = $row->account_num ?? $row->customer_ref ?? null;
-                $callQ = CallCenterInteraction::query();
-                if ($acct) {
-                    $callQ->where('account_number', $acct);
-                } else {
-                    $callQ->where('assignment_id', $a->id);
-                }
-                if ($startDate) {
-                    $callQ->where('created_at', '>=', $startDate->format('Y-m-d H:i:s'));
-                }
-
-                $latest = (clone $callQ)->orderBy('created_at', 'desc')->first();
-                $callCount = (clone $callQ)->count();
-                $calledInPeriod = $callCount > 0;
-
-                $latestOutcome = $latest->outcome ?? null;
-                $latestPaymentExpected = $latest && $latest->payment_expected_at ? Carbon::parse($latest->payment_expected_at)->toDateString() : null;
-                $latestPaid = (bool) ($latest->paid ?? false);
+                $latestOutcome = $latestOverall->outcome ?? null;
+                $latestPaymentExpected = $latestOverall && $latestOverall->payment_expected_at ? Carbon::parse($latestOverall->payment_expected_at)->toDateString() : null;
+                $latestPaid = (bool) ($latestOverall->paid ?? false);
                 $promiseOverdue = false;
-                if ($latest && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
-                    if (! $latestPaid && $latest->payment_expected_at) {
+                if ($latestOverall && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
+                    if (! $latestPaid && $latestOverall->payment_expected_at) {
                         try {
-                            $due = Carbon::parse($latest->payment_expected_at)->endOfDay();
+                            $due = Carbon::parse($latestOverall->payment_expected_at)->endOfDay();
                             if ($due->lt(Carbon::now())) {
                                 $promiseOverdue = true;
                             }
@@ -307,6 +396,7 @@ class AssignmentController extends Controller
                 return [
                     'assignment_id' => $a->id,
                     'row_id' => $a->master_dataset_row_id,
+                    'report_id' => $a->call_center_report_id,
                     'address_name' => optional($row)->address_name,
                     'arrears' => optional($row)->new_arrears_value,
                     'bill' => optional($row)->latest_bill_mny,
@@ -361,33 +451,25 @@ class AssignmentController extends Controller
                 ];
             });
 
-        // determine report period start from the row's new_arrears_column if present
+        // Compute call_count as interactions since the assignment was accepted.
+        // Show all interactions in the modal, but only count those after
+        // `accepted_at`. If not accepted yet, count is zero.
         $callCount = 0;
         try {
-            $startDate = null;
-            if ($r && ! empty($r->new_arrears_column)) {
-                // expect format like NEW_ARREARS_YYYYMMDD
-                if (preg_match('/(\d{8})/', $r->new_arrears_column, $m)) {
-                    $d = $m[1];
-                    $startDate = \DateTime::createFromFormat('Ymd', $d);
-                    if ($startDate) {
-                        $startDate = $startDate->format('Y-m-d') . ' 00:00:00';
-                    } else {
-                        $startDate = null;
-                    }
-                }
-            }
-
             $countQ = \App\Models\CallCenterInteraction::query();
             if ($acct) {
                 $countQ->where('account_number', $acct);
             } else {
                 $countQ->where('assignment_id', $assignment->id);
             }
-            if ($startDate) {
+
+            if (! empty($assignment->accepted_at)) {
+                $startDate = Carbon::parse($assignment->accepted_at)->format('Y-m-d H:i:s');
                 $countQ->where('created_at', '>=', $startDate);
+                $callCount = $countQ->count();
+            } else {
+                $callCount = 0;
             }
-            $callCount = $countQ->count();
         } catch (\Exception $e) {
             $callCount = 0;
         }
@@ -395,6 +477,7 @@ class AssignmentController extends Controller
         return response()->json([
             'assignment_id' => $assignment->id,
             'row_id' => $assignment->master_dataset_row_id ?? $r->id ?? null,
+            'report_id' => $assignment->call_center_report_id ?? null,
             'address_name' => $r->address_name ?? null,
             'arrears' => $r->new_arrears_value ?? null,
             'bill' => $r->latest_bill_mny ?? null,
@@ -514,7 +597,7 @@ class AssignmentController extends Controller
         $assignment->update([
             'accepted' => true,
             'accepted_at' => now(),
-            'status' => 'completed',
+            'status' => 'pending',
             'locked_at' => null,
             'locked_by' => null,
         ]);
@@ -525,6 +608,20 @@ class AssignmentController extends Controller
             'outcome' => 'accepted',
             'note' => 'Assignment approved by staff',
         ]);
+
+        // mark any previous assignments for the same master row as completed
+        if ($assignment->master_dataset_row_id) {
+            CallCenterAssignment::where('assigned_user_id', $user->id)
+                ->where('master_dataset_row_id', $assignment->master_dataset_row_id)
+                ->where('id', '<>', $assignment->id)
+                ->where('call_center_report_id', '<>', $assignment->call_center_report_id)
+                ->where('status', '<>', 'completed')
+                ->update([
+                    'status' => 'completed',
+                    'locked_at' => null,
+                    'locked_by' => null,
+                ]);
+        }
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['accepted' => true]);

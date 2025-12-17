@@ -36,6 +36,24 @@ class DistributeCallCenterReport implements ShouldQueue
             return;
         }
 
+        // find the immediately previous report (by id) and mark all its assignments completed
+        try {
+            $prev = CallCenterReport::where('id', '<', $report->id)->orderBy('id', 'desc')->first();
+            if ($prev) {
+                DB::table('call_center_row_assignments')
+                    ->where('call_center_report_id', $prev->id)
+                    ->where('status', '<>', 'completed')
+                    ->update([
+                        'status' => 'completed',
+                        'locked_at' => null,
+                        'locked_by' => null,
+                        'updated_at' => Carbon::now()->toDateTimeString(),
+                    ]);
+            }
+        } catch (\Exception $e) {
+            // ignore failures to avoid blocking distribution
+        }
+
         // If a cancel token was provided, only proceed if the pending cache key exists.
         if ($this->cancelToken !== null) {
             $cacheKey = 'cc:pending:distribute:'.$this->cancelToken;
@@ -48,6 +66,23 @@ class DistributeCallCenterReport implements ShouldQueue
         $rowIds = $report->row_ids ?? [];
         if (empty($rowIds)) {
             return;
+        }
+
+        // Mark any previous assignments for these master rows as completed so they
+        // no longer appear as active when we assign the new report's rows.
+        try {
+            DB::table('call_center_row_assignments')
+                ->whereIn('master_dataset_row_id', $rowIds)
+                ->where('call_center_report_id', '<>', $report->id)
+                ->where('status', '<>', 'completed')
+                ->update([
+                    'status' => 'completed',
+                    'locked_at' => null,
+                    'locked_by' => null,
+                    'updated_at' => $now ?? Carbon::now()->toDateTimeString(),
+                ]);
+        } catch (\Exception $e) {
+            // ignore failures here to avoid blocking distribution; log if needed
         }
 
         $total = count($rowIds);

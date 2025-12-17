@@ -33,10 +33,30 @@
                                 @if($selectedReport)
                                     @php $recallDisabled = $acceptedAssignments->isNotEmpty(); @endphp
                                     <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
-                                    <form method="post" action="{{ route('cc.reports.recall', $selectedReport->id) }}" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-outline-warning rounded-pill px-3" {{ $recallDisabled ? 'disabled aria-disabled="true" title="Disallowed once rows are approved"' : 'title="Undo every assignment for this report"' }} onclick="return confirm('This will undo every assignment for this report as long as no rows were accepted. Continue?');">Undo all assignments</button>
-                                    </form>
+                                        <!-- Recall modal trigger -->
+                                        <button type="button" class="btn btn-outline-warning rounded-pill px-3" id="cc-recall-open-btn" {{ $recallDisabled ? 'disabled aria-disabled="true" title="Disallowed once rows were approved"' : 'title="Undo every assignment for this report"' }} data-bs-toggle="modal" data-bs-target="#ccRecallModal">Undo all assignments</button>
+
+                                        <!-- Recall confirmation modal -->
+                                        <div class="modal fade" id="ccRecallModal" tabindex="-1" aria-labelledby="ccRecallModalLabel" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title" id="ccRecallModalLabel">Undo all assignments</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <p>This will undo every assignment for this report as long as no rows were accepted. Continue?</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                        <form id="cc-recall-form" method="post" action="{{ route('cc.reports.recall', $selectedReport->id) }}" class="m-0">
+                                                            @csrf
+                                                            <button type="submit" class="btn btn-warning">Undo assignments</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                 @endif
                             </div>
                     </div>
@@ -44,7 +64,7 @@
                         <div class="col-md-8">
                             <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
                                 <label for="report" class="mb-0 text-muted small me-2" style="min-width: 180px;">Select report</label>
-                                <select id="report" name="report" class="form-select form-select-sm rounded-pill" onchange="this.form.submit()">
+                                <select id="report" name="report" class="form-select form-select-sm rounded" onchange="this.form.submit()">
                                     @foreach($reports->take(2) as $report)
                                         @php
                                             $dm = $report->dataset_month;
@@ -66,9 +86,7 @@
                         </div>
                     </div>
 
-                @if(session('status'))
-                    <div class="alert alert-success mt-4">{{ session('status') }}</div>
-                @endif
+                {{-- Status is shown as a toast at the top; avoid duplicate inline alert --}}
                 @if($errors->has('reassign'))
                     <div class="alert alert-warning mt-4">{{ $errors->first('reassign') }}</div>
                 @endif
@@ -542,7 +560,7 @@
                             const selName = document.getElementById('ccSelectedName');
                             const selAmt = document.getElementById('ccSelectedAmounts');
                             if (selName) selName.textContent = data.address_name || data.name || '';
-                            if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls: ${data.call_count}` : '');
+                            if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
 
                             // wire Start Call button to enable form
                             const startBtnEl = document.getElementById('ccStartCallBtn');

@@ -44,6 +44,15 @@
     .cc-assignment-card .list-group-item:hover {
         background: rgba(13, 110, 253, 0.08);
     }
+    .cc-interactions-scroll {
+        max-height: 120px; /* roughly two items tall */
+        overflow-y: auto;
+        border: 1px solid rgba(0,0,0,0.04);
+        border-radius: 0.375rem;
+        background: #fff;
+    }
+    .cc-interactions-table td { vertical-align: top; padding: .5rem .75rem; }
+    .cc-interactions-table tbody tr + tr td { border-top: 1px solid rgba(0,0,0,0.04); }
 </style>
 @endpush
 
@@ -90,10 +99,33 @@
 
                 <div class="mb-3 d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>Total assigned rows:</strong> {{ number_format($assignments->count()) }}
+                        <strong>Total assigned rows:</strong> <span id="ccTotalAssigned">{{ number_format($assignments->count()) }}</span>
                     </div>
                     <div class="text-muted small">{{ $reportLabel ?? 'All reports' }}</div>
                 </div>
+
+                @if(isset($latestReportId) && $latestReportId && ($latestReportPending ?? 0) > 0 && (count($userReportIds ?? []) > 1))
+                    <div class="alert alert-info">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>New assignments:</strong> {{ $latestReportPending }} rows from {{ $latestReportLabel ?? ('Report #'.$latestReportId) }}. Please accept or reject these new rows.
+                            </div>
+                            <div class="d-flex gap-2">
+                                <form method="post" action="{{ route('cc.assignments.acceptAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccAcceptNewForm">
+                                    @csrf
+                                    <input type="hidden" name="report" value="{{ $latestReportId }}">
+                                    <button type="submit" class="btn btn-sm btn-success">Accept new rows</button>
+                                </form>
+                                <form method="post" action="{{ route('cc.assignments.rejectAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccRejectNewForm">
+                                    @csrf
+                                    <input type="hidden" name="report" value="{{ $latestReportId }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Reject new rows</button>
+                                </form>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="ccToggleOldRows">Show previous report rows</button>
+                            </div>
+                        </div>
+                    </div>
+                @endif
 
                 <div class="row g-4 mt-3 cc-assigned-grid">
                     @php $singleGroup = $grouped->count() <= 1; @endphp
@@ -155,7 +187,7 @@
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_answered">Not answered (0)</button>
                                                 </div>
                                             </div>
-                                            <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}">
+                                            <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">
                                                 <div class="list-group-item text-muted small">Loading accepted rows...</div>
                                             </div>
                                             <div class="d-flex justify-content-center mt-2">
@@ -197,8 +229,9 @@
                                 <div id="ccSelectedName" class="fw-semibold">&nbsp;</div>
                                 <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
                             </div>
-                            <div>
+                            <div class="text-end">
                                 <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+                                <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
                             </div>
                         </div>
                         <div id="ccCallFormWrapperAssign" class="cc-disabled card-body bg-white rounded-3">
@@ -252,6 +285,26 @@ document.addEventListener('DOMContentLoaded', function () {
         assignmentRowModal.style.display = 'none';
     }
 
+    window._ccNeedsListRefresh = false;
+    function refreshAssignmentList() {
+        if (typeof loadAssignments === 'function') {
+            paging.page = 1;
+            loadAssignments(false);
+        }
+    }
+    try {
+        if (assignmentRowModal && window.bootstrap && typeof bootstrap.Modal === 'function') {
+            assignmentRowModal.addEventListener('hidden.bs.modal', function () {
+                try {
+                    if (window._ccNeedsListRefresh) {
+                        window._ccNeedsListRefresh = false;
+                        refreshAssignmentList();
+                    }
+                } catch (e) { /* ignore */ }
+            });
+        }
+    } catch (e) { /* ignore */ }
+
     function showModal() {
         if (!assignmentRowModal) return;
         if (bootstrapModal) {
@@ -276,6 +329,13 @@ document.addEventListener('DOMContentLoaded', function () {
         assignmentRowModal.classList.remove('cc-fallback-modal');
         const backdrop = document.getElementById('cc-fallback-backdrop');
         if (backdrop) backdrop.remove();
+        // If saving an interaction requested a list refresh, do it now
+        try {
+            if (window._ccNeedsListRefresh) {
+                window._ccNeedsListRefresh = false;
+                refreshAssignmentList();
+            }
+        } catch (e) { /* ignore */ }
     }
 
     document.addEventListener('click', function (ev) {
@@ -328,46 +388,73 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
 
         if (Array.isArray(data.interactions) && data.interactions.length) {
-            let hist = '<div class="mt-3"><div class="small text-muted mb-2">Recent interactions</div><div class="list-group list-group-flush">';
+            let hist = '<div class="mt-3"><div class="small text-muted mb-2">Recent interactions</div>';
+            hist += '<div class="cc-interactions-scroll"><table class="table table-sm mb-0 cc-interactions-table"><tbody>';
             data.interactions.forEach(i => {
-                hist += `<div class="list-group-item small">`;
-                hist += `<div class="fw-semibold">${i.agent_name ? i.agent_name : ('Agent #'+(i.agent_id||'—'))} <span class="text-muted small">${i.created_at ? ' — '+i.created_at : ''}</span></div>`;
-                hist += `<div class="text-muted">${i.outcome ? i.outcome : '—'}`;
-                if (i.account_number) hist += ` — Acc: ${i.account_number}`;
-                hist += `</div>`;
-                if (i.note) hist += `<div class="mt-1">${i.note}</div>`;
-                hist += `</div>`;
+                const agent = i.agent_name ? i.agent_name : ('Agent #'+(i.agent_id||'—'));
+                const created = i.created_at ? i.created_at : '';
+                const outcome = i.outcome ? i.outcome : '—';
+                const acct = i.account_number ? (' — Acc: ' + i.account_number) : '';
+                const noteHtml = i.note ? `<div class="small text-muted mt-1">${i.note}</div>` : '';
+                hist += `<tr><td style="width:38%"><div class="fw-semibold">${agent}</div><div class="text-muted small">${created}</div></td>`;
+                hist += `<td><div class="text-muted small">${outcome}${acct}</div>${noteHtml}</td></tr>`;
             });
-            hist += '</div></div>';
+            hist += '</tbody></table></div></div>';
             detailFields.innerHTML += hist;
         }
         const selName = document.getElementById('ccSelectedName');
         const selAmt = document.getElementById('ccSelectedAmounts');
         if (selName) selName.textContent = data.address_name || data.name || '';
-        if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls: ${data.call_count}` : '');
+        if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
 
-        if (startBtn) {
-            startBtn.onclick = () => {
-                if (outcome) outcome.disabled = false;
-                if (note) note.disabled = false;
-                if (pay) pay.disabled = false;
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.classList.remove('d-none');
+        // If this row belongs to a previous report, keep interactions read-only and show reason text
+        try {
+            const currentLatest = assignmentList?.dataset.latestReportId || '';
+            const reasonEl = document.getElementById('ccCallStatus');
+            const startNoteEl = document.getElementById('ccStartCallNote');
+
+            if (data.report_id && String(data.report_id) !== String(currentLatest)) {
+                if (startBtn) startBtn.disabled = true;
+                if (saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('d-none'); }
+                if (wrapper) wrapper.classList.add('cc-disabled');
+                // add a small notice inside details
+                detailFields.insertAdjacentHTML('afterbegin', '<div class="small text-muted mb-2">This row belongs to a previous report; interactions are read-only.</div>');
+                if (reasonEl) reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
+                if (startNoteEl) { startNoteEl.textContent = 'Call not allowed for this row.'; startNoteEl.style.display = ''; }
+            } else {
+                if (reasonEl) reasonEl.textContent = '';
+                if (startNoteEl) { startNoteEl.textContent = ''; startNoteEl.style.display = 'none'; }
+                if (startBtn) {
+                    startBtn.onclick = () => {
+                        if (outcome) outcome.disabled = false;
+                        if (note) note.disabled = false;
+                        if (pay) pay.disabled = false;
+                        if (saveBtn) {
+                            saveBtn.disabled = false;
+                            saveBtn.classList.remove('d-none');
+                        }
+                        if (wrapper) wrapper.classList.remove('cc-disabled');
+                        startBtn.disabled = true;
+                    };
                 }
-                if (wrapper) wrapper.classList.remove('cc-disabled');
-                startBtn.disabled = true;
-            };
-        }
+            }
+        } catch (e) { /* ignore */ }
     }
 
     const assignmentList = document.getElementById('ccAssignmentList');
     const loadMoreBtn = document.getElementById('ccLoadMoreBtn');
     const filterButtons = document.querySelectorAll('[data-cc-filter]');
+    const toggleOldRowsBtn = document.getElementById('ccToggleOldRows');
     const reportId = assignmentList?.dataset.reportId || '';
+    const latestReportId = assignmentList?.dataset.latestReportId || '';
     const userId = assignmentList?.dataset.userId || '';
     let paging = { page: 1, per_page: 50, has_more: false };
     let filterCounts = { all: 0, called: 0, uncalled: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
+    // Show previous-report (completed) rows by default when there are pending
+    // new rows for the latest report so agents can review the last-owner history.
+    const initialLatestPending = Number(assignmentList?.dataset.latestReportPending || 0);
+    let showOldRows = initialLatestPending > 0;
+    let currentFilter = 'all';
 
     function updateFilterCounts() {
         filterButtons.forEach(btn => {
@@ -378,32 +465,123 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function applyFilter(filter) {
+        const targetFilter = filter || currentFilter;
+        currentFilter = targetFilter;
         document.querySelectorAll('.accepted-row').forEach(row => {
             const called = row.dataset.called === '1';
             const overdue = row.dataset.overdue === '1';
             const outcome = (row.dataset.outcome || '').toLowerCase();
             let show = true;
-            if (filter === 'called') show = called;
-            else if (filter === 'uncalled') show = !called;
-            else if (filter === 'promise_overdue') show = overdue;
-            else if (filter === 'number_invalid') show = outcome === 'number invalid';
-            else if (filter === 'not_answered') show = outcome === 'not answered';
+            if (targetFilter === 'called') show = called;
+            else if (targetFilter === 'uncalled') show = !called;
+            else if (targetFilter === 'promise_overdue') show = overdue;
+            else if (targetFilter === 'number_invalid') show = outcome === 'number invalid';
+            else if (targetFilter === 'not_answered') show = outcome === 'not answered';
             row.style.display = show ? '' : 'none';
+            enforceOldRowState(row);
         });
+    }
+
+    function enforceOldRowState(row) {
+        if (row.dataset.oldRow === '1' && !showOldRows) {
+            row.style.display = 'none';
+        }
     }
 
     filterButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             filterButtons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            applyFilter(btn.dataset.ccFilter);
+            currentFilter = btn.dataset.ccFilter;
+            applyFilter(currentFilter);
         });
     });
+
+    function updateOldRowToggle() {
+        if (!toggleOldRowsBtn) return;
+        toggleOldRowsBtn.textContent = showOldRows ? 'Hide previous report rows' : 'Show previous report rows';
+        toggleOldRowsBtn.classList.toggle('active', showOldRows);
+    }
+
+    if (toggleOldRowsBtn) {
+        toggleOldRowsBtn.addEventListener('click', () => {
+            showOldRows = !showOldRows;
+            updateOldRowToggle();
+            applyFilter(currentFilter);
+        });
+        updateOldRowToggle();
+    }
+
+    // Intercept accept/reject banner forms to update the UI via AJAX
+    const acceptForm = document.getElementById('ccAcceptNewForm');
+    const rejectForm = document.getElementById('ccRejectNewForm');
+    const bannerEl = document.querySelector('.alert.alert-info');
+
+    async function submitBannerForm(form) {
+        if (!form) return;
+        const url = form.action;
+        const formData = new FormData(form);
+        try {
+            const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });
+            if (!res.ok) throw new Error('request failed');
+            const data = await res.json();
+            // Update counts in-place so we don't need a full reload
+            const totalEl = document.getElementById('ccTotalAssigned');
+            if (data.total_pending !== undefined && totalEl) {
+                totalEl.textContent = String(data.total_pending);
+            }
+                // Keep the assignment list dataset in sync so load logic knows
+                // whether to request completed (previous-report) rows or not.
+                try {
+                    if (assignmentList) {
+                        if (data.latest_report_id !== undefined) {
+                            assignmentList.dataset.latestReportId = String(data.latest_report_id || '');
+                        }
+                        // When new rows were accepted, clear the latest-report pending flag
+                        if (data.accepted !== undefined) {
+                            assignmentList.dataset.latestReportPending = '0';
+                        }
+                        // When rejected, server may leave pending counts alone; if provided, update
+                        if (data.rejected !== undefined && data.total_pending !== undefined) {
+                            assignmentList.dataset.latestReportPending = String(data.total_pending || '0');
+                        }
+                    }
+                } catch (e) { /* ignore dataset sync errors */ }
+            // hide banner and refresh visible assignments
+            if (bannerEl) bannerEl.style.display = 'none';
+            // If the action was a reject, keep previous rows visible; if accept, hide them.
+            if (data.rejected !== undefined) {
+                showOldRows = true;
+            } else {
+                showOldRows = false;
+            }
+            updateOldRowToggle();
+            paging.page = 1;
+            loadAssignments(false);
+            return data;
+        } catch (e) {
+            console.error('Banner action failed', e);
+            alert('Action failed. Please try again.');
+        }
+    }
+
+    // Banner forms (accept/reject) now submit as normal (non-AJAX).
+    // Previously these were intercepted to POST via fetch; that caused
+    // confusing UI messaging and duplicate network activity. Leave the
+    // forms to perform standard POST + redirect so the server flash
+    // message flow remains predictable.
 
     async function loadAssignments(append = false) {
         if (!assignmentList || !userId) return;
         const params = new URLSearchParams({ page: paging.page, per_page: paging.per_page });
         if (reportId) params.append('report', reportId);
+        // If there are pending new rows from the latest report, or the user has
+        // requested to see previous report rows, include completed assignments
+        // so last-report rows remain visible until new rows are accepted.
+        const latestPending = Number(assignmentList?.dataset.latestReportPending || 0);
+        if (latestPending > 0 || showOldRows) {
+            params.append('include_completed', '1');
+        }
         assignmentList.innerHTML = append ? assignmentList.innerHTML : '<div class="list-group-item text-muted small">Loading accepted rows...</div>';
         try {
             const res = await fetch(`/cc/assignments/${userId}/rows?${params.toString()}`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -425,6 +603,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.type = 'button';
                 btn.className = 'list-group-item list-group-item-action accepted-row';
                 btn.dataset.assignmentId = r.assignment_id;
+                // include report id to allow client to mark previous-report rows
+                if (r.report_id) btn.dataset.reportId = r.report_id;
+                if (r.report_id && latestReportId && String(r.report_id) !== String(latestReportId)) {
+                    btn.dataset.oldRow = '1';
+                    btn.classList.add('text-muted');
+                    btn.title = 'Belongs to previous report — read-only';
+                }
                 btn.dataset.called = r.called_in_period ? '1' : '0';
                 btn.dataset.overdue = r.promise_overdue ? '1' : '0';
                 btn.dataset.outcome = r.latest_outcome || '';
@@ -434,7 +619,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <strong>${r.address_name ?? '—'}</strong>
                             <div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'}</div>
                             <div class="small text-muted">
-                                Calls this period: ${r.call_count ?? 0}
+                                Calls since assignment: ${r.call_count ?? 0}
                                 ${r.latest_outcome ? ' • Latest: ' + r.latest_outcome : ''}
                                 ${r.latest_payment_expected_at ? ' • Due: ' + r.latest_payment_expected_at : ''}
                                 ${r.promise_overdue ? ' • <span class="text-danger">Promise overdue</span>' : ''}
@@ -442,7 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
                         <div class="text-muted small text-end">
                             <div>#${r.row_id ?? r.assignment_id}</div>
-                            ${r.called_in_period ? '<span class="badge bg-primary-subtle text-primary">Called</span>' : '<span class="badge bg-light text-muted">Not called</span>'}
+                            ${Number(r.call_count || 0) > 0 ? '<span class="badge bg-primary-subtle text-primary">Called</span>' : '<span class="badge bg-primary-subtle text-primary">Not yet called</span>'}
                         </div>
                     </div>`;
                 btn.addEventListener('click', async () => {
@@ -462,7 +647,14 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             updateFilterCounts();
             const active = document.querySelector('[data-cc-filter].active');
-            applyFilter(active ? active.dataset.ccFilter : 'all');
+            if (active) {
+                currentFilter = active.dataset.ccFilter;
+            } else {
+                const defaultBtn = document.querySelector(`[data-cc-filter="${currentFilter}"]`);
+                if (defaultBtn) defaultBtn.classList.add('active');
+            }
+            updateOldRowToggle();
+            applyFilter(currentFilter);
         } catch (e) {
             console.error(e);
             assignmentList.innerHTML = '<div class="list-group-item text-danger small">Failed to load rows.</div>';
@@ -522,6 +714,8 @@ document.addEventListener('DOMContentLoaded', function () {
             // refresh details to include the new interaction
             const updated = await fetchDetails(aid);
             renderDetails(updated);
+            // mark that assignment list should refresh once the modal is closed
+            try { window._ccNeedsListRefresh = true; } catch (e) { /* ignore */ }
         } catch (err) {
             statusField && (statusField.textContent = 'Save failed.');
         }

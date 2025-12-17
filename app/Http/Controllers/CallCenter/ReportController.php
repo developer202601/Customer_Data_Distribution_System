@@ -62,6 +62,7 @@ class ReportController extends Controller
 
         $anyAssigned = $assignedCount > 0;
         $allAssigned = $selectedReport ? ($selectedReport->row_count > 0 && $assignedCount >= $selectedReport->row_count) : false;
+        $distributableRows = $selectedReport ? max(0, $selectedReport->row_count - $assignedCount) : 0;
 
         return view('callcenter.reports.index', [
             'reports' => $reports,
@@ -72,6 +73,7 @@ class ReportController extends Controller
             'pendingCounts' => $pendingCounts,
             'anyAssigned' => $anyAssigned,
             'allAssigned' => $allAssigned,
+            'distributableRows' => $distributableRows,
         ]);
     }
 

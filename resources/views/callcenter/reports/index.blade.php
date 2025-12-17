@@ -104,30 +104,29 @@
                                         <form method="post" action="{{ route('cc.reports.distribute', $selectedReport->id) }}" class="row g-3 align-items-center">
                                             @csrf
                                             <div class="col-md-6">
-                                                <div class="d-flex mb-2 gap-2 align-items-center">
-                                                    <label class="small text-muted mb-0">Select users</label>
-                                                    <div class="form-check ms-3">
-                                                        <input class="form-check-input" type="checkbox" id="cc-users-select-all">
-                                                        <label class="form-check-label small" for="cc-users-select-all">Select all</label>
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <label class="small text-muted mb-0">Select users</label>
+                                                        <div class="form-check ms-3 mb-0">
+                                                            <input class="form-check-input" type="checkbox" id="cc-users-select-all">
+                                                            <label class="form-check-label small" for="cc-users-select-all">Select all</label>
+                                                        </div>
                                                     </div>
+                                                    <div id="cc-enabled-users" class="small text-muted">0 enabled</div>
                                                 </div>
                                                 <input type="search" id="cc-user-search" class="form-control form-control-sm mb-2" placeholder="Search users">
                                                 <div id="cc-user-checkboxes" class="position-relative" style="max-height:240px;">
                                                     <div id="cc-user-checkbox-list" class="list-group" style="max-height:240px;overflow:auto;">
                                                         @foreach($ccUsers as $user)
-                                                            <label class="list-group-item d-flex justify-content-between align-items-center user-checkbox-item" data-search="{{ strtolower($user->username . ' ' . $user->name) }}">
-                                                                <div>
-                                                                    <input type="checkbox" name="user_ids[]" value="{{ $user->id }}" class="form-check-input me-2 cc-user-checkbox" id="cc-user-{{ $user->id }}">
-                                                                    <label for="cc-user-{{ $user->id }}" class="mb-0 small">{{ $user->username }} — {{ $user->name }}</label>
+                                                            <div class="list-group-item d-flex justify-content-between align-items-center gap-2 user-checkbox-item" data-search="{{ strtolower($user->username . ' ' . $user->name) }}" data-user-id="{{ $user->id }}">
+                                                                <div class="form-check d-flex align-items-center gap-2 mb-0">
+                                                                    <input type="checkbox" name="user_ids[]" value="{{ $user->id }}" class="form-check-input cc-user-checkbox" id="cc-user-{{ $user->id }}">
+                                                                    <label class="form-check-label small mb-0" for="cc-user-{{ $user->id }}">{{ $user->username }} — {{ $user->name }}</label>
                                                                 </div>
-                                                                <div class="d-flex align-items-center gap-2">
-                                                                    <span class="badge bg-secondary text-white small">{{ $pendingCounts[$user->id] ?? 0 }}</span>
-                                                                    <span class="text-muted small cc-user-share" data-user-id="{{ $user->id }}">—</span>
-                                                                </div>
-                                                            </label>
+                                                                <span class="text-muted small cc-user-share" data-user-id="{{ $user->id }}">—</span>
+                                                            </div>
                                                         @endforeach
                                                     </div>
-                                                    <div id="cc-user-search-results" class="card position-absolute top-100 start-0 w-100 mt-1 shadow-sm d-none" style="max-height:250px;overflow:auto;z-index:10;padding: 10px 10px;"></div>
                                                 </div>
                                             </div>
                                             <div class="col-12">
@@ -251,33 +250,6 @@
                 <div class="card shadow-sm border-0" style="border-radius: 1rem;">
                     <div class="card-body">
                         <h2 class="h5 mb-3">Recent reports</h2>
-                        <div class="list-group">
-                            @forelse($reports as $report)
-                                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {{ optional($selectedReport)->id === $report->id ? 'active' : '' }}">
-                                    <div>
-                                        @php
-                                            $dm = $report->dataset_month;
-                                            $label = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($report->dataset_month ?: 'Unknown report');
-                                        @endphp
-                                        <strong>{{ $label }}</strong>
-                                    </div>
-                                    <span class="badge rounded-pill {{ optional($selectedReport)->id === $report->id ? 'bg-light text-dark' : 'bg-primary text-white' }}">
-                                        {{ number_format($report->row_count) }} rows
-                                    </span>
-                                </div>
-                            @empty
-                                <div class="text-muted small">The system will list reports as soon as call center exports are generated.</div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="modal fade" id="ccAssignmentRowModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content card shadow-sm">
             <div class="modal-header">
                 <h5 class="modal-title">Accepted rows</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -368,55 +340,55 @@
 
             const userSearch = document.getElementById('cc-user-search');
             const userSelectAll = document.getElementById('cc-users-select-all');
-            const userCheckboxContainer = document.getElementById('cc-user-checkboxes');
-            const userList = document.getElementById('cc-user-checkbox-list');
-            const userItems = userList ? Array.from(userList.querySelectorAll('.user-checkbox-item')) : [];
-            const searchResultsCard = document.getElementById('cc-user-search-results');
-            const baseList = userList;
-            const totalRows = Number(@json($selectedReport->row_count ?? 0));
+            const enabledIndicator = document.getElementById('cc-enabled-users');
+            const userCheckboxContainer = document.getElementById('cc-user-checkbox-list');
+            const distributableRows = Number(@json($distributableRows ?? 0));
 
-            const userMeta = userItems.map(item => {
-                const cb = item.querySelector('input.cc-user-checkbox');
-                const nameEl = item.querySelector('label');
-                const badgeEl = item.querySelector('.badge');
-                return {
-                    id: cb?.value,
-                    label: nameEl ? nameEl.textContent.trim() : '',
-                    searchText: (item.dataset.search || '').toLowerCase(),
-                    pending: badgeEl ? badgeEl.textContent.trim() : '0',
-                };
-            });
+            const userRows = userCheckboxContainer ? Array.from(userCheckboxContainer.querySelectorAll('.user-checkbox-item')) : [];
 
-            const recalcShares = () => {
-                const allCheckboxes = Array.from(document.querySelectorAll('.cc-user-checkbox'));
-                const checked = allCheckboxes.filter(cb => cb.checked);
-                const selectedCount = checked.length;
-                document.querySelectorAll('.cc-user-share').forEach(el => el.textContent = '—');
-                if (selectedCount === 0 || totalRows <= 0) return;
-                const base = Math.floor(totalRows / selectedCount);
-                let remainder = totalRows % selectedCount;
-                for (const cb of allCheckboxes) {
-                    if (!cb.checked) continue;
-                    const extra = remainder > 0 ? 1 : 0;
-                    const share = base + extra;
-                    remainder = Math.max(0, remainder - 1);
-                    const el = document.querySelector(`.cc-user-share[data-user-id="${cb.value}"]`);
-                    if (el) {
-                        const pct = totalRows ? Math.round((share / totalRows) * 100) : 0;
-                        el.textContent = `${share} (${pct}%)`;
-                    }
-                }
+            const getSearchQuery = () => (userSearch?.value || '').trim().toLowerCase();
+
+            const getAllCheckboxes = () => userCheckboxContainer
+                ? Array.from(userCheckboxContainer.querySelectorAll('input.cc-user-checkbox'))
+                : [];
+
+            const getVisibleRows = () => {
+                const q = getSearchQuery();
+                if (!q) return userRows;
+                return userRows.filter(item => (item.dataset.search || '').includes(q));
             };
 
-            const visibleUserCheckboxes = () => userItems
-                .filter(item => item.style.display !== 'none')
+            const getVisibleCheckboxes = () => getVisibleRows()
                 .map(item => item.querySelector('input.cc-user-checkbox'))
                 .filter(Boolean);
 
+            const updateShares = () => {
+                const allCheckboxes = getAllCheckboxes();
+                const checked = allCheckboxes.filter(cb => cb.checked);
+                document.querySelectorAll('.cc-user-share').forEach(el => el.textContent = '—');
+                if (!checked.length || distributableRows <= 0) return;
+                const base = Math.floor(distributableRows / checked.length);
+                let remainder = distributableRows % checked.length;
+                checked.forEach(cb => {
+                    const share = base + (remainder > 0 ? 1 : 0);
+                    remainder = Math.max(0, remainder - 1);
+                    const el = document.querySelector(`.cc-user-share[data-user-id="${cb.value}"]`);
+                    if (!el) return;
+                    const pct = distributableRows ? Math.round((share / distributableRows) * 100) : 0;
+                    el.textContent = `${share} (${pct}%)`;
+                });
+            };
+
+            const updateEnabledIndicator = () => {
+                if (!enabledIndicator) return;
+                const count = getAllCheckboxes().filter(cb => cb.checked).length;
+                enabledIndicator.textContent = `${count} enabled`;
+            };
+
             const syncSelectAll = () => {
                 if (!userSelectAll) return;
-                const visible = visibleUserCheckboxes();
-                if (visible.length === 0) {
+                const visible = getVisibleCheckboxes();
+                if (!visible.length) {
                     userSelectAll.checked = false;
                     userSelectAll.indeterminate = false;
                     return;
@@ -426,76 +398,49 @@
                 userSelectAll.checked = checked === visible.length;
             };
 
-            if (userSelectAll && userCheckboxContainer) {
-                userSelectAll.addEventListener('change', (event) => {
-                    const visible = visibleUserCheckboxes();
-                    visible.forEach(cb => cb.checked = event.target.checked);
-                    syncSelectAll();
-                        recalcShares();
+            const applyFilter = () => {
+                const q = getSearchQuery();
+                userRows.forEach(item => {
+                    const matches = !q || (item.dataset.search || '').includes(q);
+                    item.style.display = matches ? '' : 'none';
                 });
-
-                userCheckboxContainer.addEventListener('change', (ev) => {
-                    if (!ev.target.matches('input.cc-user-checkbox')) return;
-                    syncSelectAll();
-                        recalcShares();
-                });
-            }
-
-            const renderSearchDropdown = (matches) => {
-                if (!searchResultsCard) return;
-                if (!matches.length) {
-                    searchResultsCard.classList.add('d-none');
-                    if (baseList) baseList.classList.remove('d-none');
-                    return;
-                }
-                baseList?.classList?.add('d-none');
-                searchResultsCard.innerHTML = matches.map(m => `
-                    <button type="button" data-user-id="${m.id}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center border-0">
-                        <div class="d-flex align-items-center">
-                            <input class="form-check-input me-2" type="checkbox" data-placeholder-for="cc-user-${m.id}" ${document.querySelector(`#cc-user-${m.id}`)?.checked ? 'checked' : ''}>
-                            <span>${m.label}</span>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-secondary text-white small">${m.pending}</span>
-                            <span class="text-muted small cc-user-share" data-user-id="${m.id}">—</span>
-                        </div>
-                    </button>
-                `).join('');
-                searchResultsCard.classList.remove('d-none');
             };
 
-            if (userSearch) {
-                userSearch.addEventListener('input', (e) => {
-                    const q = e.target.value.toLowerCase().trim();
-                    if (q === '') {
-                        searchResultsCard?.classList.add('d-none');
-                        baseList?.classList?.remove('d-none');
-                            recalcShares();
-                        return;
-                    }
-                    const matches = userMeta.filter(u => u.searchText.includes(q));
-                    renderSearchDropdown(matches);
-                    syncSelectAll();
-                        recalcShares();
+            const refreshDistribution = () => {
+                applyFilter();
+                syncSelectAll();
+                updateShares();
+                updateEnabledIndicator();
+            };
+
+            if (userSelectAll) {
+                userSelectAll.addEventListener('change', (event) => {
+                    const targets = getVisibleCheckboxes();
+                    targets.forEach(cb => cb.checked = event.target.checked);
+                    refreshDistribution();
                 });
             }
 
-            if (searchResultsCard) {
-                searchResultsCard.addEventListener('click', (e) => {
-                    const btn = e.target.closest('[data-user-id]');
-                    if (!btn) return;
-                    const userId = btn.dataset.userId;
-                    const cb = document.getElementById(`cc-user-${userId}`);
-                    if (!cb) return;
-                    cb.checked = !cb.checked;
-                    syncSelectAll();
-                    const placeholder = btn.querySelector('input');
-                    if (placeholder) {
-                        placeholder.checked = cb.checked;
-                    }
-                    recalcShares();
-                });
-            }
+            userCheckboxContainer?.addEventListener('change', (event) => {
+                if (!event.target.matches('input.cc-user-checkbox')) return;
+                syncSelectAll();
+                updateShares();
+                updateEnabledIndicator();
+            });
+
+            userSearch?.addEventListener('input', () => {
+                refreshDistribution();
+            });
+
+            refreshDistribution();
+
+            const recallBtn = document.getElementById('cc-recall-preview-btn');
+
+            userSearch?.addEventListener('input', () => {
+                refreshDistribution();
+            });
+
+            refreshDistribution();
 
             const recallBtn = document.getElementById('cc-recall-preview-btn');
             const recallForm = document.getElementById('cc-recall-form');
@@ -805,24 +750,6 @@
         margin-bottom: 0;
     }
 
-    #cc-user-search-results {
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        border-radius: 0.85rem;
-        padding: 0.5rem;
-        background: rgba(248, 249, 252, 0.95);
-    }
-
-    #cc-user-search-results button {
-        border: 1px solid transparent;
-        border-radius: 0.7rem;
-        padding: 0.4rem 0.75rem;
-        background: #ffffff;
-    }
-
-    #cc-user-search-results button:hover {
-        background: #f5f6fb;
-    }
-
     .cc-user-share {
         min-width: 70px;
         text-align: right;
@@ -870,18 +797,13 @@
     }
 
     /* fallback modal styles when Bootstrap CSS isn't available */
-        .process-upload-card.process-upload-card--transparent .card-body {
-            padding: 2rem;
-        }
-    }
-
-    /* fallback modal styles when Bootstrap CSS isn't available */
     .cc-fallback-backdrop {
         position: fixed;
         inset: 0;
         background: rgba(0,0,0,0.45);
         z-index: 1070;
     }
+
     .cc-fallback-modal {
         position: fixed !important;
         inset: 50% auto auto 50% !important;
@@ -893,7 +815,7 @@
         border-radius: 0.5rem;
         background: #fff;
     }
-    /* disabled form wrapper visual */
+
     #ccCallFormWrapper.cc-disabled {
         opacity: 0.6;
         pointer-events: none;

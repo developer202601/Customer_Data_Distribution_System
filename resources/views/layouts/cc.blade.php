@@ -194,10 +194,11 @@
                     document.addEventListener('click', function (ev) {
                         try {
                             if (!off.classList.contains('show')) return;
-                            // ignore clicks inside sidebar or on the toggle
+                            var target = ev.target;
                             if (ev.target.closest && (ev.target.closest('#ccSidebar') || ev.target.closest('.cc-sidebar-toggle'))) return;
                             var inst = bootstrap.Offcanvas.getInstance(off) || new bootstrap.Offcanvas(off);
                             inst.hide();
+                            cleanupBackdrop();
                         } catch (err) { }
                     }, true);
                     off.addEventListener('hide.bs.offcanvas', function () {

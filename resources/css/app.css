@@ -211,20 +211,28 @@ body.theme-dark {
     border-right: 1px solid rgba(255,255,255,0.06);
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
 }
-.theme-dark .cc-sidebar-nav .nav-link:hover,
-.theme-dark .cc-sidebar-nav .nav-link:focus,
-.theme-dark .cc-sidebar-nav .nav-link.active {
-    background: rgba(255, 255, 255, 0.06);
-    color: #fff;
-}
+ .theme-dark .cc-sidebar-nav .nav-link:hover,
+ .theme-dark .cc-sidebar-nav .nav-link:focus {
+     background: rgba(255, 255, 255, 0.06);
+     color: #fff;
+ }
+ .theme-dark .cc-sidebar-nav .nav-link.active {
+     background: rgba(255, 255, 255, 0.2);
+     color: #fff;
+     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+ }
 
 /* Light theme hover */
-.cc-offcanvas .cc-sidebar-nav .nav-link:hover,
-.cc-offcanvas .cc-sidebar-nav .nav-link:focus,
-.cc-offcanvas .cc-sidebar-nav .nav-link.active {
-    background: rgba(0,0,0,0.04);
-    color: var(--text-primary);
-}
+ .cc-offcanvas .cc-sidebar-nav .nav-link:hover,
+ .cc-offcanvas .cc-sidebar-nav .nav-link:focus {
+     background: rgba(0,0,0,0.04);
+     color: var(--text-primary);
+ }
+ .cc-offcanvas .cc-sidebar-nav .nav-link.active {
+     background: rgba(0, 86, 162, 0.15);
+     color: var(--accent-primary);
+     box-shadow: inset 0 0 0 1px rgba(0, 86, 162, 0.35);
+ }
 .cc-sidebar-divider {
     height: 1px;
     background: rgba(255, 255, 255, 0.12);
@@ -282,8 +290,11 @@ body.theme-dark {
 
 /* Keep navbar above the offcanvas/backdrop so it does not darken */
 .main-header.navbar {
-    position: relative;
+    position: sticky;
+    top: 0;
     z-index: 1200 !important;
+    backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px);
 }
 .offcanvas {
     z-index: 1150 !important; /* sit above the floating toggle */

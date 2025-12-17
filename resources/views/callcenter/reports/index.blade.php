@@ -20,25 +20,25 @@
                             <p class="text-uppercase text-muted small mb-1">Call Center</p>
                             <h1 class="h4 mb-0">Reports</h1>
                         </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <div id="cc-report-loader" class="cc-report-loader">
-                                <div class="cc-report-loader__inner">
-                                    <span class="cc-report-loader__spinner"></span>
-                                    <div>
-                                        <p class="mb-0 fw-semibold">Preparing Excel download...</p>
-                                        <p class="small text-muted mb-0">Do not close the page until the file starts downloading.</p>
+                            <div class="d-flex align-items-center gap-2">
+                                <div id="cc-report-loader" class="cc-report-loader">
+                                    <div class="cc-report-loader__inner">
+                                        <span class="cc-report-loader__spinner"></span>
+                                        <div>
+                                            <p class="mb-0 fw-semibold">Preparing Excel download...</p>
+                                            <p class="small text-muted mb-0">Do not close the page until the file starts downloading.</p>
+                                        </div>
                                     </div>
                                 </div>
+                                @if($selectedReport)
+                                    @php $recallDisabled = $acceptedAssignments->isNotEmpty(); @endphp
+                                    <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
+                                    <form method="post" action="{{ route('cc.reports.recall', $selectedReport->id) }}" class="d-inline">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-warning rounded-pill px-3" {{ $recallDisabled ? 'disabled aria-disabled="true" title="Disallowed once rows are approved"' : 'title="Undo every assignment for this report"' }} onclick="return confirm('This will undo every assignment for this report as long as no rows were accepted. Continue?');">Undo all assignments</button>
+                                    </form>
+                                @endif
                             </div>
-                            @if($selectedReport)
-                                @php $recallDisabled = $acceptedAssignments->isNotEmpty(); @endphp
-                                <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
-                                <button type="button" id="cc-recall-preview-btn" class="btn {{ $recallDisabled ? 'btn-outline-secondary text-muted' : 'btn-outline-warning' }} rounded-pill px-3" data-report-id="{{ $selectedReport->id }}" {{ $recallDisabled ? 'disabled aria-disabled="true" title="Recall disabled once rows are accepted"' : '' }}>Recall preview</button>
-                                <form method="post" action="{{ route('cc.reports.recall', $selectedReport->id) }}" id="cc-recall-form" class="d-none">
-                                    @csrf
-                                </form>
-                            @endif
-                        </div>
                     </div>
                     <div class="row g-3 mt-3 align-items-center">
                         <div class="col-md-8">
@@ -103,22 +103,118 @@
                                         <p class="text-uppercase text-muted small mb-3">Distribute rows to call center users</p>
                                         <form method="post" action="{{ route('cc.reports.distribute', $selectedReport->id) }}" class="row g-2 align-items-center">
                                             @csrf
-                                            <div class="col-md-6">
-                                                <label class="small text-muted">Select users (hold Ctrl/Cmd to multi-select)</label>
-                                                <select name="user_ids[]" multiple class="form-select form-select-sm">
-                                                    @foreach($ccUsers as $user)
-                                                        <option value="{{ $user->id }}">{{ $user->username }} — {{ $user->name }}</option>
-                                                    @endforeach
-                                                </select>
+                                                <div class="col-md-6">
+                                                    <label class="small text-muted">Select users</label>
+                                                    <div class="mb-2 d-flex align-items-center gap-2">
+                                                        <input type="checkbox" id="cc-select-all-users" /> <label for="cc-select-all-users" class="small mb-0">Select all</label>
+                                                        <div class="small text-muted ms-2">Distributable rows: <strong id="cc-distributable-count">{{ $distributableRows ?? 0 }}</strong></div>
+                                                    </div>
+
+                                                    <style>
+                                                        .cc-user-scroll { border: 1px solid #e9ecef; border-radius: 0.375rem; overflow-y: auto; max-height: 260px; }
+                                                        .cc-user-row { padding: 0.5rem 0.75rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.03); }
+                                                        .cc-user-row:last-child { border-bottom: none; }
+                                                        .cc-user-checkbox { flex: 0 0 28px; }
+                                                        .cc-user-meta { flex: 1 1 auto; min-width: 0; }
+                                                        .cc-user-share { flex: 0 0 96px; text-align: right; }
+                                                        .cc-user-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                                                    </style>
+
+                                                    <div class="mb-2">
+                                                        <input type="search" id="cc-user-search" class="form-control form-control-sm" placeholder="Search users (username or name)">
+                                                    </div>
+                                                    <div class="cc-user-scroll mt-1 cc-user-scroll">
+                                                        @foreach($ccUsers as $user)
+                                                            @php $pending = (int) ($pendingCounts[$user->id] ?? 0); @endphp
+                                                            <div class="cc-user-row" data-user-id="{{ $user->id }}">
+                                                                <div class="cc-user-checkbox">
+                                                                    <input type="checkbox" class="form-check-input cc-user-checkbox-input" name="user_ids[]" id="cc-user-{{ $user->id }}" value="{{ $user->id }}">
+                                                                </div>
+                                                                <div class="cc-user-meta">
+                                                                    <div class="cc-user-name"><strong>{{ $user->username }}</strong> — <span class="text-muted small">{{ $user->name }}</span></div>
+                                                                    @if($pending > 0)
+                                                                        <div class="small text-muted">Pending: <span class="badge bg-secondary text-white small">{{ $pending }}</span></div>
+                                                                    @endif
+                                                                </div>
+                                                                <div class="cc-user-share">
+                                                                    <span class="badge bg-light text-dark cc-share-badge">0</span>
+                                                                </div>
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-8">
+                                                <!-- selector column left intentionally wide -->
                                             </div>
-                                            <div class="col-md-3">
-                                                <label class="small text-muted">Per user rows</label>
-                                                <input type="number" name="per_user" class="form-control form-control-sm" placeholder="e.g. 3000" min="1">
-                                            </div>
-                                            <div class="col-md-3 d-flex align-items-end">
+                                            <div class="col-md-4 d-flex align-items-end">
                                                 <button type="submit" class="btn btn-primary btn-sm w-100">Distribute</button>
                                             </div>
                                         </form>
+                                        <script>
+                                            document.addEventListener('DOMContentLoaded', function () {
+                                                const distributable = Number({{ (int)($distributableRows ?? 0) }});
+                                                const checkboxes = Array.from(document.querySelectorAll('.cc-user-checkbox-input'));
+                                                const selectAll = document.getElementById('cc-select-all-users');
+                                                const searchInput = document.getElementById('cc-user-search');
+                                                const distributableCountEl = document.getElementById('cc-distributable-count');
+                                                // removed per-user manual input; server will calculate allocation
+
+                                                function updateShares() {
+                                                    const selected = checkboxes.filter(cb => cb.checked);
+                                                    const count = selected.length;
+                                                    const badges = document.querySelectorAll('.cc-share-badge');
+                                                    if (count === 0 || distributable <= 0) {
+                                                        badges.forEach(b => b.textContent = '0');
+                                                        return;
+                                                    }
+                                                    const base = Math.floor(distributable / count);
+                                                    let rem = distributable % count;
+                                                    // assign shares in DOM order to keep predictable distribution
+                                                    checkboxes.forEach((cb, i) => {
+                                                        const row = cb.closest('.cc-user-row');
+                                                        const badge = row?.querySelector('.cc-share-badge');
+                                                        if (!badge) return;
+                                                        if (!cb.checked) {
+                                                            badge.textContent = '0';
+                                                            return;
+                                                        }
+                                                        const add = rem > 0 ? 1 : 0;
+                                                        const share = base + add;
+                                                        badge.textContent = String(share);
+                                                        if (rem > 0) rem -= 1;
+                                                    });
+                                                    // client shows per-user badge only; server will receive user_ids[] and compute distribution
+                                                }
+
+                                                // wire checkbox changes
+                                                checkboxes.forEach(cb => cb.addEventListener('change', updateShares));
+
+                                                // search filtering (case-insensitive match against displayed name)
+                                                searchInput?.addEventListener('input', function () {
+                                                    const q = this.value.trim().toLowerCase();
+                                                    checkboxes.forEach(cb => {
+                                                        const row = cb.closest('.cc-user-row');
+                                                        const text = row.querySelector('.cc-user-name')?.textContent.toLowerCase() || '';
+                                                        row.style.display = q === '' || text.includes(q) ? '' : 'none';
+                                                    });
+                                                });
+
+                                                // select-all toggles visible rows only
+                                                selectAll?.addEventListener('change', function () {
+                                                    const v = !!this.checked;
+                                                    checkboxes.forEach(cb => {
+                                                        const row = cb.closest('.cc-user-row');
+                                                        if (row && row.style.display === 'none') return; // skip hidden rows
+                                                        cb.checked = v;
+                                                    });
+                                                    updateShares();
+                                                });
+
+                                                // initial calculation
+                                                if (distributableCountEl) distributableCountEl.textContent = String(distributable);
+                                                updateShares();
+                                            });
+                                        </script>
                                     </div>
                                 </div>
                             </div>
@@ -323,77 +419,6 @@
             });
 
             // Distribution UI reverted to server-side multi-select; no client-side distribution logic is required here.
-
-            const recallBtn = document.getElementById('cc-recall-preview-btn');
-
-            const recallBtn = document.getElementById('cc-recall-preview-btn');
-            const recallForm = document.getElementById('cc-recall-form');
-            const recallModalEl = document.createElement('div');
-            recallModalEl.innerHTML = `
-                <div class="modal fade" id="ccRecallConfirmModal" tabindex="-1" aria-labelledby="ccRecallConfirmLabel" aria-hidden="true">
-                  <div class="modal-dialog modal-dialog-centered modal-lg">
-                    <div class="modal-content">
-                      <div class="modal-header">
-                        <h5 class="modal-title" id="ccRecallConfirmLabel">Recall assignments</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                      </div>
-                      <div class="modal-body">
-                        <p id="ccRecallCount">Preparing preview…</p>
-                        <div id="ccRecallSample" style="max-height:300px;overflow:auto"></div>
-                        <p class="text-muted small mt-2">Recalled rows will be returned to the unassigned pool. This action is not allowed if any rows have already been accepted.</p>
-                      </div>
-                      <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" id="ccRecallConfirmBtn" class="btn btn-warning">Recall assignments</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-            `;
-            document.body.appendChild(recallModalEl);
-
-            let recallModal = null;
-            const recallModalNode = document.getElementById('ccRecallConfirmModal');
-            if (recallModalNode && window.bootstrap) recallModal = new bootstrap.Modal(recallModalNode, { keyboard: true });
-
-            if (recallBtn && recallForm) {
-                recallBtn.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    if (recallBtn.disabled) {
-                        alert('Recall preview is disabled once rows have already been accepted. You can reassign those rows from the Assigned Rows page.');
-                        return;
-                    }
-                    const reportId = recallBtn.dataset.reportId;
-                    try {
-                        const res = await fetch(`/cc/reports/${reportId}/recall/preview`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                        if (!res.ok) return alert('Could not fetch recall preview.');
-                        const data = await res.json();
-                        const count = data.count || 0;
-                        const countEl = document.getElementById('ccRecallCount');
-                        const sampleEl = document.getElementById('ccRecallSample');
-                        if (countEl) countEl.textContent = `About to recall ${count} assigned rows.`;
-                        if (sampleEl) {
-                            const sample = (data.sample || []).slice(0, 50);
-                            if (!sample.length) sampleEl.innerHTML = '<p class="text-muted small mb-0">No sample rows available.</p>';
-                            else {
-                                sampleEl.innerHTML = '<ul class="list-unstyled mb-0">' + sample.map(s => `<li class="py-1">#${s.row_id} — ${s.phone || '—'} — <em>${s.assigned_user || 'unknown'}</em></li>`).join('') + '</ul>';
-                            }
-                        }
-                        if (recallModal) recallModal.show();
-
-                        const confirmBtn = document.getElementById('ccRecallConfirmBtn');
-                        if (confirmBtn) {
-                            confirmBtn.onclick = () => {
-                                recallModal?.hide();
-                                recallForm.submit();
-                            };
-                        }
-                    } catch (err) {
-                        console.error('Recall preview failed', err);
-                        alert('Recall preview failed.');
-                    }
-                });
-            }
 
                         const approvedUserEls = document.querySelectorAll('.cc-approved-user');
                         if (!approvedUserEls.length) return;
@@ -617,7 +642,7 @@
                         });
                 }
         });
-    </script>
+        </script>
 <div class="modal fade" id="ccAssignmentRowModal" tabindex="-1" aria-labelledby="ccAssignmentRowModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
@@ -768,4 +793,8 @@
         pointer-events: none;
     }
 </style>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="/js/cc-user-select2.js"></script>
 @endpush

@@ -101,38 +101,22 @@
                                 <div class="card border-0 rounded-4 bg-white shadow-sm">
                                     <div class="card-body">
                                         <p class="text-uppercase text-muted small mb-3">Distribute rows to call center users</p>
-                                        <form method="post" action="{{ route('cc.reports.distribute', $selectedReport->id) }}" class="row g-3 align-items-center">
+                                        <form method="post" action="{{ route('cc.reports.distribute', $selectedReport->id) }}" class="row g-2 align-items-center">
                                             @csrf
                                             <div class="col-md-6">
-                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                                                    <div class="d-flex align-items-center gap-2">
-                                                        <label class="small text-muted mb-0">Select users</label>
-                                                        <div class="form-check ms-3 mb-0">
-                                                            <input class="form-check-input" type="checkbox" id="cc-users-select-all">
-                                                            <label class="form-check-label small" for="cc-users-select-all">Select all</label>
-                                                        </div>
-                                                    </div>
-                                                    <div id="cc-enabled-users" class="small text-muted">0 enabled</div>
-                                                </div>
-                                                <input type="search" id="cc-user-search" class="form-control form-control-sm mb-2" placeholder="Search users">
-                                                <div id="cc-user-checkboxes" class="position-relative" style="max-height:240px;">
-                                                    <div id="cc-user-checkbox-list" class="list-group" style="max-height:240px;overflow:auto;">
-                                                        @foreach($ccUsers as $user)
-                                                            <div class="list-group-item d-flex justify-content-between align-items-center gap-2 user-checkbox-item" data-search="{{ strtolower($user->username . ' ' . $user->name) }}" data-user-id="{{ $user->id }}">
-                                                                <div class="form-check d-flex align-items-center gap-2 mb-0">
-                                                                    <input type="checkbox" name="user_ids[]" value="{{ $user->id }}" class="form-check-input cc-user-checkbox" id="cc-user-{{ $user->id }}">
-                                                                    <label class="form-check-label small mb-0" for="cc-user-{{ $user->id }}">{{ $user->username }} — {{ $user->name }}</label>
-                                                                </div>
-                                                                <span class="text-muted small cc-user-share" data-user-id="{{ $user->id }}">—</span>
-                                                            </div>
-                                                        @endforeach
-                                                    </div>
-                                                </div>
+                                                <label class="small text-muted">Select users (hold Ctrl/Cmd to multi-select)</label>
+                                                <select name="user_ids[]" multiple class="form-select form-select-sm">
+                                                    @foreach($ccUsers as $user)
+                                                        <option value="{{ $user->id }}">{{ $user->username }} — {{ $user->name }}</option>
+                                                    @endforeach
+                                                </select>
                                             </div>
-                                            <div class="col-12">
-                                                <div class="d-flex justify-content-start mt-3">
-                                                    <button type="submit" class="btn btn-primary rounded-pill px-5">Distribute</button>
-                                                </div>
+                                            <div class="col-md-3">
+                                                <label class="small text-muted">Per user rows</label>
+                                                <input type="number" name="per_user" class="form-control form-control-sm" placeholder="e.g. 3000" min="1">
+                                            </div>
+                                            <div class="col-md-3 d-flex align-items-end">
+                                                <button type="submit" class="btn btn-primary btn-sm w-100">Distribute</button>
                                             </div>
                                         </form>
                                     </div>
@@ -338,101 +322,7 @@
                 form?.submit();
             });
 
-            const userSearch = document.getElementById('cc-user-search');
-            const userSelectAll = document.getElementById('cc-users-select-all');
-            const enabledIndicator = document.getElementById('cc-enabled-users');
-            const userCheckboxContainer = document.getElementById('cc-user-checkbox-list');
-            const distributableRows = Number(@json($distributableRows ?? 0));
-
-            const userRows = userCheckboxContainer ? Array.from(userCheckboxContainer.querySelectorAll('.user-checkbox-item')) : [];
-
-            const getSearchQuery = () => (userSearch?.value || '').trim().toLowerCase();
-
-            const getAllCheckboxes = () => userCheckboxContainer
-                ? Array.from(userCheckboxContainer.querySelectorAll('input.cc-user-checkbox'))
-                : [];
-
-            const getVisibleRows = () => {
-                const q = getSearchQuery();
-                if (!q) return userRows;
-                return userRows.filter(item => (item.dataset.search || '').includes(q));
-            };
-
-            const getVisibleCheckboxes = () => getVisibleRows()
-                .map(item => item.querySelector('input.cc-user-checkbox'))
-                .filter(Boolean);
-
-            const updateShares = () => {
-                const allCheckboxes = getAllCheckboxes();
-                const checked = allCheckboxes.filter(cb => cb.checked);
-                document.querySelectorAll('.cc-user-share').forEach(el => el.textContent = '—');
-                if (!checked.length || distributableRows <= 0) return;
-                const base = Math.floor(distributableRows / checked.length);
-                let remainder = distributableRows % checked.length;
-                checked.forEach(cb => {
-                    const share = base + (remainder > 0 ? 1 : 0);
-                    remainder = Math.max(0, remainder - 1);
-                    const el = document.querySelector(`.cc-user-share[data-user-id="${cb.value}"]`);
-                    if (!el) return;
-                    const pct = distributableRows ? Math.round((share / distributableRows) * 100) : 0;
-                    el.textContent = `${share} (${pct}%)`;
-                });
-            };
-
-            const updateEnabledIndicator = () => {
-                if (!enabledIndicator) return;
-                const count = getAllCheckboxes().filter(cb => cb.checked).length;
-                enabledIndicator.textContent = `${count} enabled`;
-            };
-
-            const syncSelectAll = () => {
-                if (!userSelectAll) return;
-                const visible = getVisibleCheckboxes();
-                if (!visible.length) {
-                    userSelectAll.checked = false;
-                    userSelectAll.indeterminate = false;
-                    return;
-                }
-                const checked = visible.filter(cb => cb.checked).length;
-                userSelectAll.indeterminate = checked > 0 && checked < visible.length;
-                userSelectAll.checked = checked === visible.length;
-            };
-
-            const applyFilter = () => {
-                const q = getSearchQuery();
-                userRows.forEach(item => {
-                    const matches = !q || (item.dataset.search || '').includes(q);
-                    item.style.display = matches ? '' : 'none';
-                });
-            };
-
-            const refreshDistribution = () => {
-                applyFilter();
-                syncSelectAll();
-                updateShares();
-                updateEnabledIndicator();
-            };
-
-            if (userSelectAll) {
-                userSelectAll.addEventListener('change', (event) => {
-                    const targets = getVisibleCheckboxes();
-                    targets.forEach(cb => cb.checked = event.target.checked);
-                    refreshDistribution();
-                });
-            }
-
-            userCheckboxContainer?.addEventListener('change', (event) => {
-                if (!event.target.matches('input.cc-user-checkbox')) return;
-                syncSelectAll();
-                updateShares();
-                updateEnabledIndicator();
-            });
-
-            userSearch?.addEventListener('input', () => {
-                refreshDistribution();
-            });
-
-            refreshDistribution();
+            // Distribution UI reverted to server-side multi-select; no client-side distribution logic is required here.
 
             const recallBtn = document.getElementById('cc-recall-preview-btn');
 

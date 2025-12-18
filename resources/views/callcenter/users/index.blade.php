@@ -42,7 +42,18 @@
                 <div>
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h2 class="h6 mb-0">Existing Users</h2>
-                        <span class="text-muted small">{{ $users->count() }} users</span>
+                        <div class="d-flex gap-3 align-items-center">
+                            <form id="cc-users-filter-form" class="d-flex" method="get" action="{{ route('cc.users.index') }}">
+                                <select name="status" class="form-select form-select-sm me-2" data-cc-users-status>
+                                    <option value="active" {{ (isset($filter_status) && $filter_status==='active') ? 'selected' : '' }}>Active</option>
+                                    <option value="disabled" {{ (isset($filter_status) && $filter_status==='disabled') ? 'selected' : '' }}>Disabled</option>
+                                    <option value="all" {{ (isset($filter_status) && $filter_status==='all') ? 'selected' : '' }}>All</option>
+                                </select>
+                                <input name="q" type="search" class="form-control form-control-sm me-2" placeholder="Search username or name" value="{{ $filter_q ?? '' }}" data-cc-users-search>
+                                
+                            </form>
+                            <span class="text-muted small" data-cc-users-count>{{ $users->count() }} users</span>
+                        </div>
                     </div>
                         <div class="table-responsive cc-table-container">
                             <table class="table align-middle mb-0">
@@ -56,37 +67,8 @@
                                         <th class="text-end">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    @forelse($users as $user)
-                                    <tr>
-                                        <td>{{ $user->username }}</td>
-                                        <td>{{ $user->admin_prev ? 'Call Center Admin' : 'Call Center User' }}</td>
-                                        <td>
-                                            @if($user->status)
-                                                <span class="badge bg-success">Active</span>
-                                            @else
-                                                <span class="badge bg-secondary">Disabled</span>
-                                            @endif
-                                        </td>
-                                        <td>{{ $user->fixed ? 'Yes' : 'No' }}</td>
-                                        <td>{{ optional($user->created_at)->format('Y-m-d H:i') ?? '—' }}</td>
-                                        <td class="text-end">
-                                            <div class="d-inline-flex gap-1">
-                                                <a href="{{ route('cc.users.edit', $user) }}" class="btn btn-sm btn-outline-secondary rounded-pill">Edit</a>
-                                                @if($user->status)
-                                                <button type="button" class="btn btn-sm btn-warning rounded-pill cc-disable-btn" data-action="{{ route('cc.users.disable', $user) }}" data-username="{{ $user->username }}">Disable</button>
-                                                @endif
-                                                @if(!$user->fixed)
-                                                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill cc-delete-btn" data-action="{{ route('cc.users.destroy', $user) }}" data-username="{{ $user->username }}">Delete</button>
-                                                @endif
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    @empty
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted">No call center users yet.</td>
-                                    </tr>
-                                    @endforelse
+                                <tbody data-cc-users-body>
+                                    @include('callcenter.users._rows', ['users' => $users])
                                 </tbody>
                             </table>
                         </div>
@@ -193,6 +175,7 @@
 
         <!-- Hidden forms used by JS to submit disable/delete actions -->
         <form id="cc-disable-form" method="post" style="display:none">@csrf @method('put')</form>
+        <form id="cc-enable-form" method="post" style="display:none">@csrf @method('put')</form>
         <form id="cc-delete-form" method="post" style="display:none">@csrf @method('delete')</form>
 
     </div>
@@ -206,17 +189,17 @@
     </style>
     @endpush
 
-@push('scripts')
+    @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('cc-create-user-form');
+    const createUserForm = document.getElementById('cc-create-user-form');
     const adminCheckbox = document.getElementById('admin_prev');
     const usernameInput = document.getElementById('username');
     const confirmModalEl = document.getElementById('ccAdminConfirmModal');
     const confirmUsername = document.getElementById('ccConfirmUsername');
     const confirmCreateBtn = document.getElementById('ccConfirmCreate');
 
-    if (!form) return;
+    if (!createUserForm) return;
 
     // Bootstrap modal instance (if bootstrap loaded)
     let bsModal = null;
@@ -228,22 +211,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const modalCreateBtn = document.getElementById('cc-create-user-btn');
     if (modalCreateBtn) {
         modalCreateBtn.addEventListener('click', function (e) {
-            // If admin checked, show confirm modal first
             if (adminCheckbox && adminCheckbox.checked) {
                 e.preventDefault();
                 if (confirmUsername) confirmUsername.textContent = usernameInput?.value || '—';
                 if (bsModal) {
                     bsModal.show();
-                } else {
-                    if (confirm('You are creating a Call Center administrator account. Continue?')) {
-                        form.submit();
-                    }
+                } else if (confirm('You are creating a Call Center administrator account. Continue?')) {
+                    createUserForm.submit();
                 }
                 return;
             }
-
-            // otherwise submit the form directly
-            form.submit();
+            createUserForm.submit();
         });
     }
 
@@ -252,10 +230,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const confirmMessage = document.getElementById('ccConfirmValidationMessage');
         confirmCreateBtn.addEventListener('click', function () {
             if (bsModal) bsModal.hide();
-            form.submit();
+            createUserForm.submit();
         });
 
-        // enable/disable confirm button based on input match
         if (confirmInput) {
             confirmInput.addEventListener('input', function () {
                 const expected = (confirmUsername && confirmUsername.textContent) ? confirmUsername.textContent.trim() : '';
@@ -279,9 +256,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Disable/Delete buttons: use modals and hidden forms
-    const disableBtns = document.querySelectorAll('.cc-disable-btn');
-    const deleteBtns = document.querySelectorAll('.cc-delete-btn');
     const disableModalEl = document.getElementById('ccDisableConfirmModal');
     const deleteModalEl = document.getElementById('ccDeleteConfirmModal');
     const disableUsernameEl = document.getElementById('ccDisableConfirmUsername');
@@ -290,6 +264,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const deleteConfirmBtn = document.getElementById('ccDeleteConfirm');
     const disableForm = document.getElementById('cc-disable-form');
     const deleteForm = document.getElementById('cc-delete-form');
+    const enableForm = document.getElementById('cc-enable-form');
 
     let pendingAction = null;
     let disableModal = null;
@@ -297,30 +272,49 @@ document.addEventListener('DOMContentLoaded', function () {
     if (window.bootstrap && disableModalEl) disableModal = new bootstrap.Modal(disableModalEl);
     if (window.bootstrap && deleteModalEl) deleteModal = new bootstrap.Modal(deleteModalEl);
 
-    disableBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            pendingAction = btn.getAttribute('data-action');
-            const uname = btn.getAttribute('data-username') || '—';
-            if (disableUsernameEl) disableUsernameEl.textContent = uname;
-            if (disableModal) disableModal.show();
+    const bindTableActions = () => {
+        document.querySelectorAll('.cc-disable-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                pendingAction = btn.getAttribute('data-action');
+                const uname = btn.getAttribute('data-username') || '—';
+                if (disableUsernameEl) disableUsernameEl.textContent = uname;
+                disableModal?.show();
+            });
         });
-    });
 
-    deleteBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            pendingAction = btn.getAttribute('data-action');
-            const uname = btn.getAttribute('data-username') || '—';
-            if (deleteUsernameEl) deleteUsernameEl.textContent = uname;
-            if (deleteModal) deleteModal.show();
+        document.querySelectorAll('.cc-enable-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                pendingAction = btn.getAttribute('data-action');
+                const uname = btn.getAttribute('data-username') || '—';
+                if (disableUsernameEl) disableUsernameEl.textContent = uname;
+                disableModal?.show();
+            });
         });
-    });
+
+        document.querySelectorAll('.cc-delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                pendingAction = btn.getAttribute('data-action');
+                const uname = btn.getAttribute('data-username') || '—';
+                if (deleteUsernameEl) deleteUsernameEl.textContent = uname;
+                deleteModal?.show();
+            });
+        });
+    };
+
+    bindTableActions();
 
     if (disableConfirmBtn) {
         disableConfirmBtn.addEventListener('click', () => {
             if (!pendingAction) return;
-            disableForm.action = pendingAction;
-            disableModal?.hide();
-            disableForm.submit();
+            if (pendingAction.indexOf('/enable') !== -1 && enableForm) {
+                enableForm.action = pendingAction;
+                disableModal?.hide();
+                enableForm.submit();
+            } else if (disableForm) {
+                disableForm.action = pendingAction;
+                disableModal?.hide();
+                disableForm.submit();
+            }
         });
     }
 
@@ -331,6 +325,80 @@ document.addEventListener('DOMContentLoaded', function () {
             deleteModal?.hide();
             deleteForm.submit();
         });
+    }
+
+    const filterForm = document.getElementById('cc-users-filter-form');
+    const statusSelect = filterForm?.querySelector('[data-cc-users-status]');
+    const searchInput = filterForm?.querySelector('[data-cc-users-search]');
+    const usersBody = document.querySelector('[data-cc-users-body]');
+    const usersCountBadge = document.querySelector('[data-cc-users-count]');
+    let searchTimeout;
+
+    const renderLoadingRow = () => {
+        if (!usersBody) return;
+        usersBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>Loading…</td></tr>';
+    };
+
+    const renderErrorRow = (message) => {
+        if (!usersBody) return;
+        const safeMessage = message || 'Unexpected error';
+        usersBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4"><div class="fw-semibold">Unable to load users</div><div class="small text-muted">${safeMessage}</div></td></tr>`;
+    };
+
+    const updateUserCount = (value) => {
+        if (!usersCountBadge) return;
+        const parsed = Number.isInteger(value) ? value : parseInt(value, 10);
+        if (Number.isNaN(parsed)) {
+            usersCountBadge.textContent = '— users';
+            return;
+        }
+        usersCountBadge.textContent = `${parsed} user${parsed === 1 ? '' : 's'}`;
+    };
+
+    const fetchUsers = async () => {
+        if (!filterForm || !usersBody) return;
+        const statusValue = statusSelect ? statusSelect.value : 'all';
+        const searchValue = (searchInput ? searchInput.value : '').trim();
+        const params = new URLSearchParams();
+        params.set('status', statusValue);
+        params.set('q', searchValue);
+        const url = `${filterForm.action}?${params.toString()}`;
+        renderLoadingRow();
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            if (!response.ok) throw new Error(response.statusText || 'Failed to load users');
+            const payload = await response.json();
+            usersBody.innerHTML = payload.html;
+            updateUserCount(payload.count);
+            bindTableActions();
+        } catch (error) {
+            renderErrorRow(error.message);
+            updateUserCount('—');
+        }
+    };
+
+    const scheduleSearch = () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(fetchUsers, 350);
+    };
+
+    if (filterForm) {
+        filterForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            fetchUsers();
+        });
+        if (statusSelect) {
+            statusSelect.addEventListener('change', fetchUsers);
+        }
+        if (searchInput) {
+            searchInput.addEventListener('input', scheduleSearch);
+        }
+        fetchUsers();
     }
 });
 </script>

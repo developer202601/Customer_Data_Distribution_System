@@ -41,9 +41,17 @@
                     <div class="col-md-6">
                         <label class="form-label">Username</label>
                         @if($user->fixed)
-                        <input type="text" class="form-control" value="{{ $user->username }}" readonly>
+                            <input type="text" class="form-control" value="{{ $user->username }}" readonly>
                         @else
-                        <input name="username" type="text" class="form-control" value="{{ old('username', $user->username) }}" maxlength="6" pattern="\d{6}" required>
+                            @if(!$user->status)
+                                {{-- User is disabled: allow username edit --}}
+                                <input name="username" type="text" class="form-control" value="{{ old('username', $user->username) }}" maxlength="6" pattern="\d{6}" required>
+                                <div class="form-text">Username may only be changed for disabled users.</div>
+                            @else
+                                {{-- Active users cannot change username --}}
+                                <input type="text" class="form-control" value="{{ $user->username }}" readonly>
+                                <div class="form-text text-muted">Username cannot be changed while the user is active. Disable the user to change it.</div>
+                            @endif
                         @endif
                     </div>
                     <div class="col-md-6 d-flex align-items-end">

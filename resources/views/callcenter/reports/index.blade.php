@@ -31,10 +31,28 @@
                                     </div>
                                 </div>
                                 @if($selectedReport)
-                                    @php $recallDisabled = $acceptedAssignments->isNotEmpty(); @endphp
+                                    @php
+                                        $recallReason = null;
+                                        if ($acceptedAssignments->isNotEmpty()) {
+                                            $recallReason = 'Disallowed once rows were approved';
+                                        } elseif(!empty($hasInteractions)) {
+                                            $recallReason = 'Disabled because interactions already exist for this report';
+                                        }
+                                        $recallDisabled = (bool) $recallReason;
+                                    @endphp
                                     <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
-                                        <!-- Recall modal trigger -->
-                                        <button type="button" class="btn btn-outline-warning rounded-pill px-3" id="cc-recall-open-btn" {{ $recallDisabled ? 'disabled aria-disabled="true" title="Disallowed once rows were approved"' : 'title="Undo every assignment for this report"' }} data-bs-toggle="modal" data-bs-target="#ccRecallModal">Undo all assignments</button>
+                                    <!-- Recall modal trigger -->
+                                    <button type="button" class="btn btn-outline-warning rounded-pill px-3" id="cc-recall-open-btn"
+                                        data-bs-toggle="modal" data-bs-target="#ccRecallModal"
+                                        @if($recallDisabled)
+                                            disabled aria-disabled="true" title="{{ $recallReason }}"
+                                        @else
+                                            title="Undo every assignment for this report"
+                                        @endif
+                                    >Undo all assignments</button>
+                                    @if($hasInteractions)
+                                        <p class="small text-danger mb-0 mt-1">Undo is disabled once any interactions exist for this report.</p>
+                                    @endif
 
                                         <!-- Recall confirmation modal -->
                                         <div class="modal fade" id="ccRecallModal" tabindex="-1" aria-labelledby="ccRecallModalLabel" aria-hidden="true">
@@ -45,7 +63,7 @@
                                                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                     </div>
                                                     <div class="modal-body">
-                                                        <p>This will undo every assignment for this report as long as no rows were accepted. Continue?</p>
+                                                        <p>This permanently removes every assignment (and any related interactions) for this report as long as no rows were accepted and no call activity exists. Continue?</p>
                                                     </div>
                                                     <div class="modal-footer">
                                                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -59,6 +77,10 @@
                                         </div>
                                 @endif
                             </div>
+                    </div>
+                    <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+                        <a href="{{ route('cc.reports.history') }}" class="btn btn-outline-primary btn-sm">Browse past reports</a>
+                        <p class="small text-muted mb-0">See every report we ran with call center users, their interactions, and the payouts that followed.</p>
                     </div>
                     <div class="row g-3 mt-3 align-items-center">
                         <div class="col-md-8">
@@ -244,6 +266,22 @@
                                 <div class="card border-0 rounded-4 bg-white shadow-sm h-100 d-flex flex-column">
                                     <div class="card-body flex-grow-1">
                                         <h3 class="h6 text-uppercase text-muted small mb-3">Rejected assignments</h3>
+                                        @if($rejectedSummary->isNotEmpty())
+                                            <div class="alert alert-warning py-2 px-3 mb-3 small text-dark">
+                                                <p class="mb-1 fw-semibold text-uppercase small">Latest rejections</p>
+                                                <ul class="mb-0 ps-3">
+                                                    @foreach($rejectedSummary as $summary)
+                                                        <li>
+                                                            {{ $summary['label'] }} rejected {{ $summary['count'] }} rows{{ $summary['last_rejected_at'] ? ' (' . $summary['last_rejected_at'] . ')' : '' }}.
+                                                            @if($summary['reason'])
+                                                                <span class="text-muted">Reason: {{ $summary['reason'] }}</span>
+                                                            @endif
+                                                        </li>
+                                                    @endforeach
+                                                </ul>
+                                                <p class="mb-0 text-muted small">You can reassign these rows to other users (new, pending, or already accepted) below; if they stay unaccepted for 3 days, they reappear in this list for another round, and once you reissue a rejection the completed record vanishes from this card.</p>
+                                            </div>
+                                        @endif
                                         @if($rejectedAssignments->isEmpty())
                                             <p class="text-muted small mb-0">No rejected rows for this report.</p>
                                         @else
@@ -252,7 +290,8 @@
                                                 <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
                                                     <label class="small text-muted mb-0">Select users to redistribute</label>
                                                     <div style="min-width:260px;max-width:320px;max-height:200px;overflow:auto;">
-                                                        @foreach($ccUsers as $user)
+                                                        @php $targetUsers = $nonRejectingUsers->isNotEmpty() ? $nonRejectingUsers : $ccUsers; @endphp
+                                                        @foreach($targetUsers as $user)
                                                             <div class="form-check">
                                                                 <input class="form-check-input" type="checkbox" name="user_ids[]" value="{{ $user->id }}" id="reassign-user-{{ $user->id }}">
                                                                 <label class="form-check-label small" for="reassign-user-{{ $user->id }}">{{ $user->username }} — {{ $user->name }}</label>
@@ -263,6 +302,7 @@
                                                     <button type="button" id="cc-reassign-all" class="btn btn-sm btn-outline-primary">Reassign ALL rejected</button>
                                                     <button type="submit" name="action" value="pool" class="btn btn-sm btn-secondary">Return selected to pool</button>
                                                 </div>
+                                                    <p class="small text-muted mb-3">Use the checkboxes to reassign to new users or to users who already have pending/accepted rows. Accepted users will see this as additional rows they can pick up or reject without a reason, which again increases the pool for others.</p>
                                                 <div class="table-responsive">
                                                     <table class="table table-striped table-bordered mb-0">
                                                         <thead>
@@ -310,6 +350,7 @@
                                                 @endif
                                             @endforeach
                                         </ul>
+                                        <p class="small text-muted mt-2">Each pending user receives one bundled notice for all rows they have been given; if those rows stay untouched for three days you will see them return to this widget for another redistribution round.</p>
                                     </div>
                                 </div>
                             </div>
@@ -333,6 +374,7 @@
                                                 @endforeach
                                             </ul>
                                         @endif
+                                        <p class="small text-muted mt-2">Accepted users see these counts plus any newly assigned rows that land on their desk; they may accept immediately or reject without a reason, and each rejection simply raises the pending/accepted counts again for the remaining teams.</p>
                                     </div>
                                 </div>
                             </div>
@@ -343,71 +385,7 @@
                 @endif
             </div>
         </div>
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card shadow-sm border-0" style="border-radius: 1rem;">
-                    <div class="card-body">
-                        <h2 class="h5 mb-3">Recent reports</h2>
-            <div class="modal-header">
-                <h5 class="modal-title">Accepted rows</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row gy-4">
-                    <div class="col-lg-6">
-                        <p class="small text-uppercase text-muted mb-2">Assigned rows for this agent</p>
-                        <div id="ccAssignmentRowList" class="list-group shadow-sm" style="max-height: 380px; overflow:auto;"></div>
-                        <div id="ccAssignmentDetailPane" class="mt-3">
-                            <p class="small text-uppercase text-muted mb-1">Selected row</p>
-                            <div id="ccAssignmentDetailFields" class="border rounded-3 p-3 bg-light small text-muted">Select a row to see the details.</div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <div id="ccSelectedName" class="fw-semibold">&nbsp;</div>
-                                <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
-                            </div>
-                            <div>
-                                <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
-                            </div>
-                        </div>
-                        <div class="card-body bg-white rounded-3">
-                        <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
-                            <input type="hidden" name="assignment_id" id="ccCallAssignmentId">
-                            <div class="col-12">
-                                <label class="form-label small">Outcome</label>
-                                <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
-                                    <option value="number invalid">number invalid</option>
-                                    <option value="user not authorized">user not authorized</option>
-                                    <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
-                                    <option value="agreed to pay within 7 days">agreed to pay within 7 days</option>
-                                    <option value="Not answered">Not answered</option>
-                                </select>
-                            </div>
-                            <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
-                                <label class="form-label small">Payment expected at</label>
-                                <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" disabled>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small">Note (optional)</label>
-                                <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" disabled></textarea>
-                            </div>
-                            <div class="col-12 d-flex gap-2">
-                                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save call</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                            </div>
-                            <div class="col-12">
-                                <div id="ccCallStatus" class="small text-muted"></div>
-                            </div>
-                        </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+        <!-- Recent reports section removed per request -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const loader = document.getElementById('cc-report-loader');

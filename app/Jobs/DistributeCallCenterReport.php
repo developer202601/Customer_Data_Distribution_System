@@ -114,11 +114,13 @@ class DistributeCallCenterReport implements ShouldQueue
         }
 
         // If perUserCount not provided, distribute as evenly as possible
+        $userCount = count($users);
         if (! $this->perUserCount) {
-            $perUser = (int) floor($total / count($users));
+            $basePerUser = $userCount ? (int) floor($total / $userCount) : 0;
         } else {
-            $perUser = $this->perUserCount;
+            $basePerUser = $this->perUserCount;
         }
+        $remainder = $userCount ? $total % $userCount : 0;
 
         $now = Carbon::now()->toDateTimeString();
 
@@ -127,11 +129,8 @@ class DistributeCallCenterReport implements ShouldQueue
         $batchSize = 1000;
         $pos = 0;
 
-        foreach ($users as $uid) {
-            $take = $perUser;
-            if ($uid === end($users)) {
-                $take = $total - $pos;
-            }
+        foreach ($users as $index => $uid) {
+            $take = $basePerUser + ($index < $remainder ? 1 : 0);
 
             for ($i = 0; $i < $take && $pos < $total; $i++, $pos++) {
                 $batch[] = [

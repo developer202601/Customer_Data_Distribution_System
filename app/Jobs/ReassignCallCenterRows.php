@@ -48,6 +48,7 @@ class ReassignCallCenterRows implements ShouldQueue
                     'rejected_at' => null,
                     'rejected_by' => null,
                     'rejection_note' => null,
+                    'reassignment_origin_id' => null,
                     'locked_at' => null,
                     'locked_by' => null,
                 ]);
@@ -59,17 +60,28 @@ class ReassignCallCenterRows implements ShouldQueue
         $count = count($users);
 
         foreach ($assignments as $index => $assignment) {
+            $newAssignment = $assignment->replicate();
+            $newAssignment->assigned_user_id = $users[$index % $count];
+            $newAssignment->status = 'pending';
+            $newAssignment->accepted = false;
+            $newAssignment->accepted_at = null;
+            $newAssignment->rejected = false;
+            $newAssignment->rejected_at = null;
+            $newAssignment->rejected_by = null;
+            $newAssignment->rejection_note = null;
+            $newAssignment->reassignment_origin_id = $assignment->reassignment_origin_id ?: $assignment->id;
+            $newAssignment->locked_at = null;
+            $newAssignment->locked_by = null;
+            $newAssignment->created_at = now();
+            $newAssignment->updated_at = now();
+            $newAssignment->save();
+
             $assignment->update([
-                'assigned_user_id' => $users[$index % $count],
-                'status' => 'pending',
-                'accepted' => false,
-                'accepted_at' => null,
-                'rejected' => false,
-                'rejected_at' => null,
-                'rejected_by' => null,
-                'rejection_note' => null,
-                'locked_at' => null,
-                'locked_by' => null,
+                'status' => 'completed',
+                'rejected' => $assignment->rejected,
+                'rejected_at' => $assignment->rejected_at,
+                'rejected_by' => $assignment->rejected_by,
+                'rejection_note' => $assignment->rejection_note,
             ]);
         }
     }

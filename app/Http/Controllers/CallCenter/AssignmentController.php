@@ -165,7 +165,18 @@ class AssignmentController extends Controller
         $latestReportId = $userReportIds->isNotEmpty() ? $userReportIds->max() : null;
         $latestReportCount = $latestReportId ? $assignments->where('call_center_report_id', $latestReportId)->count() : 0;
         // count only unaccepted (pending) rows from the latest report for the banner
-        $latestReportPending = $latestReportId ? $assignments->where('call_center_report_id', $latestReportId)->where('accepted', false)->count() : 0;
+        $latestReportPending = $latestReportId ? $assignments->where('call_center_report_id', $latestReportId)->where('accepted', false)->where('rejected', false)->count() : 0;
+        $latestReportAllReassigned = false;
+        if ($latestReportId && $latestReportPending > 0) {
+            $latestPendingItems = $assignments->where('call_center_report_id', $latestReportId)
+                ->where('accepted', false)
+                ->where('rejected', false);
+            if ($latestPendingItems->count() > 0) {
+                $latestReportAllReassigned = $latestPendingItems->every(function ($a) {
+                    return !empty($a->reassignment_origin_id);
+                });
+            }
+        }
         $latestReportLabel = null;
         if ($latestReportId) {
             $lr = \App\Models\CallCenterReport::find((int) $latestReportId);
@@ -187,6 +198,7 @@ class AssignmentController extends Controller
             'latestReportCount' => $latestReportCount,
             'latestReportPending' => $latestReportPending,
             'latestReportLabel' => $latestReportLabel,
+            'latestReportAllReassigned' => $latestReportAllReassigned,
             'currentUserId' => $currentUserId,
         ]);
     }
@@ -210,12 +222,6 @@ class AssignmentController extends Controller
                 'status' => 'pending',
                 'locked_at' => null,
                 'locked_by' => null,
-            ]);
-            CallCenterInteraction::create([
-                'assignment_id' => $assignment->id,
-                'agent_id' => Auth::id(),
-                'outcome' => 'accepted',
-                'note' => 'Bulk accepted by admin/user',
             ]);
             $acceptedIds[] = $assignment->id;
             if ($assignment->master_dataset_row_id) $masterRowIds[] = $assignment->master_dataset_row_id;
@@ -278,23 +284,41 @@ class AssignmentController extends Controller
         $query = CallCenterAssignment::where('assigned_user_id', $userId)->where('rejected', false);
         if ($reportId) $query->where('call_center_report_id', (int) $reportId);
 
+        $requiresReasonRaw = $request->input('requires_reason', '1');
+        $requiresReason = !in_array($requiresReasonRaw, ['0', 'false', 0, false], true);
+        $payload = $request->validate([
+            'requires_reason' => 'required|in:0,1',
+            'rejection_note' => $requiresReason ? 'required|string|max:600' : 'nullable|string|max:600',
+        ]);
+
         $assignments = $query->get();
-        foreach ($assignments as $assignment) {
-            $assignment->update([
-                'rejected' => true,
-                'rejected_at' => now(),
-                'rejected_by' => Auth::id(),
-                'rejection_note' => 'Bulk rejected',
-                'status' => 'pending',
-                'locked_at' => null,
-                'locked_by' => null,
-            ]);
-            CallCenterInteraction::create([
-                'assignment_id' => $assignment->id,
-                'agent_id' => Auth::id(),
-                'outcome' => 'rejected',
-                'note' => 'Bulk rejected by admin/user',
-            ]);
+        // If the UI indicated no reason is required, treat this as "discard reassigned copies" flow:
+        if (isset($payload['requires_reason']) && (string)$payload['requires_reason'] === '0') {
+            foreach ($assignments as $assignment) {
+                // Only operate on reassigned copies that are NOT accepted
+                if (! empty($assignment->reassignment_origin_id) && empty($assignment->accepted)) {
+                    $this->reopenOriginalRejectedAssignment($assignment);
+                }
+            }
+        } else {
+            foreach ($assignments as $assignment) {
+                if (! empty($assignment->reassignment_origin_id)) {
+                    // Discard reassigned copies and restore originals; skip note
+                    if (empty($assignment->accepted)) {
+                        $this->reopenOriginalRejectedAssignment($assignment);
+                    }
+                    continue;
+                }
+                $assignment->update([
+                    'rejected' => true,
+                    'rejected_at' => now(),
+                    'rejected_by' => Auth::id(),
+                    'rejection_note' => $payload['rejection_note'] ?? 'Bulk rejected',
+                    'status' => 'pending',
+                    'locked_at' => null,
+                    'locked_by' => null,
+                ]);
+            }
         }
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -632,13 +656,6 @@ class AssignmentController extends Controller
             'locked_by' => null,
         ]);
 
-        CallCenterInteraction::create([
-            'assignment_id' => $assignment->id,
-            'agent_id' => $user->id,
-            'outcome' => 'accepted',
-            'note' => 'Assignment approved by staff',
-        ]);
-
         // mark any previous assignments for the same master row as completed
         if ($assignment->master_dataset_row_id) {
             CallCenterAssignment::where('assigned_user_id', $user->id)
@@ -668,6 +685,22 @@ class AssignmentController extends Controller
             ->where('assigned_user_id', $user->id)
             ->firstOrFail();
 
+        // If this is a reassigned copy and NOT accepted, immediately reopen the origin and delete this copy
+        if (! empty($assignment->reassignment_origin_id)) {
+            if (! empty($assignment->accepted)) {
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['error' => 'Cannot reject an accepted row.'], 409);
+                }
+                return Redirect::route('cc.assignments.manage')->withErrors(['reject' => 'Cannot reject an accepted row.']);
+            }
+
+            $this->reopenOriginalRejectedAssignment($assignment);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['rejected' => true, 'reassigned_copy_deleted' => true]);
+            }
+            return Redirect::route('cc.assignments.manage')->with('status', 'Reassigned row discarded; original reopened.');
+        }
+
         $payload = $request->validate([
             'note' => 'nullable|string',
         ]);
@@ -682,12 +715,7 @@ class AssignmentController extends Controller
             'locked_by' => null,
         ]);
 
-        CallCenterInteraction::create([
-            'assignment_id' => $assignment->id,
-            'agent_id' => $user->id,
-            'outcome' => 'rejected',
-            'note' => $payload['note'] ?? 'Assignment rejected by staff',
-        ]);
+        $assignment = $this->reopenOriginalRejectedAssignment($assignment);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['rejected' => true]);
@@ -716,6 +744,39 @@ class AssignmentController extends Controller
         Bus::dispatchSync(new ReassignCallCenterRows($assignmentIds, $userIds));
 
         return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'Reassignment queued.');
+    }
+
+    private function reopenOriginalRejectedAssignment(CallCenterAssignment $assignment): CallCenterAssignment
+    {
+        if (empty($assignment->reassignment_origin_id)) {
+            return $assignment;
+        }
+
+        $candidate = CallCenterAssignment::find($assignment->reassignment_origin_id);
+
+        if (! $candidate || ! $candidate->rejected || $candidate->status !== 'completed') {
+            return $assignment;
+        }
+
+        DB::transaction(function () use ($candidate, $assignment) {
+            // Reopen the original assignment as pending but do NOT clear its rejection metadata.
+            // We only update status/accept/lock fields so analytics about who rejected remain intact.
+            $candidate->update([
+                'status' => 'pending',
+                'accepted' => false,
+                'accepted_at' => null,
+                'locked_at' => null,
+                'locked_by' => null,
+                'reassignment_origin_id' => null,
+            ]);
+
+            // Only delete the reassigned copy if it is not accepted
+            if (empty($assignment->accepted)) {
+                $assignment->delete();
+            }
+        });
+
+        return $candidate->refresh();
     }
 
     // Admin helper to dispatch distribution job
@@ -767,14 +828,25 @@ class AssignmentController extends Controller
             return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'No assignments to recall.');
         }
 
-        // Use the existing reassignment job to reset assignments back to the pool
-        Bus::dispatchSync(new ReassignCallCenterRows($assignmentIds, []));
+        $interactionExists = CallCenterInteraction::whereIn('assignment_id', $assignmentIds)->exists();
+        if ($interactionExists) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['recalled' => false, 'error' => 'Cannot undo once interactions have been logged for this report.'], 409);
+            }
+
+            return Redirect::route('cc.reports', ['report' => $reportId])->withErrors(['recall' => 'Cannot undo once interactions have been logged for this report.']);
+        }
+
+        DB::transaction(function () use ($assignmentIds) {
+            CallCenterInteraction::whereIn('assignment_id', $assignmentIds)->delete();
+            CallCenterAssignment::whereIn('id', $assignmentIds)->delete();
+        });
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['recalled' => true]);
         }
 
-        return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'Assignments recalled to pool.');
+        return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'Assignments deleted.');
     }
 
     public function recallPreview(Request $request, $reportId)
@@ -783,40 +855,31 @@ class AssignmentController extends Controller
             ->where('call_center_report_id', $reportId)
             ->whereNotNull('assigned_user_id')
             ->orderBy('id')
-            ->limit(200)
+            ->limit(50)
             ->get();
 
-        $count = CallCenterAssignment::where('call_center_report_id', $reportId)->whereNotNull('assigned_user_id')->count();
+        $count = CallCenterAssignment::where('call_center_report_id', $reportId)
+            ->whereNotNull('assigned_user_id')
+            ->count();
 
-        $payload = [
-            'count' => $count,
-            'sample' => $assignments->map(fn($a) => [
+        $sample = $assignments->map(function ($a) {
+            return [
                 'assignment_id' => $a->id,
                 'row_id' => $a->master_dataset_row_id,
-                'phone' => optional($a->row)->phone,
-                'assigned_user' => optional($a->agent)->username,
-            ]),
-        ];
-
-        return response()->json($payload);
-    }
-
-    public function cancelDistribute(\Illuminate\Http\Request $request, $reportId, $token)
-    {
-        $cacheKey = 'cc:pending:distribute:'.$token;
-        if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
-            \Illuminate\Support\Facades\Cache::forget($cacheKey);
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['cancelled' => true]);
-            }
-
-            return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'Distribution cancelled.');
-        }
+                'agent' => $a->agent ? ($a->agent->name ?? $a->agent->username ?? null) : null,
+                'status' => $a->status,
+                'accepted' => (bool) $a->accepted,
+                'rejected' => (bool) $a->rejected,
+            ];
+        });
 
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['cancelled' => false, 'error' => 'No pending distribution found or it already ran.'], 404);
+            return response()->json(['count' => $count, 'sample' => $sample]);
         }
 
-        return Redirect::route('cc.reports', ['report' => $reportId])->withErrors(['distribute' => 'No pending distribution found or it already ran.']);
+        return view('callcenter.reports.recall_preview', [
+            'count' => $count,
+            'sample' => $sample,
+        ]);
     }
 }

@@ -12,7 +12,13 @@ class AuthController extends Controller
     public function showLogin(Request $request): View|RedirectResponse
     {
         if ($request->session()->has('user')) {
-            return redirect()->route('dashboard');
+            $sessionUser = $request->session()->get('user');
+
+            $targetRoute = ($sessionUser['system'] ?? null) === 'cc'
+                ? (($sessionUser['is_admin'] ?? false) ? 'cc.users.index' : 'cc.dashboard')
+                : 'dashboard';
+
+            return redirect()->route($targetRoute);
         }
 
         return view('auth.login');
@@ -32,14 +38,26 @@ class AuthController extends Controller
                 ->withInput();
         }
 
+        if (!$user->status) {
+            return back()
+                ->withErrors(['username' => 'This user is disabled.'])
+                ->withInput();
+        }
+
         $request->session()->regenerate();
         $request->session()->put('user', [
             'id' => $user->id,
             'username' => $user->username,
             'is_admin' => (bool) $user->admin_prev,
+            'system' => $user->system,
         ]);
 
-        return redirect()->route('dashboard');
+        $targetRoute = match ($user->system) {
+            'cc' => $user->admin_prev ? 'cc.users.index' : 'cc.dashboard',
+            default => 'dashboard',
+        };
+
+        return redirect()->route($targetRoute);
     }
 
     public function logout(Request $request): RedirectResponse

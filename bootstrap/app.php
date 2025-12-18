@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureCallCenterAdmin;
+use App\Http\Middleware\EnsureCallCenterUser;
 use App\Http\Middleware\EnsureUserIsAuthenticated;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'session.auth' => EnsureUserIsAuthenticated::class,
+            'session.cc_user' => EnsureCallCenterUser::class,
+            'session.cc_admin' => EnsureCallCenterAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

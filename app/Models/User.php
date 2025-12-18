@@ -22,6 +22,10 @@ class User extends Model
     protected $fillable = [
         'username',
         'admin_prev',
+        'system',
+        'created_at',
+        'fixed',
+        'status',
     ];
 
     /**
@@ -31,5 +35,8 @@ class User extends Model
      */
     protected $casts = [
         'admin_prev' => 'boolean',
+        'fixed' => 'boolean',
+        'status' => 'boolean',
+        'created_at' => 'datetime',
     ];
 }

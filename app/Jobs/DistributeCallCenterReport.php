@@ -68,6 +68,19 @@ class DistributeCallCenterReport implements ShouldQueue
             return;
         }
 
+        // Ensure we only attempt to assign master rows that actually exist
+        try {
+            $existing = DB::table('master_dataset_rows')->whereIn('id', $rowIds)->pluck('id')->toArray();
+            if (empty($existing)) {
+                return;
+            }
+            // preserve original order of $rowIds but filter out missing ids
+            $rowIds = array_values(array_filter($rowIds, fn($id) => in_array($id, $existing, true)));
+        } catch (\Exception $e) {
+            // If the lookup fails for any reason, bail out to avoid FK errors
+            return;
+        }
+
         // Mark any previous assignments for these master rows as completed so they
         // no longer appear as active when we assign the new report's rows.
         try {
@@ -89,6 +102,15 @@ class DistributeCallCenterReport implements ShouldQueue
         $users = $this->userIds;
         if (empty($users)) {
             return;
+        }
+
+        // Mark selected users as fixed so distribution consumers know these
+        // users should be treated as fixed recipients. Do not fail distribution
+        // if this update errors.
+        try {
+            \App\Models\User::whereIn('id', $users)->update(['fixed' => 1]);
+        } catch (\Exception $e) {
+            // ignore errors to avoid blocking distribution
         }
 
         // If perUserCount not provided, distribute as evenly as possible

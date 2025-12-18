@@ -2,7 +2,7 @@
 
 @section('navbar-right')
 <a href="{{ route('cc.users.index') }}" class="btn btn-outline-secondary">Back to Users</a>
-<a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Master Portal</a>
+
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf
     <button type="submit" class="btn btn-outline-secondary">Logout</button>
@@ -19,7 +19,7 @@
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ route('cc.users.index') }}" class="btn btn-outline-secondary px-4">Back to Users</a>
-                <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Master Portal</a>
+                
             </div>
         </div>
 
@@ -54,11 +54,11 @@
                             @endif
                         @endif
                     </div>
-                    <div class="col-md-6 d-flex align-items-end">
+                    <div class="col-md-6 d-flex justify-content-end">
                         <div class="form-check">
                             <input type="hidden" name="admin_prev" value="0">
                             <input class="form-check-input" type="checkbox" value="1" id="admin_prev" name="admin_prev" {{ $user->admin_prev ? 'checked' : '' }}>
-                            <label class="form-check-label" for="admin_prev">Call Center Admin</label>
+                            <label class="form-check-label cll_center_admincheck" for="admin_prev">Call Center Admin</label>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -68,7 +68,7 @@
                             <option value="0" {{ !$user->status ? 'selected' : '' }}>Disabled</option>
                         </select>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-5 " >
                         <label class="form-label">Fixed</label>
                         <input type="text" class="form-control" value="{{ $user->fixed ? 'Yes' : 'No' }}" readonly>
                         <small class="text-muted">Fixed users cannot be deleted.</small>
@@ -83,3 +83,6 @@
     </div>
 </div>
 @endsection
+
+
+

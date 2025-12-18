@@ -435,7 +435,8 @@ class AssignmentController extends Controller
             $q->where('assignment_id', $assignment->id);
         }
 
-        $interactions = $q->orderBy('created_at', 'desc')->get()->map(function ($i) {
+        $interactionsRaw = $q->orderBy('created_at', 'desc')->get();
+        $interactions = $interactionsRaw->map(function ($i) {
                 return [
                     'id' => $i->id,
                     'agent_id' => $i->agent_id,
@@ -450,6 +451,34 @@ class AssignmentController extends Controller
                     'created_at' => $i->created_at ? $i->created_at->toDateTimeString() : null,
                 ];
             });
+
+        // Compute payment events separately: find interactions that recorded a payment
+        $payments = [];
+        try {
+            // iterate in chronological order (oldest first) to build sensible 'last contact before payment'
+            $chron = $interactionsRaw->sortBy('created_at');
+            $paymentEvents = $chron->filter(function ($i) {
+                return (! empty($i->paid) || ! empty($i->payment_date) || ! empty($i->paid_amount));
+            });
+            foreach ($paymentEvents as $p) {
+                $paymentDate = $p->payment_date ?? $p->created_at;
+                $lastBefore = $chron->filter(function ($x) use ($paymentDate, $p) {
+                    // strictly before the payment event time and not the payment event itself
+                    return ($x->created_at < $paymentDate) && ($x->id !== $p->id);
+                })->sortByDesc('created_at')->first();
+
+                $payments[] = [
+                    'interaction_id' => $p->id,
+                    'paid_amount' => $p->paid_amount ? number_format($p->paid_amount, 2) : null,
+                    'payment_date' => $p->payment_date ? Carbon::parse($p->payment_date)->toDateString() : ($p->created_at ? Carbon::parse($p->created_at)->toDateString() : null),
+                    'paid_by_agent' => $p->agent ? ($p->agent->name ?? $p->agent->username ?? null) : null,
+                    'last_contact_before_payment' => $lastBefore && $lastBefore->agent ? ($lastBefore->agent->name ?? $lastBefore->agent->username ?? null) : null,
+                    'last_contact_before_payment_at' => $lastBefore && $lastBefore->created_at ? Carbon::parse($lastBefore->created_at)->toDateTimeString() : null,
+                ];
+            }
+        } catch (\Exception $e) {
+            // ignore
+        }
 
         // Compute call_count as interactions since the assignment was accepted.
         // Show all interactions in the modal, but only count those after
@@ -489,6 +518,7 @@ class AssignmentController extends Controller
             'sales_person' => $r->sales_person ?? null,
             'sales_channel' => $r->sales_channel ?? null,
             'interactions' => $interactions,
+            'payments' => $payments,
             'call_count' => $callCount,
         ]);
     }

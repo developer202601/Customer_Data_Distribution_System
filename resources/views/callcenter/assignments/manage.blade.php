@@ -45,7 +45,7 @@
         background: rgba(13, 110, 253, 0.08);
     }
     .cc-interactions-scroll {
-        max-height: 120px; /* roughly two items tall */
+        max-height: 360px;
         overflow-y: auto;
         border: 1px solid rgba(0,0,0,0.04);
         border-radius: 0.375rem;
@@ -53,6 +53,38 @@
     }
     .cc-interactions-table td { vertical-align: top; padding: .5rem .75rem; }
     .cc-interactions-table tbody tr + tr td { border-top: 1px solid rgba(0,0,0,0.04); }
+    .cc-details-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    /* Make the left details container flex so interactions panel can expand */
+    .cc-details-panel { min-height: 320px; overflow: hidden; display: flex; flex-direction: column; }
+    /* Details stays its natural height, interactions take remaining space and scroll */
+    #ccDetailsPanel { flex: none; }
+    #ccInteractionsPanel { flex: 1 1 auto; overflow: hidden; }
+    #ccInteractionsPanel .cc-interactions-scroll { height: 100%; }
+    /* Ensure modal never extends underneath fixed nav and remains scrollable */
+    :root { --cc-navbar-offset: 90px; }
+    .modal-dialog { max-height: calc(100vh - var(--cc-navbar-offset)); }
+    .modal-content { max-height: calc(100vh - var(--cc-navbar-offset)); overflow: hidden; }
+    .modal-body { overflow-y: auto; }
+
+    /* When bootstrap centers modals with translateY(-50%), they can sit under a fixed navbar.
+       Override centering so modals are placed below the navbar instead. */
+    .modal-dialog.modal-dialog-centered {
+        transform: none !important;
+        margin: calc(var(--cc-navbar-offset) / 2) auto 1.5rem auto;
+    }
+
+    /* Fallback modal (used when JS bootstrap fails): position below navbar and keep horizontally centered */
+    .cc-fallback-modal {
+        position: fixed !important;
+        top: calc(var(--cc-navbar-offset) + 10px) !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 1080 !important;
+        max-width: 900px !important;
+        width: calc(100% - 40px) !important;
+        max-height: calc(100vh - calc(var(--cc-navbar-offset) + 40px));
+        overflow: hidden;
+    }
 </style>
 @endpush
 
@@ -66,9 +98,7 @@
                         <p class="text-uppercase text-muted mb-1">Call Center</p>
                         <h1 class="h4 mb-0">Assigned Rows</h1>
                     </div>
-                    <div class="text-end">
-                        <a href="{{ route('cc.reports') }}" class="btn btn-outline-secondary">Back to Reports</a>
-                    </div>
+                    
                 </div>
 
                 {{-- flash status: show as popup toast only, do not render inline alert --}}
@@ -220,8 +250,14 @@
             <div class="modal-body">
                 <div class="row gy-4">
                     <div class="col-lg-6">
-                        <p class="small text-uppercase text-muted mb-2">Details</p>
-                        <div id="ccAssignmentDetailFields" class="border rounded-3 p-3 bg-light small text-muted">Select an accepted row to view its contact details.</div>
+                        <div class="cc-details-tabs mb-2" role="tablist">
+                            <button type="button" class="btn btn-sm btn-outline-primary active" data-cc-details-tab="details">Details</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-cc-details-tab="interactions">Interactions</button>
+                        </div>
+                        <div id="ccAssignmentDetailFields" class="cc-details-panel border rounded-3 p-3 bg-light small text-muted">
+                            <div id="ccDetailsPanel">Select an accepted row to view its contact details.</div>
+                            <div id="ccInteractionsPanel" style="display:none"></div>
+                        </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -273,6 +309,9 @@
 document.addEventListener('DOMContentLoaded', function () {
     const assignmentRowModal = document.getElementById('ccAssignmentRowModal');
     const detailFields = document.getElementById('ccAssignmentDetailFields');
+    const detailPanel = document.getElementById('ccDetailsPanel');
+    const interactionsPanel = document.getElementById('ccInteractionsPanel');
+    const detailTabs = document.querySelectorAll('[data-cc-details-tab]');
     const callForm = document.getElementById('ccAssignmentCallForm');
     const outcomeEl = document.getElementById('ccCallOutcome');
     const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
@@ -308,9 +347,14 @@ document.addEventListener('DOMContentLoaded', function () {
     function showModal() {
         if (!assignmentRowModal) return;
         if (bootstrapModal) {
-            assignmentRowModal.style.display = '';
-            bootstrapModal.show();
-            return;
+            try {
+                assignmentRowModal.style.display = '';
+                bootstrapModal.show();
+                return;
+            } catch (e) {
+                console.error('bootstrap modal show failed, falling back', e);
+                // fall through to fallback display
+            }
         }
         assignmentRowModal.style.display = 'block';
         assignmentRowModal.classList.add('cc-fallback-modal');
@@ -345,6 +389,24 @@ document.addEventListener('DOMContentLoaded', function () {
         if (modal) hideModal();
     });
 
+    const tabPanels = { details: detailPanel, interactions: interactionsPanel };
+    function setDetailsTab(tabName) {
+        detailTabs.forEach(btn => {
+            const target = btn.dataset.ccDetailsTab;
+            const panel = tabPanels[target];
+            btn.classList.toggle('active', target === tabName);
+            if (panel) {
+                panel.style.display = target === tabName ? '' : 'none';
+            }
+        });
+    }
+    detailTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            setDetailsTab(btn.dataset.ccDetailsTab || 'details');
+        });
+    });
+    setDetailsTab('details');
+
     async function fetchDetails(assignmentId) {
         if (!assignmentId) return null;
         const res = await fetch(`/cc/assignments/${assignmentId}/details`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -352,8 +414,42 @@ document.addEventListener('DOMContentLoaded', function () {
         return res.json();
     }
 
+    function formatPaymentExpectation(outcome) {
+        if (!outcome) return null;
+        const normalized = outcome.toLowerCase().trim();
+        if (normalized.includes('agreed to pay within')) {
+            const match = outcome.match(/within\s+(.*)/i);
+            if (match && match[1]) {
+                return 'Payment within ' + match[1].trim();
+            }
+        }
+        if (normalized === 'not answered') {
+            return 'Not answered';
+        }
+        return outcome.charAt(0).toUpperCase() + outcome.slice(1);
+    }
+
+    function formatPaymentResult(interaction) {
+        if (!interaction) return null;
+        if (interaction.paid) {
+            const amount = interaction.paid_amount || '—';
+            const date = interaction.payment_date ? ' on ' + interaction.payment_date : '';
+            return 'Paid ' + amount + date;
+        }
+        if (interaction.payment_date) {
+            return 'Payment recorded on ' + interaction.payment_date;
+        }
+        if (interaction.payment_expected_at) {
+            return 'Payment expected by ' + interaction.payment_expected_at;
+        }
+        if ((interaction.outcome || '').toLowerCase().trim() === 'not answered') {
+            return 'Not answered';
+        }
+        return null;
+    }
+
     function renderDetails(data) {
-        if (!detailFields) return;
+        if (!detailPanel || !interactionsPanel) return;
         const outcome = document.getElementById('ccCallOutcome');
         const note = document.getElementById('ccCallNote');
         const pay = document.getElementById('ccPaymentExpected');
@@ -371,12 +467,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (wrapper) wrapper.classList.add('cc-disabled');
 
         if (!data) {
-            detailFields.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
+            detailPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
+            interactionsPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
             document.getElementById('ccSelectedName').textContent = '';
             document.getElementById('ccSelectedAmounts').textContent = '';
             return;
         }
-        detailFields.innerHTML = `
+        detailPanel.innerHTML = `
             <div class="mb-2"><strong>Phone:</strong> ${data.phone ?? '—'}</div>
             <div class="mb-2"><strong>Address:</strong> ${data.address ?? '—'}</div>
             <div class="mb-2"><strong>RTOM:</strong> ${data.rtom ?? '—'}</div>
@@ -387,20 +484,41 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="mb-2"><strong>Full address:</strong> ${data.full_address ?? '—'}</div>
         `;
 
+        const paymentsByInteraction = {};
+        if (Array.isArray(data.payments)) {
+            data.payments.forEach(p => {
+                if (p && p.interaction_id) paymentsByInteraction[String(p.interaction_id)] = p;
+            });
+        }
+
         if (Array.isArray(data.interactions) && data.interactions.length) {
-            let hist = '<div class="mt-3"><div class="small text-muted mb-2">Recent interactions</div>';
-            hist += '<div class="cc-interactions-scroll"><table class="table table-sm mb-0 cc-interactions-table"><tbody>';
-            data.interactions.forEach(i => {
+            const interactionsList = data.interactions;
+            let hist = '<div><div class="cc-interactions-scroll"><table class="table table-sm mb-0 cc-interactions-table"><tbody>';
+            interactionsList.forEach(i => {
                 const agent = i.agent_name ? i.agent_name : ('Agent #'+(i.agent_id||'—'));
                 const created = i.created_at ? i.created_at : '';
-                const outcome = i.outcome ? i.outcome : '—';
                 const acct = i.account_number ? (' — Acc: ' + i.account_number) : '';
                 const noteHtml = i.note ? `<div class="small text-muted mt-1">${i.note}</div>` : '';
-                hist += `<tr><td style="width:38%"><div class="fw-semibold">${agent}</div><div class="text-muted small">${created}</div></td>`;
-                hist += `<td><div class="text-muted small">${outcome}${acct}</div>${noteHtml}</td></tr>`;
+                const expectation = formatPaymentExpectation(i.outcome);
+                const expectationHtml = expectation ? `<div class="small text-uppercase text-muted mb-1">${expectation}</div>` : '';
+                const pay = paymentsByInteraction[String(i.id)];
+                if (pay) {
+                    const amount = pay.paid_amount ? pay.paid_amount : '—';
+                    const date = pay.payment_date ? pay.payment_date : '—';
+                    const paidBy = pay.paid_by_agent ? pay.paid_by_agent : '—';
+                    const lastContact = pay.last_contact_before_payment ? pay.last_contact_before_payment : null;
+                    const lastContactAt = pay.last_contact_before_payment_at ? (' on ' + pay.last_contact_before_payment_at) : '';
+                    hist += `<tr class="payment-row"><td></td>`;
+                    hist += `<td><div class="small text-uppercase text-muted">PAYMENT</div><div class="fw-semibold text-success">Paid ${amount} on ${date}</div>`;
+                    hist += `<div class="small text-muted">Recorded by: ${paidBy}${lastContact ? ' — Last contact before payment: ' + lastContact + (lastContactAt || '') : ''}</div></td></tr>`;
+                }
+                hist += `<tr class="interaction-row"><td style="width:38%"><div class="fw-semibold">${agent}</div><div class="text-muted small">${created}</div></td>`;
+                hist += `<td>${expectationHtml}<div class="text-muted small">${acct}</div>${noteHtml}</td></tr>`;
             });
             hist += '</tbody></table></div></div>';
-            detailFields.innerHTML += hist;
+            interactionsPanel.innerHTML = hist;
+        } else {
+            interactionsPanel.innerHTML = '<div class="text-muted small">No interactions recorded.</div>';
         }
         const selName = document.getElementById('ccSelectedName');
         const selAmt = document.getElementById('ccSelectedAmounts');
@@ -417,12 +535,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (startBtn) startBtn.disabled = true;
                 if (saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('d-none'); }
                 if (wrapper) wrapper.classList.add('cc-disabled');
-                // add a small notice inside details
-                detailFields.insertAdjacentHTML('afterbegin', '<div class="small text-muted mb-2">This row belongs to a previous report; interactions are read-only.</div>');
-                if (reasonEl) reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
-                if (startNoteEl) { startNoteEl.textContent = 'Call not allowed for this row.'; startNoteEl.style.display = ''; }
+                // show a single red status message in the call-status area
+                if (reasonEl) {
+                    reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
+                    reasonEl.classList.remove('text-muted');
+                    reasonEl.classList.add('text-danger');
+                }
+                if (startNoteEl) { startNoteEl.style.display = 'none'; }
             } else {
-                if (reasonEl) reasonEl.textContent = '';
+                if (reasonEl) { reasonEl.textContent = ''; reasonEl.classList.remove('text-danger'); reasonEl.classList.add('text-muted'); }
                 if (startNoteEl) { startNoteEl.textContent = ''; startNoteEl.style.display = 'none'; }
                 if (startBtn) {
                     startBtn.onclick = () => {
@@ -632,10 +753,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>`;
                 btn.addEventListener('click', async () => {
                     document.getElementById('ccCallAssignmentId').value = r.assignment_id;
-                    detailFields.innerHTML = '<div class="text-muted small">Loading...</div>';
-                    showModal();
-                    const details = await fetchDetails(r.assignment_id);
-                    renderDetails(details);
+                    detailPanel.innerHTML = '<div class="text-muted small">Loading...</div>';
+                    interactionsPanel.innerHTML = '';
+                    try {
+                        const details = await fetchDetails(r.assignment_id);
+                        if (!details) {
+                            detailFields.innerHTML = '<div class="text-danger small">Details unavailable.</div>';
+                            return;
+                        }
+                        renderDetails(details);
+                        showModal();
+                    } catch (err) {
+                        console.error('Failed to load details', err);
+                        detailFields.innerHTML = '<div class="text-danger small">Failed to load details. Please try again.</div>';
+                    }
                 });
                 assignmentList.appendChild(btn);
             });

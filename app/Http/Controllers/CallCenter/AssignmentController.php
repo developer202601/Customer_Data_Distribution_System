@@ -724,6 +724,18 @@ class AssignmentController extends Controller
         $userIds = $request->input('user_ids', []);
         $perUser = $request->input('per_user', null);
         $user = Auth::user();
+        // sanitize user ids
+        $userIds = array_values(array_filter($userIds, fn($id) => is_numeric($id) && (int)$id > 0));
+
+        // Mark selected users as fixed in the users table
+        if (!empty($userIds)) {
+            try {
+                \App\Models\User::whereIn('id', $userIds)->update(['fixed' => 1]);
+            } catch (\Exception $e) {
+                // don't block distribution if this fails; log if needed
+            }
+        }
+
         // Always run synchronously so the page displays updated assignments immediately after form submission.
         Bus::dispatchSync(new DistributeCallCenterReport($reportId, $userIds, $perUser));
 

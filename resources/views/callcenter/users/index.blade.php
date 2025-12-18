@@ -62,7 +62,6 @@
                                         <th>Username</th>
                                         <th>Role</th>
                                         <th>Status</th>
-                                        <th>Fixed</th>
                                         <th>Created</th>
                                         <th class="text-end">Actions</th>
                                     </tr>

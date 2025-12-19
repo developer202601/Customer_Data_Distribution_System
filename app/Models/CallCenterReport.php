@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CallCenterAssignment;
+use App\Models\CallCenterInteraction;
 use App\Models\MasterDatasetProcess;
 
 class CallCenterReport extends Model
@@ -26,5 +28,20 @@ class CallCenterReport extends Model
     public function process(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(MasterDatasetProcess::class, 'master_dataset_process_id');
+    }
+
+    public function assignments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CallCenterAssignment::class, 'call_center_report_id');
+    }
+
+    public function interactions(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
+    {
+        return $this->hasManyThrough(
+            CallCenterInteraction::class,
+            CallCenterAssignment::class,
+            'call_center_report_id',
+            'assignment_id'
+        );
     }
 }

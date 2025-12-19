@@ -14,7 +14,7 @@
                 <a class="nav-link{{ str_starts_with($ccRouteName, 'cc.reports') ? ' active' : '' }}" href="{{ route('cc.reports') }}" aria-current="{{ str_starts_with($ccRouteName, 'cc.reports') ? 'page' : '' }}">Reports</a>
             @endif
             <a class="nav-link{{ str_starts_with($ccRouteName, 'cc.assignments') ? ' active' : '' }}" href="{{ route('cc.assignments.manage') }}" aria-current="{{ str_starts_with($ccRouteName, 'cc.assignments') ? 'page' : '' }}">Assigned Rows</a>
-            <a class="nav-link" href="#">Queues</a>
+            <!-- <a class="nav-link" href="#">Queues</a> -->
         </nav>
     </div>
 </div>

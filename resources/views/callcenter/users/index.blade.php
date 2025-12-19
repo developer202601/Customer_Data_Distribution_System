@@ -62,7 +62,6 @@
                                         <th>Username</th>
                                         <th>Role</th>
                                         <th>Status</th>
-                                        <th>Fixed</th>
                                         <th>Created</th>
                                         <th class="text-end">Actions</th>
                                     </tr>
@@ -273,11 +272,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (window.bootstrap && deleteModalEl) deleteModal = new bootstrap.Modal(deleteModalEl);
 
     const bindTableActions = () => {
+        const confirmLabel = document.getElementById('ccDisableConfirmLabel');
         document.querySelectorAll('.cc-disable-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 pendingAction = btn.getAttribute('data-action');
                 const uname = btn.getAttribute('data-username') || '—';
                 if (disableUsernameEl) disableUsernameEl.textContent = uname;
+                if (confirmLabel) confirmLabel.textContent = 'Disable User';
+                if (disableConfirmBtn) disableConfirmBtn.textContent = 'Disable';
                 disableModal?.show();
             });
         });
@@ -287,6 +289,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 pendingAction = btn.getAttribute('data-action');
                 const uname = btn.getAttribute('data-username') || '—';
                 if (disableUsernameEl) disableUsernameEl.textContent = uname;
+                if (confirmLabel) confirmLabel.textContent = 'Enable User';
+                if (disableConfirmBtn) disableConfirmBtn.textContent = 'Enable';
                 disableModal?.show();
             });
         });

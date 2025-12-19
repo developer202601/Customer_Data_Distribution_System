@@ -72,6 +72,8 @@ Route::middleware('session.auth')->group(function () {
             Route::put('/users/{ccUser}/disable', [CallCenterUserController::class, 'disable'])->name('users.disable');
             Route::put('/users/{ccUser}/enable', [CallCenterUserController::class, 'enable'])->name('users.enable');
             Route::delete('/users/{ccUser}', [CallCenterUserController::class, 'destroy'])->name('users.destroy');
+            Route::get('/reports/history', [CallCenterReportController::class, 'history'])->name('reports.history');
+            Route::get('/reports/{report}/summary', [CallCenterReportController::class, 'summary'])->name('reports.summary');
             Route::get('/reports', [CallCenterReportController::class, 'index'])->name('reports');
             Route::post('/reports/{report}/distribute', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'distribute'])->name('reports.distribute');
             Route::get('/reports/{report}/distribute/cancel/{token}', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'cancelDistribute'])->name('reports.distribute.cancel');

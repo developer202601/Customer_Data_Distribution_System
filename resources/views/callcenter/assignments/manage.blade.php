@@ -45,7 +45,7 @@
         background: rgba(13, 110, 253, 0.08);
     }
     .cc-interactions-scroll {
-        max-height: 120px; /* roughly two items tall */
+        max-height: 360px;
         overflow-y: auto;
         border: 1px solid rgba(0,0,0,0.04);
         border-radius: 0.375rem;
@@ -53,6 +53,38 @@
     }
     .cc-interactions-table td { vertical-align: top; padding: .5rem .75rem; }
     .cc-interactions-table tbody tr + tr td { border-top: 1px solid rgba(0,0,0,0.04); }
+    .cc-details-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    /* Make the left details container flex so interactions panel can expand */
+    .cc-details-panel { min-height: 320px; overflow: hidden; display: flex; flex-direction: column; }
+    /* Details stays its natural height, interactions take remaining space and scroll */
+    #ccDetailsPanel { flex: none; }
+    #ccInteractionsPanel { flex: 1 1 auto; overflow: hidden; }
+    #ccInteractionsPanel .cc-interactions-scroll { height: 100%; }
+    /* Ensure modal never extends underneath fixed nav and remains scrollable */
+    :root { --cc-navbar-offset: 90px; }
+    .modal-dialog { max-height: calc(100vh - var(--cc-navbar-offset)); }
+    .modal-content { max-height: calc(100vh - var(--cc-navbar-offset)); overflow: hidden; }
+    .modal-body { overflow-y: auto; }
+
+    /* When bootstrap centers modals with translateY(-50%), they can sit under a fixed navbar.
+       Override centering so modals are placed below the navbar instead. */
+    .modal-dialog.modal-dialog-centered {
+        transform: none !important;
+        margin: calc(var(--cc-navbar-offset) / 2) auto 1.5rem auto;
+    }
+
+    /* Fallback modal (used when JS bootstrap fails): position below navbar and keep horizontally centered */
+    .cc-fallback-modal {
+        position: fixed !important;
+        top: calc(var(--cc-navbar-offset) + 10px) !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 1080 !important;
+        max-width: 900px !important;
+        width: calc(100% - 40px) !important;
+        max-height: calc(100vh - calc(var(--cc-navbar-offset) + 40px));
+        overflow: hidden;
+    }
 </style>
 @endpush
 
@@ -66,9 +98,7 @@
                         <p class="text-uppercase text-muted mb-1">Call Center</p>
                         <h1 class="h4 mb-0">Assigned Rows</h1>
                     </div>
-                    <div class="text-end">
-                        <a href="{{ route('cc.reports') }}" class="btn btn-outline-secondary">Back to Reports</a>
-                    </div>
+                    
                 </div>
 
                 {{-- flash status: show as popup toast only, do not render inline alert --}}
@@ -104,25 +134,63 @@
                     <div class="text-muted small">{{ $reportLabel ?? 'All reports' }}</div>
                 </div>
 
-                @if(isset($latestReportId) && $latestReportId && ($latestReportPending ?? 0) > 0 && (count($userReportIds ?? []) > 1))
-                    <div class="alert alert-info">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>New assignments:</strong> {{ $latestReportPending }} rows from {{ $latestReportLabel ?? ('Report #'.$latestReportId) }}. Please accept or reject these new rows.
+                @if(($latestReportPending ?? 0) > 0)
+                    <div class="mb-4">
+                        <div class="card border-0 rounded-4 bg-white shadow-sm">
+                            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+                                <div class="flex-grow-1">
+                                    <p class="text-uppercase small text-muted mb-1">New report assigned</p>
+                                    <h3 class="h6 mb-2">
+                                        Accept or reject the {{ number_format($latestReportPending) }} pending rows from {{ $latestReportLabel ?? ('Report #'.$latestReportId) }} before you start calling.
+                                    </h3>
+                                    <p class="small text-muted mb-1">If you already accepted rows from an earlier report, those assignments are now read-only and will be replaced with this new batch once you accept it.</p>
+                                    @if(!empty($latestReportAllReassigned))
+                                        <p class="small text-muted mb-0">These look like reissued rows. If you reject them, we'll discard your copy and reopen the original for the previous owner. No reason is required.</p>
+                                    @else
+                                        <p class="small text-muted mb-0">Rejections update only the assignment table (no interaction record is created) and a short reason is required.</p>
+                                    @endif
+                                </div>
+                                <div class="d-flex flex-column align-items-start align-items-md-end gap-2">
+                                    <form method="post" action="{{ route('cc.assignments.acceptAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccAcceptNewForm">
+                                        @csrf
+                                        <input type="hidden" name="report" value="{{ $latestReportId }}">
+                                        <button type="submit" class="btn btn-success btn-sm px-4">Accept rows</button>
+                                    </form>
+                                    <button type="button" class="btn btn-outline-danger btn-sm px-4" data-bs-toggle="modal" data-bs-target="#ccRejectReasonModal">
+                                        Reject rows
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="ccToggleOldRows">Show previous report rows</button>
+                                </div>
                             </div>
-                            <div class="d-flex gap-2">
-                                <form method="post" action="{{ route('cc.assignments.acceptAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccAcceptNewForm">
-                                    @csrf
-                                    <input type="hidden" name="report" value="{{ $latestReportId }}">
-                                    <button type="submit" class="btn btn-sm btn-success">Accept new rows</button>
-                                </form>
-                                <form method="post" action="{{ route('cc.assignments.rejectAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccRejectNewForm">
-                                    @csrf
-                                    <input type="hidden" name="report" value="{{ $latestReportId }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Reject new rows</button>
-                                </form>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" id="ccToggleOldRows">Show previous report rows</button>
-                            </div>
+                        </div>
+                    </div>
+                    <div class="modal fade" id="ccRejectReasonModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <form method="post" action="{{ route('cc.assignments.rejectAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccRejectNewForm" class="modal-content">
+                                @csrf
+                                <input type="hidden" name="report" value="{{ $latestReportId }}">
+                                <input type="hidden" name="requires_reason" value="{{ $latestReportAllReassigned ? '0' : '1' }}">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Reject pending rows</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    @if(!empty($latestReportAllReassigned))
+                                        <p class="small text-muted mb-0">These are reassigned copies. Rejecting will remove your copy and return the original to pending for the previous assignee. No reason needed.</p>
+                                        <input type="hidden" name="rejection_note" value="">
+                                    @else
+                                        <p class="small text-muted mb-3">Rejected rows will stay in the assignment table only; no interaction record is created. Please explain why you are declining these rows.</p>
+                                        <div class="mb-3">
+                                            <label for="ccRejectReason" class="form-label small">Rejection reason</label>
+                                            <textarea name="rejection_note" id="ccRejectReason" class="form-control form-control-sm" rows="3" required></textarea>
+                                        </div>
+                                    @endif
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-danger btn-sm">Reject rows</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 @endif
@@ -146,28 +214,10 @@
                                             <p class="small text-uppercase text-muted mb-1">{{ $agent->username ?? 'User '.$userId }}</p>
                                             <h3 class="h6 mb-1 fw-semibold">{{ $agent->name ?? ($agent->username ?? 'Unknown agent') }}</h3>
                                         </div>
-                                        <div class="d-flex gap-2 align-items-center">
-                                            @if($accepted->isEmpty())
-                                                @if($pendingCount > 0)
-                                                    <form method="post" action="{{ route('cc.assignments.acceptAll', $userId) }}">
-                                                        @csrf
-                                                        @if($reportId)
-                                                            <input type="hidden" name="report" value="{{ $reportId }}">
-                                                        @endif
-                                                        <button type="submit" class="btn btn-sm btn-success">Accept All</button>
-                                                    </form>
-                                                    <form method="post" action="{{ route('cc.assignments.rejectAll', $userId) }}">
-                                                        @csrf
-                                                        @if($reportId)
-                                                            <input type="hidden" name="report" value="{{ $reportId }}">
-                                                        @endif
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger">Reject All</button>
-                                                    </form>
-                                                @else
-                                                    <span class="badge bg-secondary">No pending</span>
-                                                @endif
-                                            @else
-                                                <span class="badge bg-success">Accepted ({{ $acceptedCount }})</span>
+                                        <div class="text-end">
+                                            <span class="badge bg-success">Accepted ({{ $acceptedCount }})</span>
+                                            @if($pendingCount > 0)
+                                                <div class="text-muted small mt-1">Pending {{ $pendingCount }} rows</div>
                                             @endif
                                         </div>
                                     </div>
@@ -220,8 +270,14 @@
             <div class="modal-body">
                 <div class="row gy-4">
                     <div class="col-lg-6">
-                        <p class="small text-uppercase text-muted mb-2">Details</p>
-                        <div id="ccAssignmentDetailFields" class="border rounded-3 p-3 bg-light small text-muted">Select an accepted row to view its contact details.</div>
+                        <div class="cc-details-tabs mb-2" role="tablist">
+                            <button type="button" class="btn btn-sm btn-outline-primary active" data-cc-details-tab="details">Details</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-cc-details-tab="interactions">Interactions</button>
+                        </div>
+                        <div id="ccAssignmentDetailFields" class="cc-details-panel border rounded-3 p-3 bg-light small text-muted">
+                            <div id="ccDetailsPanel">Select an accepted row to view its contact details.</div>
+                            <div id="ccInteractionsPanel" style="display:none"></div>
+                        </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -273,6 +329,9 @@
 document.addEventListener('DOMContentLoaded', function () {
     const assignmentRowModal = document.getElementById('ccAssignmentRowModal');
     const detailFields = document.getElementById('ccAssignmentDetailFields');
+    const detailPanel = document.getElementById('ccDetailsPanel');
+    const interactionsPanel = document.getElementById('ccInteractionsPanel');
+    const detailTabs = document.querySelectorAll('[data-cc-details-tab]');
     const callForm = document.getElementById('ccAssignmentCallForm');
     const outcomeEl = document.getElementById('ccCallOutcome');
     const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
@@ -308,9 +367,14 @@ document.addEventListener('DOMContentLoaded', function () {
     function showModal() {
         if (!assignmentRowModal) return;
         if (bootstrapModal) {
-            assignmentRowModal.style.display = '';
-            bootstrapModal.show();
-            return;
+            try {
+                assignmentRowModal.style.display = '';
+                bootstrapModal.show();
+                return;
+            } catch (e) {
+                console.error('bootstrap modal show failed, falling back', e);
+                // fall through to fallback display
+            }
         }
         assignmentRowModal.style.display = 'block';
         assignmentRowModal.classList.add('cc-fallback-modal');
@@ -345,6 +409,24 @@ document.addEventListener('DOMContentLoaded', function () {
         if (modal) hideModal();
     });
 
+    const tabPanels = { details: detailPanel, interactions: interactionsPanel };
+    function setDetailsTab(tabName) {
+        detailTabs.forEach(btn => {
+            const target = btn.dataset.ccDetailsTab;
+            const panel = tabPanels[target];
+            btn.classList.toggle('active', target === tabName);
+            if (panel) {
+                panel.style.display = target === tabName ? '' : 'none';
+            }
+        });
+    }
+    detailTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            setDetailsTab(btn.dataset.ccDetailsTab || 'details');
+        });
+    });
+    setDetailsTab('details');
+
     async function fetchDetails(assignmentId) {
         if (!assignmentId) return null;
         const res = await fetch(`/cc/assignments/${assignmentId}/details`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -352,8 +434,42 @@ document.addEventListener('DOMContentLoaded', function () {
         return res.json();
     }
 
+    function formatPaymentExpectation(outcome) {
+        if (!outcome) return null;
+        const normalized = outcome.toLowerCase().trim();
+        if (normalized.includes('agreed to pay within')) {
+            const match = outcome.match(/within\s+(.*)/i);
+            if (match && match[1]) {
+                return 'Payment within ' + match[1].trim();
+            }
+        }
+        if (normalized === 'not answered') {
+            return 'Not answered';
+        }
+        return outcome.charAt(0).toUpperCase() + outcome.slice(1);
+    }
+
+    function formatPaymentResult(interaction) {
+        if (!interaction) return null;
+        if (interaction.paid) {
+            const amount = interaction.paid_amount || '—';
+            const date = interaction.payment_date ? ' on ' + interaction.payment_date : '';
+            return 'Paid ' + amount + date;
+        }
+        if (interaction.payment_date) {
+            return 'Payment recorded on ' + interaction.payment_date;
+        }
+        if (interaction.payment_expected_at) {
+            return 'Payment expected by ' + interaction.payment_expected_at;
+        }
+        if ((interaction.outcome || '').toLowerCase().trim() === 'not answered') {
+            return 'Not answered';
+        }
+        return null;
+    }
+
     function renderDetails(data) {
-        if (!detailFields) return;
+        if (!detailPanel || !interactionsPanel) return;
         const outcome = document.getElementById('ccCallOutcome');
         const note = document.getElementById('ccCallNote');
         const pay = document.getElementById('ccPaymentExpected');
@@ -371,12 +487,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (wrapper) wrapper.classList.add('cc-disabled');
 
         if (!data) {
-            detailFields.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
+            detailPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
+            interactionsPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
             document.getElementById('ccSelectedName').textContent = '';
             document.getElementById('ccSelectedAmounts').textContent = '';
             return;
         }
-        detailFields.innerHTML = `
+        detailPanel.innerHTML = `
             <div class="mb-2"><strong>Phone:</strong> ${data.phone ?? '—'}</div>
             <div class="mb-2"><strong>Address:</strong> ${data.address ?? '—'}</div>
             <div class="mb-2"><strong>RTOM:</strong> ${data.rtom ?? '—'}</div>
@@ -387,20 +504,41 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="mb-2"><strong>Full address:</strong> ${data.full_address ?? '—'}</div>
         `;
 
+        const paymentsByInteraction = {};
+        if (Array.isArray(data.payments)) {
+            data.payments.forEach(p => {
+                if (p && p.interaction_id) paymentsByInteraction[String(p.interaction_id)] = p;
+            });
+        }
+
         if (Array.isArray(data.interactions) && data.interactions.length) {
-            let hist = '<div class="mt-3"><div class="small text-muted mb-2">Recent interactions</div>';
-            hist += '<div class="cc-interactions-scroll"><table class="table table-sm mb-0 cc-interactions-table"><tbody>';
-            data.interactions.forEach(i => {
+            const interactionsList = data.interactions;
+            let hist = '<div><div class="cc-interactions-scroll"><table class="table table-sm mb-0 cc-interactions-table"><tbody>';
+            interactionsList.forEach(i => {
                 const agent = i.agent_name ? i.agent_name : ('Agent #'+(i.agent_id||'—'));
                 const created = i.created_at ? i.created_at : '';
-                const outcome = i.outcome ? i.outcome : '—';
                 const acct = i.account_number ? (' — Acc: ' + i.account_number) : '';
                 const noteHtml = i.note ? `<div class="small text-muted mt-1">${i.note}</div>` : '';
-                hist += `<tr><td style="width:38%"><div class="fw-semibold">${agent}</div><div class="text-muted small">${created}</div></td>`;
-                hist += `<td><div class="text-muted small">${outcome}${acct}</div>${noteHtml}</td></tr>`;
+                const expectation = formatPaymentExpectation(i.outcome);
+                const expectationHtml = expectation ? `<div class="small text-uppercase text-muted mb-1">${expectation}</div>` : '';
+                const pay = paymentsByInteraction[String(i.id)];
+                if (pay) {
+                    const amount = pay.paid_amount ? pay.paid_amount : '—';
+                    const date = pay.payment_date ? pay.payment_date : '—';
+                    const paidBy = pay.paid_by_agent ? pay.paid_by_agent : '—';
+                    const lastContact = pay.last_contact_before_payment ? pay.last_contact_before_payment : null;
+                    const lastContactAt = pay.last_contact_before_payment_at ? (' on ' + pay.last_contact_before_payment_at) : '';
+                    hist += `<tr class="payment-row"><td></td>`;
+                    hist += `<td><div class="small text-uppercase text-muted">PAYMENT</div><div class="fw-semibold text-success">Paid ${amount} on ${date}</div>`;
+                    hist += `<div class="small text-muted">Recorded by: ${paidBy}${lastContact ? ' — Last contact before payment: ' + lastContact + (lastContactAt || '') : ''}</div></td></tr>`;
+                }
+                hist += `<tr class="interaction-row"><td style="width:38%"><div class="fw-semibold">${agent}</div><div class="text-muted small">${created}</div></td>`;
+                hist += `<td>${expectationHtml}<div class="text-muted small">${acct}</div>${noteHtml}</td></tr>`;
             });
             hist += '</tbody></table></div></div>';
-            detailFields.innerHTML += hist;
+            interactionsPanel.innerHTML = hist;
+        } else {
+            interactionsPanel.innerHTML = '<div class="text-muted small">No interactions recorded.</div>';
         }
         const selName = document.getElementById('ccSelectedName');
         const selAmt = document.getElementById('ccSelectedAmounts');
@@ -417,12 +555,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (startBtn) startBtn.disabled = true;
                 if (saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('d-none'); }
                 if (wrapper) wrapper.classList.add('cc-disabled');
-                // add a small notice inside details
-                detailFields.insertAdjacentHTML('afterbegin', '<div class="small text-muted mb-2">This row belongs to a previous report; interactions are read-only.</div>');
-                if (reasonEl) reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
-                if (startNoteEl) { startNoteEl.textContent = 'Call not allowed for this row.'; startNoteEl.style.display = ''; }
+                // show a single red status message in the call-status area
+                if (reasonEl) {
+                    reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
+                    reasonEl.classList.remove('text-muted');
+                    reasonEl.classList.add('text-danger');
+                }
+                if (startNoteEl) { startNoteEl.style.display = 'none'; }
             } else {
-                if (reasonEl) reasonEl.textContent = '';
+                if (reasonEl) { reasonEl.textContent = ''; reasonEl.classList.remove('text-danger'); reasonEl.classList.add('text-muted'); }
                 if (startNoteEl) { startNoteEl.textContent = ''; startNoteEl.style.display = 'none'; }
                 if (startBtn) {
                     startBtn.onclick = () => {
@@ -512,65 +653,6 @@ document.addEventListener('DOMContentLoaded', function () {
         updateOldRowToggle();
     }
 
-    // Intercept accept/reject banner forms to update the UI via AJAX
-    const acceptForm = document.getElementById('ccAcceptNewForm');
-    const rejectForm = document.getElementById('ccRejectNewForm');
-    const bannerEl = document.querySelector('.alert.alert-info');
-
-    async function submitBannerForm(form) {
-        if (!form) return;
-        const url = form.action;
-        const formData = new FormData(form);
-        try {
-            const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });
-            if (!res.ok) throw new Error('request failed');
-            const data = await res.json();
-            // Update counts in-place so we don't need a full reload
-            const totalEl = document.getElementById('ccTotalAssigned');
-            if (data.total_pending !== undefined && totalEl) {
-                totalEl.textContent = String(data.total_pending);
-            }
-                // Keep the assignment list dataset in sync so load logic knows
-                // whether to request completed (previous-report) rows or not.
-                try {
-                    if (assignmentList) {
-                        if (data.latest_report_id !== undefined) {
-                            assignmentList.dataset.latestReportId = String(data.latest_report_id || '');
-                        }
-                        // When new rows were accepted, clear the latest-report pending flag
-                        if (data.accepted !== undefined) {
-                            assignmentList.dataset.latestReportPending = '0';
-                        }
-                        // When rejected, server may leave pending counts alone; if provided, update
-                        if (data.rejected !== undefined && data.total_pending !== undefined) {
-                            assignmentList.dataset.latestReportPending = String(data.total_pending || '0');
-                        }
-                    }
-                } catch (e) { /* ignore dataset sync errors */ }
-            // hide banner and refresh visible assignments
-            if (bannerEl) bannerEl.style.display = 'none';
-            // If the action was a reject, keep previous rows visible; if accept, hide them.
-            if (data.rejected !== undefined) {
-                showOldRows = true;
-            } else {
-                showOldRows = false;
-            }
-            updateOldRowToggle();
-            paging.page = 1;
-            loadAssignments(false);
-            return data;
-        } catch (e) {
-            console.error('Banner action failed', e);
-            alert('Action failed. Please try again.');
-        }
-    }
-
-    // Banner forms (accept/reject) now submit as normal (non-AJAX).
-    // Previously these were intercepted to POST via fetch; that caused
-    // confusing UI messaging and duplicate network activity. Leave the
-    // forms to perform standard POST + redirect so the server flash
-    // message flow remains predictable.
-
     async function loadAssignments(append = false) {
         if (!assignmentList || !userId) return;
         const params = new URLSearchParams({ page: paging.page, per_page: paging.per_page });
@@ -632,10 +714,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>`;
                 btn.addEventListener('click', async () => {
                     document.getElementById('ccCallAssignmentId').value = r.assignment_id;
-                    detailFields.innerHTML = '<div class="text-muted small">Loading...</div>';
-                    showModal();
-                    const details = await fetchDetails(r.assignment_id);
-                    renderDetails(details);
+                    detailPanel.innerHTML = '<div class="text-muted small">Loading...</div>';
+                    interactionsPanel.innerHTML = '';
+                    try {
+                        const details = await fetchDetails(r.assignment_id);
+                        if (!details) {
+                            detailFields.innerHTML = '<div class="text-danger small">Details unavailable.</div>';
+                            return;
+                        }
+                        renderDetails(details);
+                        showModal();
+                    } catch (err) {
+                        console.error('Failed to load details', err);
+                        detailFields.innerHTML = '<div class="text-danger small">Failed to load details. Please try again.</div>';
+                    }
                 });
                 assignmentList.appendChild(btn);
             });

@@ -9,7 +9,6 @@
         <span class="badge bg-secondary">Disabled</span>
         @endif
     </td>
-    <td>{{ $user->fixed ? 'Yes' : 'No' }}</td>
     <td>{{ optional($user->created_at)->format('Y-m-d H:i') ?? '—' }}</td>
     <td class="text-end">
         <div class="d-inline-flex gap-1">

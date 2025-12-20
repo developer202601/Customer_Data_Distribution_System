@@ -38,19 +38,19 @@ class ReportController extends Controller
 
         $rejectedAssignments = $selectedReport
             ? CallCenterAssignment::with(['row', 'rejectedBy', 'interactions.agent'])
-                ->where('call_center_report_id', $selectedReport->id)
-                ->rejected()
-                ->where('status', 'pending')
-                ->orderByDesc('rejected_at')
-                ->get()
+            ->where('call_center_report_id', $selectedReport->id)
+            ->rejected()
+            ->where('status', 'pending')
+            ->orderByDesc('rejected_at')
+            ->get()
             : collect();
 
         $acceptedAssignments = $selectedReport
             ? CallCenterAssignment::with(['row', 'agent', 'interactions.agent'])
-                ->where('call_center_report_id', $selectedReport->id)
-                ->where('accepted', true)
-                ->orderByDesc('accepted_at')
-                ->get()
+            ->where('call_center_report_id', $selectedReport->id)
+            ->where('accepted', true)
+            ->orderByDesc('accepted_at')
+            ->get()
             : collect();
 
         $ccUsers = CallCenterUser::active()->orderBy('username')->get();
@@ -59,9 +59,9 @@ class ReportController extends Controller
         foreach ($ccUsers as $u) {
             $pendingCounts[$u->id] = $selectedReport
                 ? CallCenterAssignment::where('assigned_user_id', $u->id)
-                    ->where('call_center_report_id', $selectedReport->id)
-                    ->pendingApproval()
-                    ->count()
+                ->where('call_center_report_id', $selectedReport->id)
+                ->pendingApproval()
+                ->count()
                 : 0;
         }
 
@@ -99,7 +99,7 @@ class ReportController extends Controller
 
         $hasInteractions = false;
         if ($selectedReport) {
-            $hasInteractions = CallCenterInteraction::whereHas('assignment', fn ($query) => $query->where('call_center_report_id', $selectedReport->id))->exists();
+            $hasInteractions = CallCenterInteraction::whereHas('assignment', fn($query) => $query->where('call_center_report_id', $selectedReport->id))->exists();
         }
 
         $acceptedUserIds = $acceptedAssignments->pluck('assigned_user_id')->filter()->unique()->values()->all();
@@ -240,8 +240,8 @@ class ReportController extends Controller
         $acceptanceRate = $assignedCount ? round(($acceptedCount / $assignedCount) * 100, 1) : 0;
         $interactionCollection = $assignments->flatMap->interactions;
         $totalInteractions = $interactionCollection->count();
-        $totalPayments = $interactionCollection->sum(fn (CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0)
-            + $assignments->sum(fn (CallCenterAssignment $assignment) => $assignment->paid_amount ?? 0);
+        $totalPayments = $interactionCollection->sum(fn(CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0)
+            + $assignments->sum(fn(CallCenterAssignment $assignment) => $assignment->paid_amount ?? 0);
 
         $agentMetrics = $assignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function ($group) {
             $assignmentCount = $group->count();
@@ -249,7 +249,7 @@ class ReportController extends Controller
             $rejected = $group->where('rejected', true)->count();
             $interactions = $group->flatMap->interactions;
             $callCount = $interactions->count();
-            $paymentAmount = $interactions->sum(fn (CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0);
+            $paymentAmount = $interactions->sum(fn(CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0);
             $agent = $group->first()->agent;
             return [
                 'user_id' => $group->first()->assigned_user_id,
@@ -278,9 +278,9 @@ class ReportController extends Controller
 
         $nextAssignmentStart = $nextReport
             ? CallCenterAssignment::where('call_center_report_id', $nextReport->id)
-                ->whereNotNull('created_at')
-                ->orderBy('created_at')
-                ->value('created_at')
+            ->whereNotNull('created_at')
+            ->orderBy('created_at')
+            ->value('created_at')
             : null;
 
         $reportEndCandidate = $nextAssignmentStart
@@ -330,10 +330,10 @@ class ReportController extends Controller
     {
         $month = $report->dataset_month;
         if ($month && strlen($month) === 6) {
-            return substr($month, 0, 4).'/'.substr($month, 4, 2).' report';
+            return substr($month, 0, 4) . '/' . substr($month, 4, 2) . ' report';
         }
 
-        return 'Report #'.$report->id;
+        return 'Report #' . $report->id;
     }
 
     private function formatAgentLabel(?User $agent): string
@@ -346,7 +346,7 @@ class ReportController extends Controller
         $username = trim((string) ($agent->username ?? ''));
 
         if ($name && $username) {
-            return $name.' ('.$username.')';
+            return $name . ' (' . $username . ')';
         }
 
         if ($name) {
@@ -357,29 +357,29 @@ class ReportController extends Controller
             return $username;
         }
 
-        return 'Agent '.($agent->id ?? 'unknown');
+        return 'Agent ' . ($agent->id ?? 'unknown');
     }
 
     private function groupCountsByDate(Collection $interactions): array
     {
         return $interactions
-            ->filter(fn ($interaction) => $interaction->created_at)
-            ->groupBy(fn ($interaction) => $interaction->created_at->toDateString())
-            ->map(fn ($group) => $group->count())
+            ->filter(fn($interaction) => $interaction->created_at)
+            ->groupBy(fn($interaction) => $interaction->created_at->toDateString())
+            ->map(fn($group) => $group->count())
             ->all();
     }
 
     private function buildDailyBestAgents(Collection $interactions): array
     {
         return $interactions
-            ->filter(fn ($interaction) => $interaction->created_at)
-            ->groupBy(fn ($interaction) => $interaction->created_at->toDateString())
+            ->filter(fn($interaction) => $interaction->created_at)
+            ->groupBy(fn($interaction) => $interaction->created_at->toDateString())
             ->mapWithKeys(function (Collection $group, string $date) {
-                $agentBuckets = $group->groupBy(fn ($interaction) => $interaction->agent?->id ?? 'unassigned');
+                $agentBuckets = $group->groupBy(fn($interaction) => $interaction->agent?->id ?? 'unassigned');
                 $best = $agentBuckets->map(function (Collection $bucket, $agentId) {
                     $interaction = $bucket->first();
                     $name = optional($interaction->agent)->username
-                        ?? ($agentId === 'unassigned' ? 'Unassigned' : 'Agent '.$agentId);
+                        ?? ($agentId === 'unassigned' ? 'Unassigned' : 'Agent ' . $agentId);
                     return [
                         'name' => $name,
                         'calls' => $bucket->count(),
@@ -431,7 +431,7 @@ class ReportController extends Controller
             $weekEnd = $weekStart->copy()->endOfWeek();
 
             return [
-                'label' => $weekStart->format('M j').' – '.$weekEnd->format('M j'),
+                'label' => $weekStart->format('M j') . ' – ' . $weekEnd->format('M j'),
                 'count' => $this->sumCountsBetween($counts, $weekStart, $weekEnd),
             ];
         })->values()->all();

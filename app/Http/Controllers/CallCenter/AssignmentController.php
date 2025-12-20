@@ -95,10 +95,10 @@ class AssignmentController extends Controller
 
             $callCount = 0;
             $calledInPeriod = false;
-                if (! empty($assignment->accepted_at)) {
-                    try {
-                        $startDate = Carbon::parse($assignment->accepted_at);
-                        $callQSince = (clone $callQBase)->where('created_at', '>=', $startDate->format('Y-m-d H:i:s'));
+            if (! empty($assignment->accepted_at)) {
+                try {
+                    $startDate = Carbon::parse($assignment->accepted_at);
+                    $callQSince = (clone $callQBase)->where('created_at', '>=', $startDate->format('Y-m-d H:i:s'));
                     $callCount = (clone $callQSince)->count();
                     $calledInPeriod = $callCount > 0;
                 } catch (\Exception $e) {
@@ -157,7 +157,7 @@ class AssignmentController extends Controller
             $r = \App\Models\CallCenterReport::find((int) $reportId);
             if ($r) {
                 $dm = $r->dataset_month;
-                $reportLabel = ($dm && strlen($dm) === 6) ? substr($dm,0,4).'/'.substr($dm,4,2).' report' : ($r->dataset_month ?: 'Unknown report');
+                $reportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($r->dataset_month ?: 'Unknown report');
             }
         }
 
@@ -183,7 +183,7 @@ class AssignmentController extends Controller
             $lr = \App\Models\CallCenterReport::find((int) $latestReportId);
             if ($lr) {
                 $dm = $lr->dataset_month;
-                $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm,0,4).'/'.substr($dm,4,2).' report' : ($lr->dataset_month ?: 'Report #'.$lr->id);
+                $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($lr->dataset_month ?: 'Report #' . $lr->id);
             }
         }
 
@@ -462,20 +462,20 @@ class AssignmentController extends Controller
 
         $interactionsRaw = $q->orderBy('created_at', 'desc')->get();
         $interactions = $interactionsRaw->map(function ($i) {
-                return [
-                    'id' => $i->id,
-                    'agent_id' => $i->agent_id,
-                    'agent_name' => $i->agent ? ($i->agent->name ?? $i->agent->username ?? null) : null,
-                    'outcome' => $i->outcome,
-                    'note' => $i->note,
-                    'account_number' => $i->account_number ?? null,
-                    'paid' => (bool) ($i->paid ?? false),
-                    'paid_amount' => $i->paid_amount ? number_format($i->paid_amount, 2) : null,
-                    'payment_expected_at' => $i->payment_expected_at ? $i->payment_expected_at->toDateString() : null,
-                    'payment_date' => $i->payment_date ? $i->payment_date->toDateString() : null,
-                    'created_at' => $i->created_at ? $i->created_at->toDateTimeString() : null,
-                ];
-            });
+            return [
+                'id' => $i->id,
+                'agent_id' => $i->agent_id,
+                'agent_name' => $i->agent ? ($i->agent->name ?? $i->agent->username ?? null) : null,
+                'outcome' => $i->outcome,
+                'note' => $i->note,
+                'account_number' => $i->account_number ?? null,
+                'paid' => (bool) ($i->paid ?? false),
+                'paid_amount' => $i->paid_amount ? number_format($i->paid_amount, 2) : null,
+                'payment_expected_at' => $i->payment_expected_at ? $i->payment_expected_at->toDateString() : null,
+                'payment_date' => $i->payment_date ? $i->payment_date->toDateString() : null,
+                'created_at' => $i->created_at ? $i->created_at->toDateTimeString() : null,
+            ];
+        });
 
         // Compute payment events separately: find interactions that recorded a payment
         $payments = [];
@@ -555,7 +555,7 @@ class AssignmentController extends Controller
         $updated = CallCenterAssignment::where('id', $id)
             ->where(function ($q) use ($user) {
                 $q->where('status', 'pending')->orWhere(function ($q2) use ($user) {
-                    $q2->where('assigned_user_id', $user->id)->where('status','claimed');
+                    $q2->where('assigned_user_id', $user->id)->where('status', 'claimed');
                 });
             })
             ->update([
@@ -620,7 +620,7 @@ class AssignmentController extends Controller
             $assignment->locked_at = null;
             $assignment->locked_by = null;
             // If the interaction indicates paid or a terminal outcome, mark completed
-            if (! empty($payload['paid']) || in_array(($payload['outcome'] ?? ''), ['paid','promise_to_pay'])) {
+            if (! empty($payload['paid']) || in_array(($payload['outcome'] ?? ''), ['paid', 'promise_to_pay'])) {
                 $assignment->status = 'completed';
             }
 
@@ -731,8 +731,8 @@ class AssignmentController extends Controller
         $userIds = $request->input('user_ids', []);
         $action = $request->input('action');
 
-        $assignmentIds = array_map('intval', array_filter($assignmentIds, fn ($id) => is_numeric($id) && $id > 0));
-        $userIds = array_map('intval', array_filter($userIds, fn ($id) => is_numeric($id) && $id > 0));
+        $assignmentIds = array_map('intval', array_filter($assignmentIds, fn($id) => is_numeric($id) && $id > 0));
+        $userIds = array_map('intval', array_filter($userIds, fn($id) => is_numeric($id) && $id > 0));
 
         if ($action === 'pool') {
             $userIds = [];

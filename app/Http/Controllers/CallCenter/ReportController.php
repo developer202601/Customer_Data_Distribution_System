@@ -57,9 +57,37 @@ class ReportController extends Controller
 
         $pendingCounts = [];
         foreach ($ccUsers as $u) {
-            $pendingCounts[$u->id] = CallCenterAssignment::where('assigned_user_id', $u->id)
-                ->pendingApproval()
-                ->count();
+            $pendingCounts[$u->id] = $selectedReport
+                ? CallCenterAssignment::where('assigned_user_id', $u->id)
+                    ->where('call_center_report_id', $selectedReport->id)
+                    ->pendingApproval()
+                    ->count()
+                : 0;
+        }
+
+        // Also compute previous-report pending counts for each user so admins can see carry-overs
+        $prevPendingCounts = [];
+        if ($selectedReport) {
+            $previousReport = CallCenterReport::where('created_at', '<', $selectedReport->created_at)
+                ->orderByDesc('created_at')
+                ->first();
+
+            if (! $previousReport && $selectedReport->dataset_month) {
+                $prevMonth = (string) $selectedReport->dataset_month;
+                $previousReport = CallCenterReport::whereNotNull('dataset_month')
+                    ->where('dataset_month', '<', $prevMonth)
+                    ->orderByDesc('dataset_month')
+                    ->first();
+            }
+
+            if ($previousReport) {
+                foreach ($ccUsers as $u) {
+                    $prevPendingCounts[$u->id] = CallCenterAssignment::where('assigned_user_id', $u->id)
+                        ->where('call_center_report_id', $previousReport->id)
+                        ->pendingApproval()
+                        ->count();
+                }
+            }
         }
         $assignedCount = $selectedReport
             ? CallCenterAssignment::where('call_center_report_id', $selectedReport->id)->whereNotNull('assigned_user_id')->count()
@@ -100,6 +128,7 @@ class ReportController extends Controller
             'rejectedAssignments' => $rejectedAssignments,
             'acceptedAssignments' => $acceptedAssignments,
             'pendingCounts' => $pendingCounts,
+            'prevPendingCounts' => $prevPendingCounts ?? [],
             'anyAssigned' => $anyAssigned,
             'allAssigned' => $allAssigned,
             'distributableRows' => $distributableRows,

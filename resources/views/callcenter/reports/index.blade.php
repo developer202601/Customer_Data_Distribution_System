@@ -32,27 +32,16 @@
                                 </div>
                                 @if($selectedReport)
                                     @php
-                                        $recallReason = null;
-                                        if ($acceptedAssignments->isNotEmpty()) {
-                                            $recallReason = 'Disallowed once rows were approved';
-                                        } elseif(!empty($hasInteractions)) {
-                                            $recallReason = 'Disabled because interactions already exist for this report';
-                                        }
-                                        $recallDisabled = (bool) $recallReason;
+                                        $recallDisabled = $acceptedAssignments->isNotEmpty() || !empty($hasInteractions);
                                     @endphp
                                     <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
-                                    <!-- Recall modal trigger -->
-                                    <button type="button" class="btn btn-outline-warning rounded-pill px-3" id="cc-recall-open-btn"
-                                        data-bs-toggle="modal" data-bs-target="#ccRecallModal"
-                                        @if($recallDisabled)
-                                            disabled aria-disabled="true" title="{{ $recallReason }}"
-                                        @else
+                                    @unless($recallDisabled)
+                                        <!-- Recall modal trigger -->
+                                        <button type="button" class="btn btn-outline-warning rounded-pill px-3" id="cc-recall-open-btn"
                                             title="Undo every assignment for this report"
-                                        @endif
-                                    >Undo all assignments</button>
-                                    @if($hasInteractions)
-                                        <p class="small text-danger mb-0 mt-1">Undo is disabled once any interactions exist for this report.</p>
-                                    @endif
+                                            data-bs-toggle="modal" data-bs-target="#ccRecallModal">
+                                            Undo all assignments
+                                        </button>
 
                                         <!-- Recall confirmation modal -->
                                         <div class="modal fade" id="ccRecallModal" tabindex="-1" aria-labelledby="ccRecallModalLabel" aria-hidden="true">
@@ -75,6 +64,7 @@
                                                 </div>
                                             </div>
                                         </div>
+                                    @endunless
                                 @endif
                             </div>
                     </div>
@@ -165,15 +155,25 @@
                                                     </div>
                                                     <div class="cc-user-scroll mt-1 cc-user-scroll">
                                                         @foreach($ccUsers as $user)
-                                                            @php $pending = (int) ($pendingCounts[$user->id] ?? 0); @endphp
+                                                            @php
+                                                                $pending = (int) ($pendingCounts[$user->id] ?? 0);
+                                                                $prevPending = (int) (($prevPendingCounts[$user->id] ?? 0));
+                                                            @endphp
                                                             <div class="cc-user-row" data-user-id="{{ $user->id }}">
                                                                 <div class="cc-user-checkbox">
                                                                     <input type="checkbox" class="form-check-input cc-user-checkbox-input" name="user_ids[]" id="cc-user-{{ $user->id }}" value="{{ $user->id }}">
                                                                 </div>
                                                                 <div class="cc-user-meta">
                                                                     <div class="cc-user-name"><strong>{{ $user->username }}</strong> — <span class="text-muted small">{{ $user->name }}</span></div>
-                                                                    @if($pending > 0)
-                                                                        <div class="small text-muted">Pending: <span class="badge bg-secondary text-white small">{{ $pending }}</span></div>
+                                                                    @if($pending > 0 || $prevPending > 0)
+                                                                        <div class="small text-muted d-flex gap-3 flex-wrap">
+                                                                            @if($pending > 0)
+                                                                                <span>Pending (this report): <span class="badge bg-secondary text-white small">{{ $pending }}</span></span>
+                                                                            @endif
+                                                                            @if($prevPending > 0)
+                                                                                <span>Prev report pending: <span class="badge bg-warning text-dark small">{{ $prevPending }}</span></span>
+                                                                            @endif
+                                                                        </div>
                                                                     @endif
                                                                 </div>
                                                                 <div class="cc-user-share">

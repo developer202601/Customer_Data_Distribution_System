@@ -29,6 +29,7 @@ class AssignmentController extends Controller
         $perPage = (int) $request->get('per_page', 25);
 
         $q = CallCenterAssignment::where('assigned_user_id', $user->id)
+            ->where('status', '<>', 'completed')
             ->with('row', 'interactions')
             ->orderBy('id', 'asc');
 
@@ -795,6 +796,30 @@ class AssignmentController extends Controller
             } catch (\Exception $e) {
                 // don't block distribution if this fails; log if needed
             }
+        }
+
+        // Finalize past assignments for selected agents without deleting.
+        // Only target assignments from reports other than the current one
+        // and not yet accepted or rejected. Mark them completed so they
+        // no longer appear as active, but preserve their historical status.
+        if (!empty($userIds)) {
+            DB::transaction(function () use ($userIds, $reportId) {
+                foreach ($userIds as $uid) {
+                    $priorIds = CallCenterAssignment::where('assigned_user_id', (int) $uid)
+                        ->where('call_center_report_id', '<>', (int) $reportId)
+                        ->where('accepted', false)
+                        ->where('rejected', false)
+                        ->pluck('id')
+                        ->all();
+
+                    if (empty($priorIds)) {
+                        continue;
+                    }
+
+                    CallCenterAssignment::whereIn('id', $priorIds)
+                        ->update(['status' => 'completed', 'locked_at' => null, 'locked_by' => null]);
+                }
+            });
         }
 
         // Always run synchronously so the page displays updated assignments immediately after form submission.

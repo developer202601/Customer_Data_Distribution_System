@@ -239,40 +239,98 @@
                                         }
                                         return 'Unassigned';
                                     };
+
+                                    // Group per agent and produce a single status row: prefer 'rejected' if any rejected rows exist
+                                    $grouped = $nonAcceptedAssignments->groupBy('assigned_user_id');
+                                    $agentSummaries = $grouped->map(function ($items) use ($formatAgentLabel) {
+                                        $agent = $items->first()->agent ?? null;
+                                        $label = $formatAgentLabel($agent);
+                                        $pendingItems = $items->where('rejected', false);
+                                        $rejectedItems = $items->where('rejected', true);
+
+                                        if ($rejectedItems->count() > 0) {
+                                            $reasons = $rejectedItems->pluck('rejection_note')->filter(fn($r) => trim((string)$r) !== '');
+                                            $uniqueReasons = $reasons->unique()->values();
+                                            $latest = $rejectedItems->sortByDesc(function($i){ return $i->rejected_at ?? $i->updated_at ?? $i->created_at; })->first();
+                                            $primaryReason = trim((string)($latest->rejection_note ?? ''));
+                                            $latestRejectedAt = $latest && ($latest->rejected_at ?? null)
+                                                ? optional($latest->rejected_at)->format('M j, Y')
+                                                : (optional($latest->updated_at)->format('M j, Y') ?? optional($latest->created_at)->format('M j, Y'));
+
+                                            if ($uniqueReasons->count() === 0) {
+                                                $reasonText = 'No reason provided';
+                                            } elseif ($uniqueReasons->count() === 1) {
+                                                $reasonText = $uniqueReasons->first();
+                                            } else {
+                                                $reasonText = ($primaryReason !== '' ? $primaryReason : $uniqueReasons->first()) . ' (+' . ($uniqueReasons->count() - 1) . ' more)';
+                                            }
+
+                                            return [
+                                                'label' => $label,
+                                                'status' => 'rejected',
+                                                'count' => $rejectedItems->count(),
+                                                'reason' => $reasonText,
+                                                'pending_since' => null,
+                                                'rejected_at' => $latestRejectedAt,
+                                            ];
+                                        }
+
+                                        $earliestPending = $pendingItems->sortBy(function($i){ return $i->created_at ?? $i->updated_at; })->first();
+                                        $pendingSince = $earliestPending
+                                            ? (optional($earliestPending->created_at)->format('M j, Y') ?? optional($earliestPending->updated_at)->format('M j, Y'))
+                                            : null;
+
+                                        return [
+                                            'label' => $label,
+                                            'status' => 'pending',
+                                            'count' => $pendingItems->count(),
+                                            'reason' => null,
+                                            'pending_since' => $pendingSince,
+                                            'rejected_at' => null,
+                                        ];
+                                    })->values();
                                 @endphp
                                 <div class="table-responsive">
                                     <table class="table table-sm">
                                         <thead>
                                             <tr>
-                                                <th>Row</th>
-                                                <th>Phone</th>
                                                 <th>Agent</th>
                                                 <th>Status</th>
-                                                <th>Rejected by</th>
                                                 <th>Reason</th>
+                                                <th>Timeline</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($nonAcceptedAssignments as $assignment)
-                                                @php
-                                                    $assignedLabel = $formatAgentLabel($assignment->agent);
-                                                    $rejectedLabel = $assignment->rejected ? $formatAgentLabel($assignment->rejectedBy) : '—';
-                                                @endphp
+                                            @foreach($agentSummaries as $summary)
                                                 <tr>
-                                                    <td>#{{ optional($assignment->row)->id ?? $assignment->id }}</td>
-                                                    <td>{{ optional($assignment->row)->phone ?? '—' }}</td>
-                                                    <td>{{ $assignedLabel }}</td>
+                                                    <td>{{ $summary['label'] }}</td>
                                                     <td>
-                                                        <span class="badge bg-{{ $assignment->rejected ? 'warning' : 'secondary' }} text-dark small">
-                                                            {{ $assignment->rejected ? 'Rejected' : 'Awaiting acceptance' }}
-                                                        </span>
-                                                    </td>
-                                                    <td>{{ $rejectedLabel }}</td>
-                                                    <td>
-                                                        @if($assignment->rejected)
-                                                            {{ $assignment->rejection_note ?? 'No reason provided' }}
+                                                        @if($summary['status'] === 'rejected')
+                                                            <span class="badge bg-warning text-dark small">Rejected ({{ number_format($summary['count']) }})</span>
                                                         @else
-                                                            <span class="text-muted small">Waiting for agent to accept</span>
+                                                            <span class="badge bg-secondary text-dark small">Pending ({{ number_format($summary['count']) }})</span>
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @if($summary['status'] === 'rejected')
+                                                            {{ $summary['reason'] }}
+                                                        @else
+                                                            <span class="text-muted small">—</span>
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @php
+                                                            $pendingSince = $summary['pending_since'] ?? null;
+                                                            $rejectedAt = $summary['rejected_at'] ?? null;
+                                                        @endphp
+                                                        @if($pendingSince && $rejectedAt)
+                                                            <span class="small">Pending since {{ $pendingSince }} · Rejected at {{ $rejectedAt }}</span>
+                                                        @elseif($rejectedAt)
+                                                            <span class="small">Rejected at {{ $rejectedAt }}</span>
+                                                        @elseif($pendingSince)
+                                                            <span class="small">Pending since {{ $pendingSince }}</span>
+                                                        @else
+                                                            <span class="text-muted small">—</span>
                                                         @endif
                                                     </td>
                                                 </tr>
@@ -280,11 +338,6 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                @if($nonAcceptedAssignments->where('rejected', true)->isNotEmpty())
-                                    <p class="mt-2 mb-0 small text-muted">
-                                        {{ $nonAcceptedAssignments->where('rejected', true)->count() }} rejected rows captured above; each row shows who declined and the rejection reason.
-                                    </p>
-                                @endif
                             @endif
                         </div>
                     </div>

@@ -211,8 +211,8 @@
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
-                                            <p class="small text-uppercase text-muted mb-1">{{ $agent->username ?? 'User '.$userId }}</p>
-                                            <h3 class="h6 mb-1 fw-semibold">{{ $agent->name ?? ($agent->username ?? 'Unknown agent') }}</h3>
+                                            <h3>Current Reports</h3>
+                                            
                                         </div>
                                         <div class="text-end">
                                             <span class="badge bg-success">Accepted ({{ $acceptedCount }})</span>
@@ -232,6 +232,7 @@
                                                     <button type="button" class="btn btn-outline-secondary active" data-cc-filter="all">All (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="called">Called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="uncalled">Not called (0)</button>
+                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="authorized">User Not Authorized (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="promise_overdue">Promise overdue (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="number_invalid">Number invalid (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_answered">Not answered (0)</button>
@@ -590,7 +591,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const latestReportId = assignmentList?.dataset.latestReportId || '';
     const userId = assignmentList?.dataset.userId || '';
     let paging = { page: 1, per_page: 50, has_more: false };
-    let filterCounts = { all: 0, called: 0, uncalled: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
+    let filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
     // Show previous-report (completed) rows by default when there are pending
     // new rows for the latest report so agents can review the last-owner history.
     const initialLatestPending = Number(assignmentList?.dataset.latestReportPending || 0);
@@ -615,6 +616,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let show = true;
             if (targetFilter === 'called') show = called;
             else if (targetFilter === 'uncalled') show = !called;
+            else if (targetFilter === 'authorized') show = outcome === 'user not authorized';
             else if (targetFilter === 'promise_overdue') show = overdue;
             else if (targetFilter === 'number_invalid') show = outcome === 'number invalid';
             else if (targetFilter === 'not_answered') show = outcome === 'not answered';
@@ -672,11 +674,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const rows = Array.isArray(data.rows) ? data.rows : [];
             if (!append) {
                 assignmentList.innerHTML = '';
-                filterCounts = { all: 0, called: 0, uncalled: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
+                filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
             }
             rows.forEach(r => {
                 filterCounts.all++;
                 if (r.called_in_period) filterCounts.called++; else filterCounts.uncalled++;
+                if ((r.latest_outcome || '').toLowerCase() === 'user not authorized') filterCounts.authorized++;
                 if (r.promise_overdue) filterCounts.promise_overdue++;
                 if ((r.latest_outcome || '').toLowerCase() === 'number invalid') filterCounts.number_invalid++;
                 if ((r.latest_outcome || '').toLowerCase() === 'not answered') filterCounts.not_answered++;

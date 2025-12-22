@@ -223,11 +223,7 @@
                                 </form>
                                 <script>
                                     document.addEventListener('DOMContentLoaded', function() {
-                                        const distributable = Number({
-                                            {
-                                                (int)($distributableRows ?? 0)
-                                            }
-                                        });
+                                        const distributable = Number(@json((int)($distributableRows ?? 0)));
                                         const checkboxes = Array.from(document.querySelectorAll('.cc-user-checkbox-input'));
                                         const selectAll = document.getElementById('cc-select-all-users');
                                         const searchInput = document.getElementById('cc-user-search');
@@ -506,17 +502,9 @@
 
                 async function loadUserAccepted(userId) {
                     const params = new URLSearchParams();
-                    if (typeof {
-                            {
-                                json_encode($selectedReport - > id ?? null)
-                            }
-                        } !== 'undefined' && {
-                            {
-                                json_encode($selectedReport - > id ?? null)
-                            }
-                        }) {
-                        params.set('report', '{{ $selectedReport->id ?? '
-                            ' }}');
+                    const selectedReportId = @json($selectedReport->id ?? null);
+                    if (selectedReportId) {
+                        params.set('report', String(selectedReportId));
                     }
                     const res = await fetch(`/cc/assignments/${userId}/rows?${params.toString()}`, {
                         credentials: 'same-origin',

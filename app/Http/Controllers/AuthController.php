@@ -50,6 +50,8 @@ class AuthController extends Controller
             'username' => $user->username,
             'is_admin' => (bool) $user->admin_prev,
             'system' => $user->system,
+            'assignment' => $user->assignment ?? null,
+            'name' => $user->name ?? null,
         ]);
 
         $targetRoute = match ($user->system) {

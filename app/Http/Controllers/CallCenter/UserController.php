@@ -115,26 +115,36 @@ class UserController extends Controller
         return redirect()->route('cc.users.index')->with('status', 'User updated successfully.');
     }
 
-    public function disable(CallCenterUser $ccUser): RedirectResponse
+    public function disable(Request $request, CallCenterUser $ccUser): RedirectResponse
     {
         if (!$ccUser->status) {
+            $return = $request->input('return_to');
+            if ($return) return redirect($return)->with('status', 'User is already disabled.');
             return redirect()->route('cc.users.index')->with('status', 'User is already disabled.');
         }
 
         $ccUser->status = 0;
         $ccUser->save();
 
+        $return = $request->input('return_to');
+        if ($return) return redirect($return)->with('status', 'User disabled successfully.');
+
         return redirect()->route('cc.users.index')->with('status', 'User disabled successfully.');
     }
 
-    public function enable(CallCenterUser $ccUser): RedirectResponse
+    public function enable(Request $request, CallCenterUser $ccUser): RedirectResponse
     {
         if ($ccUser->status) {
+            $return = $request->input('return_to');
+            if ($return) return redirect($return)->with('status', 'User is already enabled.');
             return redirect()->route('cc.users.index')->with('status', 'User is already enabled.');
         }
 
         $ccUser->status = 1;
         $ccUser->save();
+
+        $return = $request->input('return_to');
+        if ($return) return redirect($return)->with('status', 'User enabled successfully.');
 
         return redirect()->route('cc.users.index')->with('status', 'User enabled successfully.');
     }

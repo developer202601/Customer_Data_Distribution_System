@@ -26,6 +26,9 @@ class User extends Model
         'created_at',
         'fixed',
         'status',
+        'name',
+        'assignment',
+        'supervisor',
     ];
 
     /**

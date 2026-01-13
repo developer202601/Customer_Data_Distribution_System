@@ -13,15 +13,21 @@
                 @if(session('user.assignment') === 'super')
                     <a class="nav-link{{ $ccRouteName === 'cc.users.assign.index' ? ' active' : '' }}" href="{{ route('cc.users.assign.index') }}" aria-current="{{ $ccRouteName === 'cc.users.assign.index' ? 'page' : '' }}">Assign Users</a>
                 @elseif(session('user.assignment') && session('user.assignment') !== 'super')
-                    <a class="nav-link{{ $ccRouteName === 'cc.region.dashboard' ? ' active' : '' }}" href="{{ route('cc.region.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.region.dashboard' ? 'page' : '' }}">Region Dashboard</a>
-                    <a class="nav-link{{ $ccRouteName === 'cc.region.index' ? ' active' : '' }}" href="{{ route('cc.region.index') }}" aria-current="{{ $ccRouteName === 'cc.region.index' ? 'page' : '' }}">RTOM Admins</a>
+                    @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'rtom_'))
+                        <a class="nav-link{{ $ccRouteName === 'cc.region.assign.index' ? ' active' : '' }}" href="{{ route('cc.region.assign.index') }}" aria-current="{{ $ccRouteName === 'cc.region.assign.index' ? 'page' : '' }}">Assign Supervisors</a>
+                    @elseif(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
+                        <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">Manage Callers</a>
+                    @else
+                        <a class="nav-link{{ $ccRouteName === 'cc.region.dashboard' ? ' active' : '' }}" href="{{ route('cc.region.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.region.dashboard' ? 'page' : '' }}">Region Dashboard</a>
+                        <a class="nav-link{{ $ccRouteName === 'cc.region.index' ? ' active' : '' }}" href="{{ route('cc.region.index') }}" aria-current="{{ $ccRouteName === 'cc.region.index' ? 'page' : '' }}">RTOM Admins</a>
+                    @endif
                 @endif
                 @php $isRegion = session('user.assignment') && str_starts_with(session('user.assignment'), 'REGION'); @endphp
-                @if(! $isRegion)
+                @if(! $isRegion && ! \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'rtom_'))
                     <a class="nav-link{{ str_starts_with($ccRouteName, 'cc.reports') ? ' active' : '' }}" href="{{ route('cc.reports') }}" aria-current="{{ str_starts_with($ccRouteName, 'cc.reports') ? 'page' : '' }}">Reports</a>
                 @endif
             @endif
-            @if(session('user.assignment') !== 'super' && ! (session('user.assignment') && str_starts_with(session('user.assignment'), 'REGION')) )
+            @if(session('user.assignment') !== 'super' && ! (session('user.assignment') && str_starts_with(session('user.assignment'), 'REGION')) && ! \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'rtom_') )
                 <a class="nav-link{{ str_starts_with($ccRouteName, 'cc.assignments') ? ' active' : '' }}" href="{{ route('cc.assignments.manage') }}" aria-current="{{ str_starts_with($ccRouteName, 'cc.assignments') ? 'page' : '' }}">Assigned Rows</a>
             @endif
             <!-- <a class="nav-link" href="#">Queues</a> -->

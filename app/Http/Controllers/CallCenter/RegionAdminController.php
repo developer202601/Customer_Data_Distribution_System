@@ -173,7 +173,7 @@ class RegionAdminController extends Controller
             'admin_prev' => 1,
             'system' => 'cc',
             'created_at' => now(),
-            'fixed' => $isSupervisor ? 1 : 0,
+            'fixed' => 0,
             'status' => 1,
             'name' => $request->input('name'),
             'assignment' => 'rtom_' . preg_replace('/\s+/', '_', strtolower($rtom)),
@@ -189,15 +189,18 @@ class RegionAdminController extends Controller
 
         $request->validate([
             'username' => 'required|digits:6|unique:users,username',
-            'rtom' => 'required_without:supervisor|string|max:255',
-            'supervisor' => 'required_without:rtom|string|max:255',
             'name' => 'nullable|string|max:45',
         ]);
 
-        // Accept value from either the RTOM field (create admin) or the supervisor field (create supervisor form)
-        $rtom = $request->input('rtom') ?? $request->input('supervisor');
+        // If RTOM user, use their RTOM from session for assignment and supervisor fields
+        if (\Illuminate\Support\Str::startsWith(session('user.assignment'), 'rtom_')) {
+            $rtom = session('user.assignment');
+            $supervisorId = session('user')['id'] ?? null;
+        } else {
+            $rtom = $request->input('rtom') ?? $request->input('supervisor');
+            $supervisorId = session('user')['id'] ?? null;
+        }
 
-        // allow marking created users as "supervisors" via fixed=1 in the form (they are fixed and cannot be deleted)
         $isSupervisor = ! empty($request->input('fixed'));
 
         $user = User::create([
@@ -205,14 +208,19 @@ class RegionAdminController extends Controller
             'admin_prev' => 1,
             'system' => 'cc',
             'created_at' => now(),
-            'fixed' => $isSupervisor ? 1 : 0,
+            'fixed' => 0,
             'status' => 1,
             'name' => $request->input('name'),
             'assignment' => 'supervisor_' . preg_replace('/\s+/', '_', strtolower($rtom)),
-            'supervisor' => session('user')['id'] ?? null,
+            'supervisor' => $supervisorId,
         ]);
 
-        return redirect()->route('cc.region.index')->with('status', 'Supervisor created');
+        // Redirect to supervisor list for RTOM users, else to RTOM list
+        if (\Illuminate\Support\Str::startsWith(session('user.assignment'), 'rtom_')) {
+            return redirect()->route('cc.region.assign.index')->with('status', 'Supervisor created');
+        } else {
+            return redirect()->route('cc.region.index')->with('status', 'Supervisor created');
+        }
     }
 
     public function editAdminForm(User $user)
@@ -264,6 +272,80 @@ class RegionAdminController extends Controller
         return redirect()->route('cc.region.index')->with('status', 'RTOM admin deleted');
     }
 
+    // --- Supervisor management for RTOM users ---
+    public function editSupervisorForm(User $user)
+    {
+        $this->ensureRegionAdmin();
+
+        if (! $user->assignment || stripos($user->assignment, 'supervisor_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
+            abort(404);
+        }
+
+        return view('cc.region.edit_supervisor', compact('user'));
+    }
+
+    public function updateSupervisor(Request $request, User $user)
+    {
+        $this->ensureRegionAdmin();
+
+        if (! $user->assignment || stripos($user->assignment, 'supervisor_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
+            abort(404);
+        }
+
+        $request->validate([
+            'name' => 'nullable|string|max:45',
+        ]);
+
+        $user->name = $request->input('name');
+        $user->save();
+
+        return redirect()->route('cc.region.assign.index')->with('status', 'Supervisor updated');
+    }
+
+    public function disableSupervisor(User $user)
+    {
+        $this->ensureRegionAdmin();
+
+        if (! $user->assignment || stripos($user->assignment, 'supervisor_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
+            abort(404);
+        }
+
+        $user->status = 0;
+        $user->save();
+
+        return redirect()->route('cc.region.assign.index')->with('status', 'Supervisor disabled');
+    }
+
+    public function enableSupervisor(User $user)
+    {
+        $this->ensureRegionAdmin();
+
+        if (! $user->assignment || stripos($user->assignment, 'supervisor_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
+            abort(404);
+        }
+
+        $user->status = 1;
+        $user->save();
+
+        return redirect()->route('cc.region.assign.index')->with('status', 'Supervisor enabled');
+    }
+
+    public function destroySupervisor(User $user)
+    {
+        $this->ensureRegionAdmin();
+
+        if (! $user->assignment || stripos($user->assignment, 'supervisor_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
+            abort(404);
+        }
+
+        if ($user->fixed) {
+            return redirect()->route('cc.region.assign.index')->withErrors(['delete' => 'This user is fixed and cannot be deleted.']);
+        }
+
+        $user->delete();
+        return redirect()->route('cc.region.assign.index')->with('status', 'Supervisor deleted');
+    }
+
     public function dashboard()
     {
         $region = $this->ensureRegionAdmin();
@@ -302,18 +384,27 @@ class RegionAdminController extends Controller
     {
         $region = $this->ensureRegionAdmin();
 
-        // Show call-center users added by the logged-in supervisor, not super admins and not already RTOM admins
-        $users = User::where('system', 'cc')
-            ->where('supervisor', session('user')['id'] ?? null)
-            ->where(function ($q) {
-                $q->whereNull('assignment')
-                    ->orWhere(function ($sq) {
-                        $sq->where('assignment', '<>', 'super')
-                            ->where('assignment', 'not like', 'rtom_%');
-                    });
-            })
-            ->orderBy('id')
-            ->get();
+        // For RTOM users, show only supervisor users they created
+        if (\Illuminate\Support\Str::startsWith(session('user.assignment'), 'rtom_')) {
+            $users = User::where('system', 'cc')
+                ->where('supervisor', session('user')['id'] ?? null)
+                ->where('assignment', 'like', 'supervisor_%')
+                ->orderBy('id')
+                ->get();
+        } else {
+            // Show call-center users added by the logged-in supervisor, not super admins and not already RTOM admins
+            $users = User::where('system', 'cc')
+                ->where('supervisor', session('user')['id'] ?? null)
+                ->where(function ($q) {
+                    $q->whereNull('assignment')
+                        ->orWhere(function ($sq) {
+                            $sq->where('assignment', '<>', 'super')
+                                ->where('assignment', 'not like', 'rtom_%');
+                        });
+                })
+                ->orderBy('id')
+                ->get();
+        }
 
         return view('cc.region.assign_index', compact('users', 'region'));
     }

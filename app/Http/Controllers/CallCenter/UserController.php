@@ -35,6 +35,19 @@ class UserController extends Controller
     protected function buildUsersQuery(string $status, string $q)
     {
         $usersQ = CallCenterUser::query();
+        $usersQ->with('supervisorUser');
+        // If logged-in user is a supervisor, show callers for the supervisor's RTOM (exclude supervisor accounts)
+        if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
+            $assign = session('user.assignment') ?? '';
+            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+            if ($rtomVal !== '') {
+                $usersQ->where('assignment', 'caller_rtom_' . $rtomVal);
+            } else {
+                // fallback: show callers created by this supervisor
+                $usersQ->where('supervisor', session('user')['id'] ?? null);
+            }
+        }
         if ($status === 'active') {
             $usersQ->where('status', 1);
         } elseif ($status === 'disabled') {
@@ -65,6 +78,16 @@ class UserController extends Controller
             'system' => 'cc',
             'fixed' => 0,
             'created_at' => now(),
+            'supervisor' => \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_') ? (session('user')['id'] ?? null) : null,
+            'assignment' => (function() {
+                $assign = session('user.assignment') ?? '';
+                if (! $assign) return null;
+                // strip supervisor_ prefix then strip leading rtom_ if present
+                $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+                if ($rtomVal === '') return null;
+                return 'caller_rtom_' . $rtomVal;
+            })(),
         ]);
 
         return redirect()->route('cc.users.index')->with('status', 'User created successfully.');

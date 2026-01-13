@@ -1,6 +1,13 @@
 @forelse($users as $user)
 <tr>
     <td>{{ $user->username }}</td>
+    <td>
+        @if(optional($user->supervisorUser)->id)
+            {{ optional($user->supervisorUser)->name ?: '' }} <span class="text-muted">({{ optional($user->supervisorUser)->username }})</span>
+        @else
+            —
+        @endif
+    </td>
     <td>{{ $user->admin_prev ? 'Call Center Admin' : 'Call Center User' }}</td>
     <td>
         @if($user->status)
@@ -10,9 +17,16 @@
         @endif
     </td>
     <td>{{ optional($user->created_at)->format('Y-m-d H:i') ?? '—' }}</td>
+    @php
+        $isSupervisorView = \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_');
+        $currentSupervisorId = session('user')['id'] ?? null;
+        $canEdit = ! $isSupervisorView || ($user->supervisor && $user->supervisor === $currentSupervisorId);
+    @endphp
     <td class="text-end">
         <div class="d-inline-flex gap-1">
+            @if($canEdit)
             <a href="{{ route('cc.users.edit', $user) }}" class="btn btn-sm btn-outline-secondary rounded-pill">Edit</a>
+            @endif
             @if($user->status)
             <button type="button" class="btn btn-sm btn-warning rounded-pill cc-disable-btn" data-action="{{ route('cc.users.disable', $user) }}" data-username="{{ $user->username }}">Disable</button>
             @else

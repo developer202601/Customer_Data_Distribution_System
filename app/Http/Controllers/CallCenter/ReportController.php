@@ -53,7 +53,15 @@ class ReportController extends Controller
             ->get()
             : collect();
 
-        $ccUsers = CallCenterUser::active()->orderBy('username')->get();
+        // If logged-in user is a supervisor, limit visible users to callers they created
+        if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
+            $ccUsers = CallCenterUser::where('supervisor', session('user')['id'] ?? null)
+                ->active()
+                ->orderBy('username')
+                ->get();
+        } else {
+            $ccUsers = CallCenterUser::active()->orderBy('username')->get();
+        }
 
         $pendingCounts = [];
         foreach ($ccUsers as $u) {
@@ -89,13 +97,40 @@ class ReportController extends Controller
                 }
             }
         }
-        $assignedCount = $selectedReport
-            ? CallCenterAssignment::where('call_center_report_id', $selectedReport->id)->whereNotNull('assigned_user_id')->count()
-            : 0;
+        // Compute assigned / distributable counts. Supervisors should only be able to distribute rows
+        // that match their RTOM (and by extension the region(s) where that RTOM appears).
+        $assignedCount = 0;
+        $allowedRowIds = [];
+        if ($selectedReport) {
+            $allAssignedForReport = CallCenterAssignment::where('call_center_report_id', $selectedReport->id)->whereNotNull('assigned_user_id');
+            // Default behavior: everything
+            $assignedCount = $allAssignedForReport->count();
+
+            // If supervisor, narrow to rows matching their RTOM
+            if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
+                $assignStr = session('user.assignment') ?? '';
+                $rtomPart = preg_replace('/^supervisor_/', '', $assignStr);
+                // strip leading rtom_ if present
+                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+                // find row ids that match this rtom (case-insensitive) within the report's row list
+                $rowIds = $selectedReport->row_ids ?? [];
+                $allowedRowIds = collect($rowIds)->chunk(1000)->flatMap(function($chunk) use ($rtomVal) {
+                    return \Illuminate\Support\Facades\DB::table('master_dataset_rows')
+                        ->whereIn('id', $chunk->toArray())
+                        ->whereRaw('LOWER(rtom) = ?', [strtolower($rtomVal)])
+                        ->pluck('id');
+                })->values()->all();
+
+                $assignedCount = CallCenterAssignment::where('call_center_report_id', $selectedReport->id)
+                    ->whereIn('master_dataset_row_id', $allowedRowIds)
+                    ->whereNotNull('assigned_user_id')
+                    ->count();
+            }
+        }
 
         $anyAssigned = $assignedCount > 0;
         $allAssigned = $selectedReport ? ($selectedReport->row_count > 0 && $assignedCount >= $selectedReport->row_count) : false;
-        $distributableRows = $selectedReport ? max(0, $selectedReport->row_count - $assignedCount) : 0;
+        $distributableRows = $selectedReport ? max(0, (count($allowedRowIds) ?: $selectedReport->row_count) - $assignedCount) : 0;
 
         $hasInteractions = false;
         if ($selectedReport) {
@@ -125,6 +160,7 @@ class ReportController extends Controller
             'reports' => $reports,
             'selectedReport' => $selectedReport,
             'ccUsers' => $ccUsers,
+            'allowedRowIds' => $allowedRowIds,
             'rejectedAssignments' => $rejectedAssignments,
             'acceptedAssignments' => $acceptedAssignments,
             'pendingCounts' => $pendingCounts,
@@ -448,5 +484,102 @@ class ReportController extends Controller
         }
 
         return $total;
+    }
+
+    /**
+     * Supervisor-specific distribution: only allow assigning rows that match
+     * the supervisor's RTOM and only to callers they created.
+     */
+    public function distributeSupervisor(Request $request, $reportId)
+    {
+        $session = session('user');
+        if (! $session || ! \Illuminate\Support\Str::startsWith($session['assignment'] ?? '', 'supervisor_')) {
+            abort(403);
+        }
+
+        $report = CallCenterReport::findOrFail($reportId);
+
+        $userIds = array_values(array_filter((array) $request->input('user_ids', []), fn($v) => is_numeric($v) && (int)$v > 0));
+        if (empty($userIds)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'Select at least one user to distribute to.']);
+        }
+
+        // Only allow selecting callers that this supervisor created
+        $allowedUserIds = \App\Models\CallCenter\CallCenterUser::whereIn('id', $userIds)
+            ->where('supervisor', $session['id'] ?? null)
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($allowedUserIds)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No valid users selected.']);
+        }
+
+        // Determine RTOM value for this supervisor
+        $assignStr = $session['assignment'] ?? '';
+        $rtomPart = preg_replace('/^supervisor_/', '', $assignStr);
+        $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+
+        $rowIds = $report->row_ids ?? [];
+        if (empty($rowIds)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No rows available for this report.']);
+        }
+
+        // Find allowed master row ids matching RTOM (case-insensitive)
+        $allowedRowIds = collect($rowIds)->chunk(1000)->flatMap(function($chunk) use ($rtomVal) {
+            return \Illuminate\Support\Facades\DB::table('master_dataset_rows')
+                ->whereIn('id', $chunk->toArray())
+                ->whereRaw('LOWER(rtom) = ?', [strtolower($rtomVal)])
+                ->pluck('id');
+        })->values()->all();
+
+        if (empty($allowedRowIds)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No rows match your RTOM.']);
+        }
+
+        // Exclude rows already assigned for this report
+        $alreadyAssigned = CallCenterAssignment::where('call_center_report_id', $report->id)
+            ->whereIn('master_dataset_row_id', $allowedRowIds)
+            ->whereNotNull('assigned_user_id')
+            ->pluck('master_dataset_row_id')
+            ->toArray();
+
+        $available = array_values(array_diff($allowedRowIds, $alreadyAssigned));
+        if (empty($available)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No distributable rows available for your RTOM.']);
+        }
+
+        // Distribute evenly among allowed users
+        $total = count($available);
+        $users = array_values($allowedUserIds);
+        $userCount = count($users);
+        $basePerUser = $userCount ? (int) floor($total / $userCount) : 0;
+        $remainder = $userCount ? $total % $userCount : 0;
+
+        $now = Carbon::now()->toDateTimeString();
+        $batch = [];
+        $pos = 0;
+        foreach ($users as $index => $uid) {
+            $take = $basePerUser + ($index < $remainder ? 1 : 0);
+            for ($i = 0; $i < $take && $pos < $total; $i++, $pos++) {
+                $batch[] = [
+                    'call_center_report_id' => $report->id,
+                    'master_dataset_row_id' => $available[$pos],
+                    'assigned_user_id' => $uid,
+                    'status' => 'pending',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+                if (count($batch) >= 500) {
+                    \Illuminate\Support\Facades\DB::table('call_center_row_assignments')->insert($batch);
+                    $batch = [];
+                }
+            }
+        }
+
+        if (! empty($batch)) {
+            \Illuminate\Support\Facades\DB::table('call_center_row_assignments')->insert($batch);
+        }
+
+        return redirect()->route('cc.reports', ['report' => $reportId])->with('status', 'Distribution completed for your RTOM.');
     }
 }

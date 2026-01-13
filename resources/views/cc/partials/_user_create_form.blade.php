@@ -10,9 +10,7 @@
 <form method="POST" action="{{ $action }}">
     @csrf
 
-    @if(!empty($isSupervisor))
-        <input type="hidden" name="fixed" value="1">
-    @endif
+    <!-- Do not auto-mark newly created users as fixed; default to 0 in controller -->
 
     <div class="form-group">
         <label for="username">Username <span class="text-danger">*</span></label>

@@ -120,18 +120,22 @@
                         <div class="card bg-light border-0 h-100 rounded-4">
                             <div class="card-body">
                                 <p class="text-uppercase text-muted small mb-1">Call Center rows captured</p>
+                                @if(session('user.assignment') && Str::startsWith(session('user.assignment'), 'supervisor_'))
+                                <h2 class="h4 mb-0">{{ number_format(count($allowedRowIds ?? [])) }}</h2>
+                                @else
                                 <h2 class="h4 mb-0">{{ number_format($selectedReport->row_count) }}</h2>
+                                @endif
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="row mt-4">
-                    @if(! ($allAssigned ?? false))
+                    @if(! ($allAssigned ?? false) && (($distributableRows ?? 0) > 0))
                     <div class="col-12">
                         <div class="card border-0 rounded-4 bg-white shadow-sm">
                             <div class="card-body">
                                 <p class="text-uppercase text-muted small mb-3">Distribute rows to call center users</p>
-                                <form method="post" action="{{ route('cc.reports.distribute', $selectedReport->id) }}" class="row g-2 align-items-center">
+                                <form method="post" action="{{ (session('user.assignment') && Str::startsWith(session('user.assignment'), 'supervisor_')) ? route('cc.reports.distribute_supervisor', $selectedReport->id) : route('cc.reports.distribute', $selectedReport->id) }}" class="row g-2 align-items-center">
                                     @csrf
                                     <div class="col-md-6">
                                         <label class="small text-muted">Select users</label>

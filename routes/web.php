@@ -66,8 +66,6 @@ Route::middleware('session.auth')->group(function () {
 
         Route::middleware('session.cc_admin')->group(function () {
             Route::get('/users', [CallCenterUserController::class, 'index'])->name('users.index');
-            Route::get('/users/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'createUserForm'])->name('users.create');
-            Route::post('/users/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'storeUser'])->name('users.create.store');
             Route::post('/users', [CallCenterUserController::class, 'store'])->name('users.store');
             Route::get('/users/assign', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexAssign'])->name('users.assign.index');
             Route::get('/users/{ccUser}/edit', [CallCenterUserController::class, 'edit'])->name('users.edit');
@@ -83,20 +81,25 @@ Route::middleware('session.auth')->group(function () {
             // Region admin pages (RTOM management)
             Route::get('/rtoms/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'dashboard'])->name('region.dashboard');
             Route::get('/rtoms', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'index'])->name('region.index');
-            Route::get('/rtoms/search', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'search'])->name('region.search');
             Route::get('/rtoms/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'indexAssign'])->name('region.assign.index');
             Route::get('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'showAssignForm'])->name('region.assign');
             Route::post('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeAssignment'])->name('region.assign.store');
             Route::get('/rtoms/create-admin', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'createAdminForm'])->name('region.create_admin');
             Route::get('/rtoms/create-supervisor', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'createSupervisorForm'])->name('region.create_supervisor');
             Route::post('/rtoms/admins', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeAdmin'])->name('region.store_admin');
-            // Create supervisor (POST)
             Route::post('/rtoms/supervisors', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeSupervisor'])->name('region.store_supervisor');
             Route::get('/rtoms/admins/{user}/edit', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'editAdminForm'])->name('region.edit_admin');
             Route::put('/rtoms/admins/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateAdmin'])->name('region.update_admin');
             Route::delete('/rtoms/admins/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroyAdmin'])->name('region.destroy_admin');
+            // Supervisor management (for RTOM users)
+            Route::get('/rtoms/supervisors/{user}/edit', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'editSupervisorForm'])->name('region.edit_supervisor');
+            Route::put('/rtoms/supervisors/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateSupervisor'])->name('region.update_supervisor');
+            Route::put('/rtoms/supervisors/{user}/disable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'disableSupervisor'])->name('region.disable_supervisor');
+            Route::put('/rtoms/supervisors/{user}/enable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'enableSupervisor'])->name('region.enable_supervisor');
+            Route::delete('/rtoms/supervisors/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroySupervisor'])->name('region.destroy_supervisor');
             // Region admins create RTOM admins only; regular user creation removed
             Route::post('/reports/{report}/distribute', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'distribute'])->name('reports.distribute');
+            Route::post('/reports/{report}/distribute-supervisor', [\App\Http\Controllers\CallCenter\ReportController::class, 'distributeSupervisor'])->name('reports.distribute_supervisor');
             Route::get('/reports/{report}/distribute/cancel/{token}', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'cancelDistribute'])->name('reports.distribute.cancel');
             Route::post('/reports/{report}/recall', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recall'])->name('reports.recall');
             Route::get('/reports/{report}/recall/preview', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recallPreview'])->name('reports.recall.preview');

@@ -23,9 +23,7 @@
                     </div>
                 </div>
 
-        @if(session('status'))
-        <div class="alert alert-success" role="alert">{{ session('status') }}</div>
-        @endif
+        {{-- success messages are shown via top popup; do not render inline alert here --}}
 
         @if($errors->any())
         <div class="alert alert-danger" role="alert">
@@ -60,6 +58,7 @@
                                 <thead>
                                     <tr>
                                         <th>Username</th>
+                                        <th>Supervisor</th>
                                         <th>Role</th>
                                         <th>Status</th>
                                         <th>Created</th>
@@ -93,11 +92,15 @@
                                 <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
-                            <div class="form-check mb-3">
+                            @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
                                 <input type="hidden" name="admin_prev" value="0">
-                                <input type="checkbox" name="admin_prev" id="admin_prev" value="1" class="form-check-input" {{ old('admin_prev') ? 'checked' : '' }}>
-                                <label for="admin_prev" class="form-check-label">Call Center Admin</label>
-                            </div>
+                            @else
+                                <div class="form-check mb-3">
+                                    <input type="hidden" name="admin_prev" value="0">
+                                    <input type="checkbox" name="admin_prev" id="admin_prev" value="1" class="form-check-input" {{ old('admin_prev') ? 'checked' : '' }}>
+                                    <label for="admin_prev" class="form-check-label">Call Center Admin</label>
+                                </div>
+                            @endif
                         </form>
                     </div>
                     <div class="modal-footer">
@@ -107,7 +110,8 @@
                 </div>
             </div>
         </div>
-        <!-- Confirmation modal for creating admin users -->
+        <!-- Confirmation modal for creating admin users (hidden for supervisors) -->
+        @unless(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
         <div class="modal fade" id="ccAdminConfirmModal" tabindex="-1" aria-labelledby="ccAdminConfirmLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -131,6 +135,7 @@
                 </div>
             </div>
         </div>
+        @endunless
 
         <!-- Disable confirmation modal -->
         <div class="modal fade" id="ccDisableConfirmModal" tabindex="-1" aria-labelledby="ccDisableConfirmLabel" aria-hidden="true">

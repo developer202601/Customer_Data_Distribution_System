@@ -14,8 +14,6 @@
 
                 <form action="{{ route('cc.region.store_supervisor') }}" method="post">
                     @csrf
-                    {{-- mark new supervisors as fixed users so they cannot be deleted --}}
-                    <input type="hidden" name="fixed" value="1">
                     <div class="mb-3">
                         <label class="form-label">Username</label>
                         <input name="username" type="text" class="form-control" maxlength="6" pattern="\d{6}" required>
@@ -24,18 +22,28 @@
                         <label class="form-label">Name</label>
                         <input name="name" type="text" class="form-control">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">RTOM</label>
-                        <select name="supervisor" class="form-select">
-                            @foreach($rtoms as $r)
-                                <option value="{{ $r }}">{{ $r }}</option>
-                            @endforeach
-                        </select>
-                    </div>
+
+                    @if(Str::startsWith(session('user.assignment'), 'rtom_'))
+                        <!-- RTOM users: do not show RTOM dropdown, save RTOM from session in backend -->
+                        <input type="hidden" name="supervisor" value="{{ session('user.assignment') }}">
+                    @else
+                        <div class="mb-3">
+                            <label class="form-label">RTOM</label>
+                            <select name="supervisor" class="form-select">
+                                @foreach($rtoms as $r)
+                                    <option value="{{ $r }}">{{ $r }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
 
                     <div class="d-flex gap-2">
                         <button class="btn btn-success">Create</button>
-                        <a href="{{ route('cc.region.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        @if(Str::startsWith(session('user.assignment'), 'rtom_'))
+                            <a href="{{ route('cc.region.assign.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        @else
+                            <a href="{{ route('cc.region.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        @endif
                     </div>
                 </form>
 

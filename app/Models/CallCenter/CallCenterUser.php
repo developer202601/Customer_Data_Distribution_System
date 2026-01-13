@@ -4,6 +4,7 @@ namespace App\Models\CallCenter;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CallCenterUser extends User
 {
@@ -46,5 +47,13 @@ class CallCenterUser extends User
     public function isAdmin(): bool
     {
         return (bool) $this->admin_prev;
+    }
+
+    /**
+     * Supervisor relationship (the user who created / owns this caller).
+     */
+    public function supervisorUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'supervisor');
     }
 }

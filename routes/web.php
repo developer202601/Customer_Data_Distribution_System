@@ -66,6 +66,8 @@ Route::middleware('session.auth')->group(function () {
 
         Route::middleware('session.cc_admin')->group(function () {
             Route::get('/users', [CallCenterUserController::class, 'index'])->name('users.index');
+            Route::get('/users/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'createUserForm'])->name('users.create');
+            Route::post('/users/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'storeUser'])->name('users.create.store');
             Route::post('/users', [CallCenterUserController::class, 'store'])->name('users.store');
             Route::get('/users/assign', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexAssign'])->name('users.assign.index');
             Route::get('/users/{ccUser}/edit', [CallCenterUserController::class, 'edit'])->name('users.edit');

@@ -6,10 +6,13 @@
 <section class="content login-page">
     <div class="login-page__panel login-page__panel--visual">
         <div class="login-page__visual-inner">
-            <span class="login-page__eyebrow">Customer Data Distribution System</span>
+            <span class="login-page__eyebrow">Customer Data Distribution & Payment Reminder System</span>
             <h1>Secure delivery for your customers</h1>
             <p>
-                This is the customer data distribution system that keeps every client package verified, tracked, and compliant.
+                Customer data distribution system that keeps every client package verified, tracked, and compliant.
+            </p>
+            <p>
+                Payment reminder management system that provides automated payment reminders, overdue tracking, and financial performance oversight across the organization.
             </p>
             <p class="login-page__visual-note">Trusted dashboards, concise alerts, zero guesswork.</p>
         </div>
@@ -19,7 +22,7 @@
             <div class="login-card__header">
                 <p class="text-uppercase mb-1">Secure Access</p>
                 <h2>Customer Portal Login</h2>
-                <p class="text-muted">Access your distribution feeds and delivery approvals.</p>
+                <p class="text-muted">Access your distribution feeds, delivery approvals, and payment management tools.</p>
             </div>
             <form action="{{ route('login.perform') }}" method="post">
                 @csrf

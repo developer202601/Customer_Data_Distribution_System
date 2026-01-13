@@ -42,6 +42,12 @@ class AssignmentController extends Controller
      */
     public function manage(Request $request)
     {
+        // Prevent super-assigned admin users from accessing the assign/manage rows page
+        $sessionUser = $request->session()->get('user');
+        if (! empty($sessionUser) && (($sessionUser['assignment'] ?? null) === 'super')) {
+            abort(403);
+        }
+
         $reportId = $request->query('report');
 
         $currentUserId = auth()->id() ?? session('user.id') ?? null;

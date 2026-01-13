@@ -19,6 +19,7 @@
                         <h1 class="process-upload-title mb-0">Assign Users</h1>
                     </div>
                     <div class="d-flex gap-2">
+                        <a href="{{ route('cc.users.create') }}" class="btn btn-outline-primary rounded-pill px-4">Add User</a>
                         <a href="{{ route('cc.users.index') }}" class="btn btn-outline-success rounded-pill px-4">Manage Users</a>
                     </div>
                 </div>
@@ -29,7 +30,6 @@
                             <table class="table align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
                                         <th>Username</th>
                                         <th>Name</th>
                                         <th>Assignment</th>
@@ -39,7 +39,6 @@
                                 <tbody>
                                     @foreach($users as $u)
                                         <tr>
-                                            <td>{{ $u->id }}</td>
                                             <td>{{ $u->username }}</td>
                                             <td>{{ $u->name ?? '—' }}</td>
                                             <td>{{ $u->assignment ?? 'none' }}</td>

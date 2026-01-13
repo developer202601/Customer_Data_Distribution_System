@@ -61,7 +61,24 @@ class RegionAdminController extends Controller
 
         $rtoms = $this->regionRtoms($region);
 
-        return view('cc.region.create_admin', compact('rtoms'));
+        return view('cc.region.create_admin', [
+            'rtoms' => $rtoms,
+            'isSupervisor' => false,
+        ]);
+    }
+
+    /**
+     * Show the create supervisor form (separate view with supervisor select and fixed=1).
+     */
+    public function createSupervisorForm(Request $request)
+    {
+        $region = $this->ensureRegionAdmin();
+
+        $rtoms = $this->regionRtoms($region);
+
+        return view('cc.region.create_supervisor', [
+            'rtoms' => $rtoms,
+        ]);
     }
 
     protected function regionRtoms($region)
@@ -89,37 +106,74 @@ class RegionAdminController extends Controller
 
         $request->validate([
             'username' => 'required|digits:6|unique:users,username',
-            'rtom' => 'required|string|max:255',
+            'rtom' => 'required_without:supervisor|string|max:255',
+            'supervisor' => 'required_without:rtom|string|max:255',
             'name' => 'nullable|string|max:45',
         ]);
 
-        $rtom = $request->input('rtom');
+        // Accept value from either the RTOM field (create admin) or the supervisor field (create supervisor form)
+        $rtom = $request->input('rtom') ?? $request->input('supervisor');
+
+        // allow marking created users as "supervisors" via fixed=1 in the form (they are fixed and cannot be deleted)
+        $isSupervisor = ! empty($request->input('fixed'));
 
         $user = User::create([
             'username' => $request->input('username'),
             'admin_prev' => 1,
             'system' => 'cc',
             'created_at' => now(),
-            'fixed' => 0,
+            'fixed' => $isSupervisor ? 1 : 0,
             'status' => 1,
             'name' => $request->input('name'),
             'assignment' => 'rtom_' . preg_replace('/\s+/', '_', strtolower($rtom)),
-            'supervisor' => session('user')['supervisor'],
+            'supervisor' => session('user')['supervisor'] ?? null,
         ]);
 
         return redirect()->route('cc.region.index')->with('status', 'RTOM admin created');
     }
 
+    public function storeSupervisor(Request $request)
+    {
+        $region = $this->ensureRegionAdmin();
+
+        $request->validate([
+            'username' => 'required|digits:6|unique:users,username',
+            'rtom' => 'required_without:supervisor|string|max:255',
+            'supervisor' => 'required_without:rtom|string|max:255',
+            'name' => 'nullable|string|max:45',
+        ]);
+
+        // Accept value from either the RTOM field (create admin) or the supervisor field (create supervisor form)
+        $rtom = $request->input('rtom') ?? $request->input('supervisor');
+
+        // allow marking created users as "supervisors" via fixed=1 in the form (they are fixed and cannot be deleted)
+        $isSupervisor = ! empty($request->input('fixed'));
+
+        $user = User::create([
+            'username' => $request->input('username'),
+            'admin_prev' => 1,
+            'system' => 'cc',
+            'created_at' => now(),
+            'fixed' => $isSupervisor ? 1 : 0,
+            'status' => 1,
+            'name' => $request->input('name'),
+            'assignment' => 'supervisor_' . preg_replace('/\s+/', '_', strtolower($rtom)),
+            'supervisor' => session('user')['supervisor'] ?? null,
+        ]);
+
+        return redirect()->route('cc.region.index')->with('status', 'Supervisor created');
+    }
+
     public function editAdminForm(User $user)
     {
-        $this->ensureRegionAdmin();
+        $region = $this->ensureRegionAdmin();
 
         // only allow editing RTOM admins they supervise
         if (! $user->assignment || stripos($user->assignment, 'rtom_') !== 0 || $user->supervisor !== (session('user')['supervisor'] ?? null)) {
             abort(404);
         }
 
-        $rtoms = $this->regionRtoms(session('user.assignment'));
+        $rtoms = $this->regionRtoms($region);
         return view('cc.region.edit_admin', compact('user', 'rtoms'));
     }
 

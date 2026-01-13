@@ -19,8 +19,8 @@
                         <h1 class="process-upload-title mb-0">RTOMs & RTOM Admins</h1>
                     </div>
                     <div class="d-flex gap-2">
-                        <a href="{{ route('cc.region.assign.index') }}" class="btn btn-outline-primary rounded-pill px-4">Assign Supervisors</a>
-                        <a href="{{ route('cc.region.create_admin') }}" class="btn btn-outline-success rounded-pill px-4">Create RTOM Admin</a>
+                        
+                        
                     </div>
                 </div>
 

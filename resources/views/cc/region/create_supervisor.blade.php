@@ -7,17 +7,15 @@
             <div class="card-body p-4 p-lg-5">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                     <div>
-                        <p class="text-uppercase text-muted mb-1">{{ $isSupervisor ? 'Create Supervisor Admin' : 'Create RTOM Admin' }}</p>
-                        <h1 class="process-upload-title mb-0">{{ $isSupervisor ? 'New Supervisor Admin' : 'New RTOM Admin' }}</h1>
+                        <p class="text-uppercase text-muted mb-1">Create Supervisor Admin</p>
+                        <h1 class="process-upload-title mb-0">New Supervisor Admin</h1>
                     </div>
                 </div>
 
-                <form action="{{ route('cc.region.store_admin') }}" method="post">
+                <form action="{{ route('cc.region.store_supervisor') }}" method="post">
                     @csrf
-                    @if(!empty($isSupervisor) && $isSupervisor)
-                        {{-- mark supervisors fixed so they cannot be deleted --}}
-                        <input type="hidden" name="fixed" value="1">
-                    @endif
+                    {{-- mark new supervisors as fixed users so they cannot be deleted --}}
+                    <input type="hidden" name="fixed" value="1">
                     <div class="mb-3">
                         <label class="form-label">Username</label>
                         <input name="username" type="text" class="form-control" maxlength="6" pattern="\d{6}" required>
@@ -28,7 +26,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">RTOM</label>
-                        <select name="rtom" class="form-select">
+                        <select name="supervisor" class="form-select">
                             @foreach($rtoms as $r)
                                 <option value="{{ $r }}">{{ $r }}</option>
                             @endforeach

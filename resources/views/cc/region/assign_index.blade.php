@@ -19,7 +19,8 @@
                         <h1 class="process-upload-title mb-0">Assign Supervisors</h1>
                     </div>
                     <div class="d-flex gap-2">
-                        <a href="{{ route('cc.region.index') }}" class="btn btn-outline-success rounded-pill px-4">Manage Supervisors</a>
+                        
+                        <a href="{{ route('cc.region.create_supervisor') }}" class="btn btn-outline-success rounded-pill px-4">Add Supervisors</a>
                     </div>
                 </div>
 

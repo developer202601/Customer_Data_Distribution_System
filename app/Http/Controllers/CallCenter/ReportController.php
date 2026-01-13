@@ -53,12 +53,25 @@ class ReportController extends Controller
             ->get()
             : collect();
 
-        // If logged-in user is a supervisor, limit visible users to callers they created
+        // If logged-in user is a supervisor, show callers for the supervisor's RTOM (from assignment)
+        // Supervisors will see other supervisors' callers in the same RTOM; their own callers will be marked in the view.
+        $currentSupervisorId = session('user')['id'] ?? null;
         if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
-            $ccUsers = CallCenterUser::where('supervisor', session('user')['id'] ?? null)
-                ->active()
-                ->orderBy('username')
-                ->get();
+            $assign = session('user.assignment') ?? '';
+            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+            if ($rtomVal !== '') {
+                $ccUsers = CallCenterUser::where('assignment', 'caller_rtom_' . $rtomVal)
+                    ->active()
+                    ->orderBy('username')
+                    ->get();
+            } else {
+                // fallback: show callers created by this supervisor
+                $ccUsers = CallCenterUser::where('supervisor', $currentSupervisorId)
+                    ->active()
+                    ->orderBy('username')
+                    ->get();
+            }
         } else {
             $ccUsers = CallCenterUser::active()->orderBy('username')->get();
         }
@@ -160,6 +173,7 @@ class ReportController extends Controller
             'reports' => $reports,
             'selectedReport' => $selectedReport,
             'ccUsers' => $ccUsers,
+            'currentSupervisorId' => $currentSupervisorId,
             'allowedRowIds' => $allowedRowIds,
             'rejectedAssignments' => $rejectedAssignments,
             'acceptedAssignments' => $acceptedAssignments,
@@ -504,20 +518,24 @@ class ReportController extends Controller
             return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'Select at least one user to distribute to.']);
         }
 
-        // Only allow selecting callers that this supervisor created
+        // Determine RTOM value for this supervisor
+        $assignStr = $session['assignment'] ?? '';
+        $rtomPart = preg_replace('/^supervisor_/', '', $assignStr);
+        $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+
+        if ($rtomVal === '') {
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'Unable to determine your RTOM assignment.']);
+        }
+
+        // Only allow selecting callers that belong to this RTOM (callers may be owned by any supervisor)
         $allowedUserIds = \App\Models\CallCenter\CallCenterUser::whereIn('id', $userIds)
-            ->where('supervisor', $session['id'] ?? null)
+            ->where('assignment', 'caller_rtom_' . $rtomVal)
             ->pluck('id')
             ->toArray();
 
         if (empty($allowedUserIds)) {
             return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No valid users selected.']);
         }
-
-        // Determine RTOM value for this supervisor
-        $assignStr = $session['assignment'] ?? '';
-        $rtomPart = preg_replace('/^supervisor_/', '', $assignStr);
-        $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
 
         $rowIds = $report->row_ids ?? [];
         if (empty($rowIds)) {

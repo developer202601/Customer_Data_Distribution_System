@@ -35,7 +35,7 @@
                         $recallDisabled = $acceptedAssignments->isNotEmpty() || !empty($hasInteractions);
                         @endphp
                         <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
-                        @unless($recallDisabled)
+                        @if(($anyAssigned ?? false) && !($recallDisabled))
                         <!-- Recall modal trigger -->
                         <button type="button" class="btn btn-outline-warning rounded-pill px-3" id="cc-recall-open-btn"
                             title="Undo every assignment for this report"
@@ -143,6 +143,9 @@
                                             <input type="checkbox" id="cc-select-all-users" /> <label for="cc-select-all-users" class="small mb-0">Select all</label>
                                             <div class="small text-muted ms-2">Distributable rows: <strong id="cc-distributable-count">{{ $distributableRows ?? 0 }}</strong></div>
                                         </div>
+                                        @if(Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
+                                            <div class="small text-muted mt-1">* = callers you own (supervisor-created)</div>
+                                        @endif
 
                                         <style>
                                             .cc-user-scroll {
@@ -199,7 +202,14 @@
                                                     <input type="checkbox" class="form-check-input cc-user-checkbox-input" name="user_ids[]" id="cc-user-{{ $user->id }}" value="{{ $user->id }}">
                                                 </div>
                                                 <div class="cc-user-meta">
-                                                    <div class="cc-user-name"><strong>{{ $user->username }}</strong> — <span class="text-muted small">{{ $user->name }}</span></div>
+                                                    <div class="cc-user-name">
+                                                        <strong>{{ $user->username }}@if(isset($currentSupervisorId) && $user->supervisor === $currentSupervisorId) *@endif</strong>
+                                                        @if(is_null($user->name))
+                                                            &nbsp;&mdash;&nbsp;<span class="text-muted small">new user</span>
+                                                        @elseif(trim((string) ($user->name ?? '')) !== '')
+                                                            &nbsp;&mdash;&nbsp;<span class="text-muted small">{{ $user->name }}</span>
+                                                        @endif
+                                                    </div>
                                                     @if($pending > 0 || $prevPending > 0)
                                                     <div class="small text-muted d-flex gap-3 flex-wrap">
                                                         @if($pending > 0)
@@ -379,7 +389,17 @@
                                     @php $pending = (int) ($pendingCounts[$user->id] ?? 0); @endphp
                                     @if($pending > 0 && ! in_array($user->id, $acceptedUserIds))
                                     <li class="d-flex justify-content-between align-items-center py-1">
-                                        <div class="small">{{ $user->username }} — {{ $user->name }}</div>
+                                        <div class="small">
+                                            @php
+                                                $owned = isset($currentSupervisorId) && $user->supervisor === $currentSupervisorId;
+                                            @endphp
+                                            <strong>{{ $user->username }}@if($owned) *@endif</strong>
+                                            @if(is_null($user->name))
+                                                &nbsp;&mdash;&nbsp;<span class="text-muted">new user</span>
+                                            @elseif(trim((string) ($user->name ?? '')) !== '')
+                                                &nbsp;&mdash;&nbsp;<span class="text-muted">{{ $user->name }}</span>
+                                            @endif
+                                        </div>
                                         <span class="badge bg-secondary text-white small">{{ $pending }}</span>
                                     </li>
                                     @endif

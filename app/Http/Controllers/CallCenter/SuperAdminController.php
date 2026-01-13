@@ -179,6 +179,8 @@ class SuperAdminController extends Controller
         $user->status = 1;
         // mark supervisor as the current super admin (session user id)
         $user->supervisor = $sessionUser['id'] ?? null;
+        // ensure created_at is populated (model has timestamps disabled)
+        $user->created_at = now();
         $user->save();
 
         return redirect()->route('cc.users.assign.index')->with('status', 'User created and assigned');

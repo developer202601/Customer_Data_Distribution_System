@@ -44,15 +44,66 @@ class RegionAdminController extends Controller
                 ->values();
         }
 
-        // rtom admins are users with assignment like 'rtom_<rtom>' and supervisor = current user's supervisor
-        $currentSupervisor = session('user')['supervisor'] ?? null;
-        $rtomAdmins = User::where('system', 'cc')
+        // rtom admins are users with assignment like 'rtom_<rtom>' and supervisor = current user's id
+        $currentSupervisor = session('user')['id'] ?? null;
+
+        $q = request()->query('q');
+        $selectedRtom = request()->query('rtom');
+
+        $query = User::where('system', 'cc')
             ->where('admin_prev', 1)
             ->where('assignment', 'like', 'rtom_%')
-            ->where('supervisor', $currentSupervisor)
-            ->get();
+            ->where('supervisor', $currentSupervisor);
 
-        return view('cc.region.index', compact('rtoms', 'rtomAdmins', 'region'));
+        if (! empty($q)) {
+            $query->where(function($w) use ($q) {
+                $w->where('username', 'like', "%{$q}%")
+                  ->orWhere('name', 'like', "%{$q}%");
+            });
+        }
+
+        if (! empty($selectedRtom)) {
+            $assignmentValue = 'rtom_' . preg_replace('/\s+/', '_', strtolower($selectedRtom));
+            $query->where('assignment', $assignmentValue);
+        }
+
+        $rtomAdmins = $query->get();
+
+        return view('cc.region.index', compact('rtoms', 'rtomAdmins', 'region', 'q', 'selectedRtom'));
+    }
+
+    /**
+     * AJAX search endpoint returning table rows for RTOM admins.
+     */
+    public function search(Request $request)
+    {
+        $region = $this->ensureRegionAdmin();
+
+        $currentSupervisor = session('user')['id'] ?? null;
+
+        $q = $request->query('q');
+        $selectedRtom = $request->query('rtom');
+
+        $query = User::where('system', 'cc')
+            ->where('admin_prev', 1)
+            ->where('assignment', 'like', 'rtom_%')
+            ->where('supervisor', $currentSupervisor);
+
+        if (! empty($q)) {
+            $query->where(function($w) use ($q) {
+                $w->where('username', 'like', "%{$q}%")
+                  ->orWhere('name', 'like', "%{$q}%");
+            });
+        }
+
+        if (! empty($selectedRtom)) {
+            $assignmentValue = 'rtom_' . preg_replace('/\s+/', '_', strtolower($selectedRtom));
+            $query->where('assignment', $assignmentValue);
+        }
+
+        $rtomAdmins = $query->get();
+
+        return view('cc.region._rows', compact('rtomAdmins'));
     }
 
     public function createAdminForm(Request $request)
@@ -126,7 +177,7 @@ class RegionAdminController extends Controller
             'status' => 1,
             'name' => $request->input('name'),
             'assignment' => 'rtom_' . preg_replace('/\s+/', '_', strtolower($rtom)),
-            'supervisor' => session('user')['supervisor'] ?? null,
+            'supervisor' => session('user')['id'] ?? null,
         ]);
 
         return redirect()->route('cc.region.index')->with('status', 'RTOM admin created');
@@ -158,7 +209,7 @@ class RegionAdminController extends Controller
             'status' => 1,
             'name' => $request->input('name'),
             'assignment' => 'supervisor_' . preg_replace('/\s+/', '_', strtolower($rtom)),
-            'supervisor' => session('user')['supervisor'] ?? null,
+            'supervisor' => session('user')['id'] ?? null,
         ]);
 
         return redirect()->route('cc.region.index')->with('status', 'Supervisor created');
@@ -169,7 +220,7 @@ class RegionAdminController extends Controller
         $region = $this->ensureRegionAdmin();
 
         // only allow editing RTOM admins they supervise
-        if (! $user->assignment || stripos($user->assignment, 'rtom_') !== 0 || $user->supervisor !== (session('user')['supervisor'] ?? null)) {
+        if (! $user->assignment || stripos($user->assignment, 'rtom_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
             abort(404);
         }
 
@@ -181,7 +232,7 @@ class RegionAdminController extends Controller
     {
         $this->ensureRegionAdmin();
 
-        if (! $user->assignment || stripos($user->assignment, 'rtom_') !== 0 || $user->supervisor !== (session('user')['supervisor'] ?? null)) {
+        if (! $user->assignment || stripos($user->assignment, 'rtom_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
             abort(404);
         }
 
@@ -201,7 +252,7 @@ class RegionAdminController extends Controller
     {
         $this->ensureRegionAdmin();
 
-        if (! $user->assignment || stripos($user->assignment, 'rtom_') !== 0 || $user->supervisor !== (session('user')['supervisor'] ?? null)) {
+        if (! $user->assignment || stripos($user->assignment, 'rtom_') !== 0 || $user->supervisor !== (session('user')['id'] ?? null)) {
             abort(404);
         }
 
@@ -253,7 +304,7 @@ class RegionAdminController extends Controller
 
         // Show call-center users added by the logged-in supervisor, not super admins and not already RTOM admins
         $users = User::where('system', 'cc')
-            ->where('supervisor', session('user')['supervisor'] ?? null)
+            ->where('supervisor', session('user')['id'] ?? null)
             ->where(function ($q) {
                 $q->whereNull('assignment')
                     ->orWhere(function ($sq) {
@@ -293,7 +344,7 @@ class RegionAdminController extends Controller
 
         $user->admin_prev = 1;
         $user->assignment = 'rtom_' . preg_replace('/\s+/', '_', strtolower($rtom));
-        $user->supervisor = $rtom;
+        $user->supervisor = session('user')['id'] ?? null;
         $user->save();
 
         return redirect()->route('cc.region.assign.index')->with('status', 'Assignment updated');

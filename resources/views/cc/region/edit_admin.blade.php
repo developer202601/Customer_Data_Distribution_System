@@ -29,16 +29,12 @@
                     </div>
 
                     <div class="d-flex gap-2">
-                        <button class="btn btn-primary">Save</button>
-                        <a href="{{ route('cc.region.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary rounded-pill px-4">Save</button>
+                        <a href="{{ route('cc.region.index') }}" class="btn btn-outline-secondary rounded-pill px-4">Cancel</a>
                     </div>
                 </form>
 
-                <form action="{{ route('cc.region.destroy_admin', $user) }}" method="post" class="mt-3" onsubmit="return confirm('Delete this RTOM admin?');">
-                    @csrf
-                    @method('delete')
-                    <button class="btn btn-danger" type="submit">Delete</button>
-                </form>
+                {{-- Delete action removed: deletion handled from RTOM list only --}}
 
             </div>
         </div>

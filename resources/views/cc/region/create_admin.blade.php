@@ -12,34 +12,8 @@
                     </div>
                 </div>
 
-                <form action="{{ route('cc.region.store_admin') }}" method="post">
-                    @csrf
-                    @if(!empty($isSupervisor) && $isSupervisor)
-                        {{-- mark supervisors fixed so they cannot be deleted --}}
-                        <input type="hidden" name="fixed" value="1">
-                    @endif
-                    <div class="mb-3">
-                        <label class="form-label">Username</label>
-                        <input name="username" type="text" class="form-control" maxlength="6" pattern="\d{6}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Name</label>
-                        <input name="name" type="text" class="form-control">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">RTOM</label>
-                        <select name="rtom" class="form-select">
-                            @foreach($rtoms as $r)
-                                <option value="{{ $r }}">{{ $r }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-success">Create</button>
-                        <a href="{{ route('cc.region.index') }}" class="btn btn-outline-secondary">Cancel</a>
-                    </div>
-                </form>
+                @php $action = route('cc.region.store_admin'); @endphp
+                @include('cc.partials._user_create_form', ['mode' => 'rtom', 'action' => $action, 'rtoms' => $rtoms, 'isSupervisor' => $isSupervisor ?? false])
 
             </div>
         </div>

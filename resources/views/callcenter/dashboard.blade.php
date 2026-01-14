@@ -55,13 +55,14 @@
                                 </a>
                             </div>
                         </div>
+                        <p class="text-muted small mb-3">This table shows performance metrics for active callers. Coverage represents the percentage of total assigned customers each caller has contacted. Pending payments may include follow-ups from previous months.</p>
                         <div class="table-responsive cc-table-container">
                             <table class="table table-borderless table-hover align-middle mb-0">
                                 <thead>
                                     <tr class="text-uppercase text-muted small">
                                         <th scope="col">Caller</th>
-                                        <th scope="col">Assigned customers</th>
-                                        <th scope="col">Coverage</th>
+                                        <th scope="col" title="Unique customers contacted this month/all time">Customers contacted</th>
+                                        <th scope="col" title="Percentage of total assigned rows this caller has contacted">Coverage</th>
                                         <th scope="col">Calls</th>
                                         <th scope="col">Payments after call</th>
                                         <th scope="col">Amount received</th>

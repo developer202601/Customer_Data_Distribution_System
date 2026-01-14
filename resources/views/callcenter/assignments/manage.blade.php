@@ -297,6 +297,8 @@
                             <div class="col-12">
                                 <label class="form-label small">Outcome</label>
                                 <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
+                                    <option value="" disabled selected>Select outcome</option>
+                                    <option value="paid">paid</option>
                                     <option value="number invalid">number invalid</option>
                                     <option value="user not authorized">user not authorized</option>
                                     <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
@@ -307,6 +309,14 @@
                             <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
                                 <label class="form-label small">Payment expected at</label>
                                 <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" disabled>
+                            </div>
+                            <div class="col-12" id="ccPaymentDateWrap" style="display:none;">
+                                <label class="form-label small">Payment date</label>
+                                <input type="date" name="payment_date" id="ccPaymentDate" class="form-control form-control-sm" disabled>
+                            </div>
+                            <div class="col-12" id="ccPaidAmountWrap" style="display:none;">
+                                <label class="form-label small">Paid amount</label>
+                                <input type="number" step="0.01" name="paid_amount" id="ccPaidAmount" class="form-control form-control-sm" disabled>
                             </div>
                             <div class="col-12">
                                 <label class="form-label small">Note (optional)</label>
@@ -336,7 +346,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const callForm = document.getElementById('ccAssignmentCallForm');
     const outcomeEl = document.getElementById('ccCallOutcome');
     const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
+    const paymentDateWrap = document.getElementById('ccPaymentDateWrap');
+    const paidAmountWrap = document.getElementById('ccPaidAmountWrap');
     const paymentInput = document.getElementById('ccPaymentExpected');
+    const paymentDate = document.getElementById('ccPaymentDate');
+    const paidAmount = document.getElementById('ccPaidAmount');
     const statusField = document.getElementById('ccCallStatus');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     let bootstrapModal = null;
@@ -480,6 +494,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (outcome) outcome.disabled = true;
         if (note) note.disabled = true;
         if (pay) pay.disabled = true;
+        if (paymentDate) paymentDate.disabled = true;
+        if (paidAmount) paidAmount.disabled = true;
         if (saveBtn) {
             saveBtn.disabled = true;
             saveBtn.classList.add('d-none');
@@ -571,6 +587,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (outcome) outcome.disabled = false;
                         if (note) note.disabled = false;
                         if (pay) pay.disabled = false;
+                        if (paymentDate) paymentDate.disabled = false;
+                        if (paidAmount) paidAmount.disabled = false;
                         if (saveBtn) {
                             saveBtn.disabled = false;
                             saveBtn.classList.remove('d-none');
@@ -766,13 +784,29 @@ document.addEventListener('DOMContentLoaded', function () {
         const v = this.value;
         if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
             paymentWrap.style.display = 'block';
+            paymentDateWrap.style.display = 'none';
+            paidAmountWrap.style.display = 'none';
             const days = v.includes('3') ? 3 : 7;
             const d = new Date();
             d.setDate(d.getDate() + days);
             paymentInput.value = d.toISOString().slice(0,10);
+            paymentDate.value = '';
+            paidAmount.value = '';
+        } else if (v === 'paid') {
+            paymentWrap.style.display = 'none';
+            paymentDateWrap.style.display = 'block';
+            paidAmountWrap.style.display = 'block';
+            paymentInput.value = '';
+            const today = new Date().toISOString().slice(0,10);
+            paymentDate.value = today;
+            paidAmount.value = '';
         } else {
             paymentWrap.style.display = 'none';
+            paymentDateWrap.style.display = 'none';
+            paidAmountWrap.style.display = 'none';
             paymentInput.value = '';
+            paymentDate.value = '';
+            paidAmount.value = '';
         }
     });
 
@@ -784,6 +818,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         const formData = new FormData(this);
+        if (outcomeEl && outcomeEl.value === 'paid') {
+            formData.set('paid', '1');
+        }
         try {
             const res = await fetch(`/cc/assignments/${aid}/interactions`, { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });
             if (!res.ok) throw new Error('failed');
@@ -792,7 +829,11 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 callForm.reset();
                 if (paymentWrap) paymentWrap.style.display = 'none';
+                if (paymentDateWrap) paymentDateWrap.style.display = 'none';
+                if (paidAmountWrap) paidAmountWrap.style.display = 'none';
                 if (paymentInput) paymentInput.value = '';
+                if (paymentDate) paymentDate.value = '';
+                if (paidAmount) paidAmount.value = '';
                 if (outcomeEl) outcomeEl.selectedIndex = 0;
                 const saveBtn = document.getElementById('ccSaveCallBtn');
                 if (saveBtn) {

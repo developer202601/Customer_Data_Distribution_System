@@ -15,8 +15,9 @@ class UserController extends Controller
     {
         $status = $request->query('status', 'all');
         $q = trim((string) $request->query('q', ''));
+        $role = $request->query('role', 'all');
 
-        $users = $this->buildUsersQuery($status, $q)->orderBy('username')->get();
+        $users = $this->buildUsersQuery($status, $q, $role)->orderBy('username')->get();
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -29,10 +30,11 @@ class UserController extends Controller
             'users' => $users,
             'filter_status' => $status,
             'filter_q' => $q,
+            'filter_role' => $role,
         ]);
     }
 
-    protected function buildUsersQuery(string $status, string $q)
+    protected function buildUsersQuery(string $status, string $q, string $role)
     {
         $usersQ = CallCenterUser::query();
         $usersQ->with('supervisorUser');
@@ -48,16 +50,32 @@ class UserController extends Controller
                 $usersQ->where('supervisor', session('user')['id'] ?? null);
             }
         }
+
+        // Status filter
         if ($status === 'active') {
-            $usersQ->where('status', 1);
+            $usersQ->where('status', true);
         } elseif ($status === 'disabled') {
-            $usersQ->where('status', 0);
+            $usersQ->where('status', false);
         }
 
+        // Role filter
+        if ($role === 'super_admin') {
+            $usersQ->where('assignment', 'super');
+        } elseif ($role === 'region_admin') {
+            $usersQ->where('assignment', 'like', 'REGION%');
+        } elseif ($role === 'rtom_admin') {
+            $usersQ->where('assignment', 'like', 'rtom_%');
+        } elseif ($role === 'supervisor') {
+            $usersQ->where('assignment', 'like', 'supervisor_%');
+        } elseif ($role === 'caller') {
+            $usersQ->where('assignment', 'like', 'caller_%');
+        }
+
+        // Search filter
         if ($q !== '') {
-            $usersQ->where(function ($qq) use ($q) {
-                $qq->where('username', 'like', "%{$q}%")
-                   ->orWhere('name', 'like', "%{$q}%");
+            $usersQ->where(function ($query) use ($q) {
+                $query->where('username', 'like', '%' . $q . '%')
+                      ->orWhere('name', 'like', '%' . $q . '%');
             });
         }
 

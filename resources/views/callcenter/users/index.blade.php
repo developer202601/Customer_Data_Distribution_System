@@ -47,6 +47,14 @@
                                     <option value="disabled" {{ (isset($filter_status) && $filter_status==='disabled') ? 'selected' : '' }}>Disabled</option>
                                     <option value="all" {{ (isset($filter_status) && $filter_status==='all') ? 'selected' : '' }}>All</option>
                                 </select>
+                                <select name="role" class="form-select form-select-sm me-2" data-cc-users-role>
+                                    <option value="all" {{ (isset($filter_role) && $filter_role==='all') ? 'selected' : '' }}>All Roles</option>
+                                    <option value="super_admin" {{ (isset($filter_role) && $filter_role==='super_admin') ? 'selected' : '' }}>Super Admin</option>
+                                    <option value="region_admin" {{ (isset($filter_role) && $filter_role==='region_admin') ? 'selected' : '' }}>Region Admin</option>
+                                    <option value="rtom_admin" {{ (isset($filter_role) && $filter_role==='rtom_admin') ? 'selected' : '' }}>RTOM Admin</option>
+                                    <option value="supervisor" {{ (isset($filter_role) && $filter_role==='supervisor') ? 'selected' : '' }}>Supervisor</option>
+                                    <option value="caller" {{ (isset($filter_role) && $filter_role==='caller') ? 'selected' : '' }}>Caller</option>
+                                </select>
                                 <input name="q" type="search" class="form-control form-control-sm me-2" placeholder="Search username or name" value="{{ $filter_q ?? '' }}" data-cc-users-search>
                                 
                             </form>
@@ -58,10 +66,8 @@
                                 <thead>
                                     <tr>
                                         <th>Username</th>
-                                        <th>Supervisor</th>
+                                        <th>Name</th>
                                         <th>Role</th>
-                                        <th>Status</th>
-                                        <th>Created</th>
                                         <th class="text-end">Actions</th>
                                     </tr>
                                 </thead>
@@ -182,6 +188,37 @@
         <form id="cc-enable-form" method="post" style="display:none">@csrf @method('put')</form>
         <form id="cc-delete-form" method="post" style="display:none">@csrf @method('delete')</form>
 
+        <!-- User Details Modal -->
+        <div class="modal fade" id="userDetailsModal" tabindex="-1" aria-labelledby="userDetailsLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="userDetailsLabel">User Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <dl class="row">
+                            <dt class="col-sm-4">Username</dt>
+                            <dd class="col-sm-8" id="detail-username">—</dd>
+                            <dt class="col-sm-4">Name</dt>
+                            <dd class="col-sm-8" id="detail-name">—</dd>
+                            <dt class="col-sm-4">Role</dt>
+                            <dd class="col-sm-8" id="detail-role">—</dd>
+                            <dt class="col-sm-4">Supervisor</dt>
+                            <dd class="col-sm-8" id="detail-supervisor">—</dd>
+                            <dt class="col-sm-4">Status</dt>
+                            <dd class="col-sm-8" id="detail-status">—</dd>
+                            <dt class="col-sm-4">Created</dt>
+                            <dd class="col-sm-8" id="detail-created">—</dd>
+                        </dl>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 @endsection
@@ -190,6 +227,7 @@
     <style>
     /* Page-specific: keep footer flush but preserve CC layout padding; only remove bottom spacing */
     .cc-layout .content-wrapper { padding-bottom: 0 !important; }
+    .user-row { cursor: pointer; }
     </style>
     @endpush
 
@@ -310,7 +348,23 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
+    const attachRowHandlers = () => {
+        document.querySelectorAll('.user-row').forEach(row => {
+            row.addEventListener('click', function() {
+                document.getElementById('detail-username').textContent = this.dataset.username;
+                document.getElementById('detail-name').textContent = this.dataset.name;
+                document.getElementById('detail-role').textContent = this.dataset.role;
+                document.getElementById('detail-supervisor').textContent = this.dataset.supervisor;
+                document.getElementById('detail-status').textContent = this.dataset.status;
+                document.getElementById('detail-created').textContent = this.dataset.created;
+                const modal = new bootstrap.Modal(document.getElementById('userDetailsModal'));
+                modal.show();
+            });
+        });
+    };
+
     bindTableActions();
+    attachRowHandlers();
 
     if (disableConfirmBtn) {
         disableConfirmBtn.addEventListener('click', () => {
@@ -338,6 +392,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const filterForm = document.getElementById('cc-users-filter-form');
     const statusSelect = filterForm?.querySelector('[data-cc-users-status]');
+    const roleSelect = filterForm?.querySelector('[data-cc-users-role]');
     const searchInput = filterForm?.querySelector('[data-cc-users-search]');
     const usersBody = document.querySelector('[data-cc-users-body]');
     const usersCountBadge = document.querySelector('[data-cc-users-count]');
@@ -345,13 +400,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const renderLoadingRow = () => {
         if (!usersBody) return;
-        usersBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>Loading…</td></tr>';
+        usersBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>Loading…</td></tr>';
     };
 
     const renderErrorRow = (message) => {
         if (!usersBody) return;
         const safeMessage = message || 'Unexpected error';
-        usersBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4"><div class="fw-semibold">Unable to load users</div><div class="small text-muted">${safeMessage}</div></td></tr>`;
+        usersBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4"><div class="fw-semibold">Unable to load users</div><div class="small text-muted">${safeMessage}</div></td></tr>`;
     };
 
     const updateUserCount = (value) => {
@@ -367,9 +422,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const fetchUsers = async () => {
         if (!filterForm || !usersBody) return;
         const statusValue = statusSelect ? statusSelect.value : 'all';
+        const roleValue = roleSelect ? roleSelect.value : 'all';
         const searchValue = (searchInput ? searchInput.value : '').trim();
         const params = new URLSearchParams();
         params.set('status', statusValue);
+        params.set('role', roleValue);
         params.set('q', searchValue);
         const url = `${filterForm.action}?${params.toString()}`;
         renderLoadingRow();
@@ -385,6 +442,7 @@ document.addEventListener('DOMContentLoaded', function () {
             usersBody.innerHTML = payload.html;
             updateUserCount(payload.count);
             bindTableActions();
+            attachRowHandlers();
         } catch (error) {
             renderErrorRow(error.message);
             updateUserCount('—');
@@ -403,6 +461,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         if (statusSelect) {
             statusSelect.addEventListener('change', fetchUsers);
+        }
+        if (roleSelect) {
+            roleSelect.addEventListener('change', fetchUsers);
         }
         if (searchInput) {
             searchInput.addEventListener('input', scheduleSearch);

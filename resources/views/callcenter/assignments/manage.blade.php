@@ -677,13 +677,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!assignmentList || !userId) return;
         const params = new URLSearchParams({ page: paging.page, per_page: paging.per_page });
         if (reportId) params.append('report', reportId);
-        // If there are pending new rows from the latest report, or the user has
-        // requested to see previous report rows, include completed assignments
-        // so last-report rows remain visible until new rows are accepted.
-        const latestPending = Number(assignmentList?.dataset.latestReportPending || 0);
-        if (latestPending > 0 || showOldRows) {
-            params.append('include_completed', '1');
-        }
+        // Always include completed assignments for the accepted rows view
+        params.append('include_completed', '1');
         assignmentList.innerHTML = append ? assignmentList.innerHTML : '<div class="list-group-item text-muted small">Loading accepted rows...</div>';
         try {
             const res = await fetch(`/cc/assignments/${userId}/rows?${params.toString()}`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });

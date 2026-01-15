@@ -8,7 +8,10 @@
     </div>
     <div class="offcanvas-body">
         <nav class="nav flex-column cc-sidebar-nav">
-            <a class="nav-link{{ $ccRouteName === 'cc.dashboard' ? ' active' : '' }}" href="{{ route('cc.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.dashboard' ? 'page' : '' }}">Overview</a>
+            @php $userAssignment = session('user.assignment') ?? null; @endphp
+            @if($userAssignment === 'super')
+                <a class="nav-link{{ $ccRouteName === 'cc.dashboard' ? ' active' : '' }}" href="{{ route('cc.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.dashboard' ? 'page' : '' }}">Overview</a>
+            @endif
             @if(session('user.is_admin'))
                 @if(session('user.assignment') === 'super')
                     <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">User Management</a>

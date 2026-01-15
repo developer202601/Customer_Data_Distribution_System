@@ -1,7 +1,6 @@
 @extends('layouts.cc')
 
 @section('navbar-right')
-<a href="{{ route('cc.dashboard') }}" class="btn btn-outline-secondary">Call Center Home</a>
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf
     <button type="submit" class="btn btn-outline-secondary">Logout</button>
@@ -261,6 +260,14 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('supervisorProfitModal').style.display = 'none';
     });
 
+    // Close modal functionality
+    document.querySelectorAll('[data-bs-dismiss="modal"]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const modal = this.closest('.modal');
+            modal.style.display = 'none';
+        });
+    });
+
     window.addEventListener('click', function(event) {
         const modal = document.getElementById('supervisorProfitModal');
         if (event.target === modal) {
@@ -271,9 +278,9 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <!-- Modal for Supervisor Profit Chart -->
-<div id="supervisorProfitModal" class="modal" style="display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+<div id="supervisorProfitModal" class="modal" style="display: none; position: fixed; z-index: 1055; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
     <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 600px; position: relative;">
-        <button type="button" class="btn-close" aria-label="Close" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
         <h2 class="modal-title">Supervisor Profits</h2>
         <canvas id="supervisorProfitChart"></canvas>
     </div>

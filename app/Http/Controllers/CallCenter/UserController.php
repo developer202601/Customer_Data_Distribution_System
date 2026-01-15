@@ -15,8 +15,9 @@ class UserController extends Controller
     {
         $status = $request->query('status', 'all');
         $q = trim((string) $request->query('q', ''));
+        $role = $request->query('role', 'all');
 
-        $users = $this->buildUsersQuery($status, $q)->orderBy('username')->get();
+        $users = $this->buildUsersQuery($status, $q, $role)->orderBy('username')->get();
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -29,22 +30,52 @@ class UserController extends Controller
             'users' => $users,
             'filter_status' => $status,
             'filter_q' => $q,
+            'filter_role' => $role,
         ]);
     }
 
-    protected function buildUsersQuery(string $status, string $q)
+    protected function buildUsersQuery(string $status, string $q, string $role)
     {
         $usersQ = CallCenterUser::query();
-        if ($status === 'active') {
-            $usersQ->where('status', 1);
-        } elseif ($status === 'disabled') {
-            $usersQ->where('status', 0);
+        $usersQ->with('supervisorUser');
+        // If logged-in user is a supervisor, show callers for the supervisor's RTOM (exclude supervisor accounts)
+        if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
+            $assign = session('user.assignment') ?? '';
+            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+            if ($rtomVal !== '') {
+                $usersQ->where('assignment', 'caller_rtom_' . $rtomVal);
+            } else {
+                // fallback: show callers created by this supervisor
+                $usersQ->where('supervisor', session('user')['id'] ?? null);
+            }
         }
 
+        // Status filter
+        if ($status === 'active') {
+            $usersQ->where('status', true);
+        } elseif ($status === 'disabled') {
+            $usersQ->where('status', false);
+        }
+
+        // Role filter
+        if ($role === 'super_admin') {
+            $usersQ->where('assignment', 'super');
+        } elseif ($role === 'region_admin') {
+            $usersQ->where('assignment', 'like', 'REGION%');
+        } elseif ($role === 'rtom_admin') {
+            $usersQ->where('assignment', 'like', 'rtom_%');
+        } elseif ($role === 'supervisor') {
+            $usersQ->where('assignment', 'like', 'supervisor_%');
+        } elseif ($role === 'caller') {
+            $usersQ->where('assignment', 'like', 'caller_%');
+        }
+
+        // Search filter
         if ($q !== '') {
-            $usersQ->where(function ($qq) use ($q) {
-                $qq->where('username', 'like', "%{$q}%")
-                   ->orWhere('name', 'like', "%{$q}%");
+            $usersQ->where(function ($query) use ($q) {
+                $query->where('username', 'like', '%' . $q . '%')
+                      ->orWhere('name', 'like', '%' . $q . '%');
             });
         }
 
@@ -65,6 +96,16 @@ class UserController extends Controller
             'system' => 'cc',
             'fixed' => 0,
             'created_at' => now(),
+            'supervisor' => \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_') ? (session('user')['id'] ?? null) : null,
+            'assignment' => (function() {
+                $assign = session('user.assignment') ?? '';
+                if (! $assign) return null;
+                // strip supervisor_ prefix then strip leading rtom_ if present
+                $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+                if ($rtomVal === '') return null;
+                return 'caller_rtom_' . $rtomVal;
+            })(),
         ]);
 
         return redirect()->route('cc.users.index')->with('status', 'User created successfully.');
@@ -115,26 +156,36 @@ class UserController extends Controller
         return redirect()->route('cc.users.index')->with('status', 'User updated successfully.');
     }
 
-    public function disable(CallCenterUser $ccUser): RedirectResponse
+    public function disable(Request $request, CallCenterUser $ccUser): RedirectResponse
     {
         if (!$ccUser->status) {
+            $return = $request->input('return_to');
+            if ($return) return redirect($return)->with('status', 'User is already disabled.');
             return redirect()->route('cc.users.index')->with('status', 'User is already disabled.');
         }
 
         $ccUser->status = 0;
         $ccUser->save();
 
+        $return = $request->input('return_to');
+        if ($return) return redirect($return)->with('status', 'User disabled successfully.');
+
         return redirect()->route('cc.users.index')->with('status', 'User disabled successfully.');
     }
 
-    public function enable(CallCenterUser $ccUser): RedirectResponse
+    public function enable(Request $request, CallCenterUser $ccUser): RedirectResponse
     {
         if ($ccUser->status) {
+            $return = $request->input('return_to');
+            if ($return) return redirect($return)->with('status', 'User is already enabled.');
             return redirect()->route('cc.users.index')->with('status', 'User is already enabled.');
         }
 
         $ccUser->status = 1;
         $ccUser->save();
+
+        $return = $request->input('return_to');
+        if ($return) return redirect($return)->with('status', 'User enabled successfully.');
 
         return redirect()->route('cc.users.index')->with('status', 'User enabled successfully.');
     }

@@ -134,25 +134,63 @@
                     <div class="text-muted small">{{ $reportLabel ?? 'All reports' }}</div>
                 </div>
 
-                @if(isset($latestReportId) && $latestReportId && ($latestReportPending ?? 0) > 0 && (count($userReportIds ?? []) > 1))
-                    <div class="alert alert-info">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>New assignments:</strong> {{ $latestReportPending }} rows from {{ $latestReportLabel ?? ('Report #'.$latestReportId) }}. Please accept or reject these new rows.
+                @if(($latestReportPending ?? 0) > 0)
+                    <div class="mb-4">
+                        <div class="card border-0 rounded-4 bg-white shadow-sm">
+                            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+                                <div class="flex-grow-1">
+                                    <p class="text-uppercase small text-muted mb-1">New report assigned</p>
+                                    <h3 class="h6 mb-2">
+                                        Accept or reject the {{ number_format($latestReportPending) }} pending rows from {{ $latestReportLabel ?? ('Report #'.$latestReportId) }} before you start calling.
+                                    </h3>
+                                    <p class="small text-muted mb-1">If you already accepted rows from an earlier report, those assignments are now read-only and will be replaced with this new batch once you accept it.</p>
+                                    @if(!empty($latestReportAllReassigned))
+                                        <p class="small text-muted mb-0">These look like reissued rows. If you reject them, we'll discard your copy and reopen the original for the previous owner. No reason is required.</p>
+                                    @else
+                                        <p class="small text-muted mb-0">Rejections update only the assignment table (no interaction record is created) and a short reason is required.</p>
+                                    @endif
+                                </div>
+                                <div class="d-flex flex-column align-items-start align-items-md-end gap-2">
+                                    <form method="post" action="{{ route('cc.assignments.acceptAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccAcceptNewForm">
+                                        @csrf
+                                        <input type="hidden" name="report" value="{{ $latestReportId }}">
+                                        <button type="submit" class="btn btn-success btn-sm px-4">Accept rows</button>
+                                    </form>
+                                    <button type="button" class="btn btn-outline-danger btn-sm px-4" data-bs-toggle="modal" data-bs-target="#ccRejectReasonModal">
+                                        Reject rows
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="ccToggleOldRows">Show previous report rows</button>
+                                </div>
                             </div>
-                            <div class="d-flex gap-2">
-                                <form method="post" action="{{ route('cc.assignments.acceptAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccAcceptNewForm">
-                                    @csrf
-                                    <input type="hidden" name="report" value="{{ $latestReportId }}">
-                                    <button type="submit" class="btn btn-sm btn-success">Accept new rows</button>
-                                </form>
-                                <form method="post" action="{{ route('cc.assignments.rejectAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccRejectNewForm">
-                                    @csrf
-                                    <input type="hidden" name="report" value="{{ $latestReportId }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Reject new rows</button>
-                                </form>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" id="ccToggleOldRows">Show previous report rows</button>
-                            </div>
+                        </div>
+                    </div>
+                    <div class="modal fade" id="ccRejectReasonModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <form method="post" action="{{ route('cc.assignments.rejectAll', $currentUserId ?? auth()->id()) }}?report={{ $latestReportId }}" id="ccRejectNewForm" class="modal-content">
+                                @csrf
+                                <input type="hidden" name="report" value="{{ $latestReportId }}">
+                                <input type="hidden" name="requires_reason" value="{{ $latestReportAllReassigned ? '0' : '1' }}">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Reject pending rows</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    @if(!empty($latestReportAllReassigned))
+                                        <p class="small text-muted mb-0">These are reassigned copies. Rejecting will remove your copy and return the original to pending for the previous assignee. No reason needed.</p>
+                                        <input type="hidden" name="rejection_note" value="">
+                                    @else
+                                        <p class="small text-muted mb-3">Rejected rows will stay in the assignment table only; no interaction record is created. Please explain why you are declining these rows.</p>
+                                        <div class="mb-3">
+                                            <label for="ccRejectReason" class="form-label small">Rejection reason</label>
+                                            <textarea name="rejection_note" id="ccRejectReason" class="form-control form-control-sm" rows="3" required></textarea>
+                                        </div>
+                                    @endif
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-danger btn-sm">Reject rows</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 @endif
@@ -173,31 +211,13 @@
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
-                                            <p class="small text-uppercase text-muted mb-1">{{ $agent->username ?? 'User '.$userId }}</p>
-                                            <h3 class="h6 mb-1 fw-semibold">{{ $agent->name ?? ($agent->username ?? 'Unknown agent') }}</h3>
+                                            <h3>Current Reports</h3>
+                                            
                                         </div>
-                                        <div class="d-flex gap-2 align-items-center">
-                                            @if($accepted->isEmpty())
-                                                @if($pendingCount > 0)
-                                                    <form method="post" action="{{ route('cc.assignments.acceptAll', $userId) }}">
-                                                        @csrf
-                                                        @if($reportId)
-                                                            <input type="hidden" name="report" value="{{ $reportId }}">
-                                                        @endif
-                                                        <button type="submit" class="btn btn-sm btn-success">Accept All</button>
-                                                    </form>
-                                                    <form method="post" action="{{ route('cc.assignments.rejectAll', $userId) }}">
-                                                        @csrf
-                                                        @if($reportId)
-                                                            <input type="hidden" name="report" value="{{ $reportId }}">
-                                                        @endif
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger">Reject All</button>
-                                                    </form>
-                                                @else
-                                                    <span class="badge bg-secondary">No pending</span>
-                                                @endif
-                                            @else
-                                                <span class="badge bg-success">Accepted ({{ $acceptedCount }})</span>
+                                        <div class="text-end">
+                                            <span class="badge bg-success">Accepted ({{ $acceptedCount }})</span>
+                                            @if($pendingCount > 0)
+                                                <div class="text-muted small mt-1">Pending {{ $pendingCount }} rows</div>
                                             @endif
                                         </div>
                                     </div>
@@ -212,6 +232,7 @@
                                                     <button type="button" class="btn btn-outline-secondary active" data-cc-filter="all">All (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="called">Called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="uncalled">Not called (0)</button>
+                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="authorized">User Not Authorized (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="promise_overdue">Promise overdue (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="number_invalid">Number invalid (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_answered">Not answered (0)</button>
@@ -276,6 +297,8 @@
                             <div class="col-12">
                                 <label class="form-label small">Outcome</label>
                                 <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
+                                    <option value="" disabled selected>Select outcome</option>
+                                    <option value="paid">paid</option>
                                     <option value="number invalid">number invalid</option>
                                     <option value="user not authorized">user not authorized</option>
                                     <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
@@ -286,6 +309,14 @@
                             <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
                                 <label class="form-label small">Payment expected at</label>
                                 <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" disabled>
+                            </div>
+                            <div class="col-12" id="ccPaymentDateWrap" style="display:none;">
+                                <label class="form-label small">Payment date</label>
+                                <input type="date" name="payment_date" id="ccPaymentDate" class="form-control form-control-sm" disabled>
+                            </div>
+                            <div class="col-12" id="ccPaidAmountWrap" style="display:none;">
+                                <label class="form-label small">Paid amount</label>
+                                <input type="number" step="0.01" name="paid_amount" id="ccPaidAmount" class="form-control form-control-sm" disabled>
                             </div>
                             <div class="col-12">
                                 <label class="form-label small">Note (optional)</label>
@@ -315,7 +346,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const callForm = document.getElementById('ccAssignmentCallForm');
     const outcomeEl = document.getElementById('ccCallOutcome');
     const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
+    const paymentDateWrap = document.getElementById('ccPaymentDateWrap');
+    const paidAmountWrap = document.getElementById('ccPaidAmountWrap');
     const paymentInput = document.getElementById('ccPaymentExpected');
+    const paymentDate = document.getElementById('ccPaymentDate');
+    const paidAmount = document.getElementById('ccPaidAmount');
     const statusField = document.getElementById('ccCallStatus');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     let bootstrapModal = null;
@@ -459,6 +494,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (outcome) outcome.disabled = true;
         if (note) note.disabled = true;
         if (pay) pay.disabled = true;
+        if (paymentDate) paymentDate.disabled = true;
+        if (paidAmount) paidAmount.disabled = true;
         if (saveBtn) {
             saveBtn.disabled = true;
             saveBtn.classList.add('d-none');
@@ -550,6 +587,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (outcome) outcome.disabled = false;
                         if (note) note.disabled = false;
                         if (pay) pay.disabled = false;
+                        if (paymentDate) paymentDate.disabled = false;
+                        if (paidAmount) paidAmount.disabled = false;
                         if (saveBtn) {
                             saveBtn.disabled = false;
                             saveBtn.classList.remove('d-none');
@@ -570,7 +609,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const latestReportId = assignmentList?.dataset.latestReportId || '';
     const userId = assignmentList?.dataset.userId || '';
     let paging = { page: 1, per_page: 50, has_more: false };
-    let filterCounts = { all: 0, called: 0, uncalled: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
+    let filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
     // Show previous-report (completed) rows by default when there are pending
     // new rows for the latest report so agents can review the last-owner history.
     const initialLatestPending = Number(assignmentList?.dataset.latestReportPending || 0);
@@ -595,6 +634,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let show = true;
             if (targetFilter === 'called') show = called;
             else if (targetFilter === 'uncalled') show = !called;
+            else if (targetFilter === 'authorized') show = outcome === 'user not authorized';
             else if (targetFilter === 'promise_overdue') show = overdue;
             else if (targetFilter === 'number_invalid') show = outcome === 'number invalid';
             else if (targetFilter === 'not_answered') show = outcome === 'not answered';
@@ -633,65 +673,6 @@ document.addEventListener('DOMContentLoaded', function () {
         updateOldRowToggle();
     }
 
-    // Intercept accept/reject banner forms to update the UI via AJAX
-    const acceptForm = document.getElementById('ccAcceptNewForm');
-    const rejectForm = document.getElementById('ccRejectNewForm');
-    const bannerEl = document.querySelector('.alert.alert-info');
-
-    async function submitBannerForm(form) {
-        if (!form) return;
-        const url = form.action;
-        const formData = new FormData(form);
-        try {
-            const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });
-            if (!res.ok) throw new Error('request failed');
-            const data = await res.json();
-            // Update counts in-place so we don't need a full reload
-            const totalEl = document.getElementById('ccTotalAssigned');
-            if (data.total_pending !== undefined && totalEl) {
-                totalEl.textContent = String(data.total_pending);
-            }
-                // Keep the assignment list dataset in sync so load logic knows
-                // whether to request completed (previous-report) rows or not.
-                try {
-                    if (assignmentList) {
-                        if (data.latest_report_id !== undefined) {
-                            assignmentList.dataset.latestReportId = String(data.latest_report_id || '');
-                        }
-                        // When new rows were accepted, clear the latest-report pending flag
-                        if (data.accepted !== undefined) {
-                            assignmentList.dataset.latestReportPending = '0';
-                        }
-                        // When rejected, server may leave pending counts alone; if provided, update
-                        if (data.rejected !== undefined && data.total_pending !== undefined) {
-                            assignmentList.dataset.latestReportPending = String(data.total_pending || '0');
-                        }
-                    }
-                } catch (e) { /* ignore dataset sync errors */ }
-            // hide banner and refresh visible assignments
-            if (bannerEl) bannerEl.style.display = 'none';
-            // If the action was a reject, keep previous rows visible; if accept, hide them.
-            if (data.rejected !== undefined) {
-                showOldRows = true;
-            } else {
-                showOldRows = false;
-            }
-            updateOldRowToggle();
-            paging.page = 1;
-            loadAssignments(false);
-            return data;
-        } catch (e) {
-            console.error('Banner action failed', e);
-            alert('Action failed. Please try again.');
-        }
-    }
-
-    // Banner forms (accept/reject) now submit as normal (non-AJAX).
-    // Previously these were intercepted to POST via fetch; that caused
-    // confusing UI messaging and duplicate network activity. Leave the
-    // forms to perform standard POST + redirect so the server flash
-    // message flow remains predictable.
-
     async function loadAssignments(append = false) {
         if (!assignmentList || !userId) return;
         const params = new URLSearchParams({ page: paging.page, per_page: paging.per_page });
@@ -711,11 +692,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const rows = Array.isArray(data.rows) ? data.rows : [];
             if (!append) {
                 assignmentList.innerHTML = '';
-                filterCounts = { all: 0, called: 0, uncalled: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
+                filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
             }
             rows.forEach(r => {
                 filterCounts.all++;
                 if (r.called_in_period) filterCounts.called++; else filterCounts.uncalled++;
+                if ((r.latest_outcome || '').toLowerCase() === 'user not authorized') filterCounts.authorized++;
                 if (r.promise_overdue) filterCounts.promise_overdue++;
                 if ((r.latest_outcome || '').toLowerCase() === 'number invalid') filterCounts.number_invalid++;
                 if ((r.latest_outcome || '').toLowerCase() === 'not answered') filterCounts.not_answered++;
@@ -802,13 +784,29 @@ document.addEventListener('DOMContentLoaded', function () {
         const v = this.value;
         if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
             paymentWrap.style.display = 'block';
+            paymentDateWrap.style.display = 'none';
+            paidAmountWrap.style.display = 'none';
             const days = v.includes('3') ? 3 : 7;
             const d = new Date();
             d.setDate(d.getDate() + days);
             paymentInput.value = d.toISOString().slice(0,10);
+            paymentDate.value = '';
+            paidAmount.value = '';
+        } else if (v === 'paid') {
+            paymentWrap.style.display = 'none';
+            paymentDateWrap.style.display = 'block';
+            paidAmountWrap.style.display = 'block';
+            paymentInput.value = '';
+            const today = new Date().toISOString().slice(0,10);
+            paymentDate.value = today;
+            paidAmount.value = '';
         } else {
             paymentWrap.style.display = 'none';
+            paymentDateWrap.style.display = 'none';
+            paidAmountWrap.style.display = 'none';
             paymentInput.value = '';
+            paymentDate.value = '';
+            paidAmount.value = '';
         }
     });
 
@@ -820,6 +818,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         const formData = new FormData(this);
+        if (outcomeEl && outcomeEl.value === 'paid') {
+            formData.set('paid', '1');
+        }
         try {
             const res = await fetch(`/cc/assignments/${aid}/interactions`, { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });
             if (!res.ok) throw new Error('failed');
@@ -828,7 +829,11 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 callForm.reset();
                 if (paymentWrap) paymentWrap.style.display = 'none';
+                if (paymentDateWrap) paymentDateWrap.style.display = 'none';
+                if (paidAmountWrap) paidAmountWrap.style.display = 'none';
                 if (paymentInput) paymentInput.value = '';
+                if (paymentDate) paymentDate.value = '';
+                if (paidAmount) paidAmount.value = '';
                 if (outcomeEl) outcomeEl.selectedIndex = 0;
                 const saveBtn = document.getElementById('ccSaveCallBtn');
                 if (saveBtn) {

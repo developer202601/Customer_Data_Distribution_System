@@ -1,31 +1,52 @@
 @forelse($users as $user)
-<tr>
+@php
+    $assignment = $user->assignment ?? '';
+    if ($assignment === 'super') {
+        $role = 'Super Admin';
+    } elseif (str_starts_with($assignment, 'REGION')) {
+        $region = str_replace('REGION ', '', $assignment);
+        $role = 'Region Admin for ' . $region;
+    } elseif (str_starts_with($assignment, 'rtom_')) {
+        $rtom = str_replace('rtom_', '', $assignment);
+        $role = 'RTOM Admin for ' . $rtom;
+    } elseif (str_starts_with($assignment, 'supervisor_rtom_')) {
+        $rtom = str_replace('supervisor_rtom_', '', $assignment);
+        $role = 'Supervisor for RTOM ' . $rtom;
+    } elseif (str_starts_with($assignment, 'caller_rtom_')) {
+        $rtom = str_replace('caller_rtom_', '', $assignment);
+        $role = 'Caller for RTOM ' . $rtom;
+    } else {
+        $role = $user->admin_prev ? 'Call Center Admin' : 'Call Center User';
+    }
+    $supervisorInfo = optional($user->supervisorUser)->name ? (optional($user->supervisorUser)->name . ' (' . optional($user->supervisorUser)->username . ')') : '—';
+@endphp
+<tr class="user-row" title="Click to view more details" data-user-id="{{ $user->id }}" data-username="{{ $user->username }}" data-name="{{ $user->name }}" data-role="{{ $role }}" data-supervisor="{{ $supervisorInfo }}" data-status="{{ $user->status ? 'Active' : 'Disabled' }}" data-created="{{ optional($user->created_at)->format('Y-m-d H:i') ?? '—' }}">
     <td>{{ $user->username }}</td>
-    <td>{{ $user->admin_prev ? 'Call Center Admin' : 'Call Center User' }}</td>
-    <td>
-        @if($user->status)
-        <span class="badge bg-success">Active</span>
-        @else
-        <span class="badge bg-secondary">Disabled</span>
-        @endif
-    </td>
-    <td>{{ optional($user->created_at)->format('Y-m-d H:i') ?? '—' }}</td>
+    <td>{{ $user->name ?: '—' }}</td>
+    <td>{{ $role }}</td>
+    @php
+        $isSupervisorView = \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_');
+        $currentSupervisorId = session('user')['id'] ?? null;
+        $canEdit = ! $isSupervisorView || ($user->supervisor && $user->supervisor === $currentSupervisorId);
+    @endphp
     <td class="text-end">
         <div class="d-inline-flex gap-1">
-            <a href="{{ route('cc.users.edit', $user) }}" class="btn btn-sm btn-outline-secondary rounded-pill">Edit</a>
+            @if($canEdit)
+            <a href="{{ route('cc.users.edit', $user) }}" class="btn btn-sm btn-outline-secondary rounded-pill" onclick="event.stopPropagation()">Edit</a>
+            @endif
             @if($user->status)
-            <button type="button" class="btn btn-sm btn-warning rounded-pill cc-disable-btn" data-action="{{ route('cc.users.disable', $user) }}" data-username="{{ $user->username }}">Disable</button>
+            <button type="button" class="btn btn-sm btn-warning rounded-pill cc-disable-btn" data-action="{{ route('cc.users.disable', $user) }}" data-username="{{ $user->username }}" onclick="event.stopPropagation()">Disable</button>
             @else
-            <button type="button" class="btn btn-sm btn-success rounded-pill cc-enable-btn" data-action="{{ route('cc.users.enable', $user) }}" data-username="{{ $user->username }}">Enable</button>
+            <button type="button" class="btn btn-sm btn-success rounded-pill cc-enable-btn" data-action="{{ route('cc.users.enable', $user) }}" data-username="{{ $user->username }}" onclick="event.stopPropagation()">Enable</button>
             @endif
             @if(!$user->fixed)
-            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill cc-delete-btn" data-action="{{ route('cc.users.destroy', $user) }}" data-username="{{ $user->username }}">Delete</button>
+            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill cc-delete-btn" data-action="{{ route('cc.users.destroy', $user) }}" data-username="{{ $user->username }}" onclick="event.stopPropagation()">Delete</button>
             @endif
         </div>
     </td>
 </tr>
 @empty
 <tr>
-    <td colspan="6" class="text-center text-muted">No call center users yet.</td>
+    <td colspan="4" class="text-center text-muted">No call center users yet.</td>
 </tr>
 @endforelse

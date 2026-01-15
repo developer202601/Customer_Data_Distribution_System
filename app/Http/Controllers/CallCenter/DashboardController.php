@@ -23,6 +23,7 @@ class DashboardController extends Controller
         $distinctExpr = DB::raw("DISTINCT COALESCE(account_number, CONCAT('assignment:', assignment_id))");
 
         $userStats = CallCenterUser::active()
+            ->where('assignment', 'like', 'caller_%')
             ->orderBy('name')
             ->get()
             ->map(function (CallCenterUser $user) use ($monthStart, $totalAssignedRows, $distinctExpr) {

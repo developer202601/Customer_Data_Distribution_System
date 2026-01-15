@@ -26,6 +26,9 @@ class User extends Model
         'created_at',
         'fixed',
         'status',
+        'name',
+        'assignment',
+        'supervisor',
     ];
 
     /**
@@ -38,5 +41,6 @@ class User extends Model
         'fixed' => 'boolean',
         'status' => 'boolean',
         'created_at' => 'datetime',
+        'supervisor' => 'integer',
     ];
 }

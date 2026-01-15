@@ -15,7 +15,7 @@ class AuthController extends Controller
             $sessionUser = $request->session()->get('user');
 
             $targetRoute = ($sessionUser['system'] ?? null) === 'cc'
-                ? (($sessionUser['is_admin'] ?? false) ? 'cc.users.index' : 'cc.dashboard')
+                ? ((($sessionUser['is_admin'] ?? false) && ($sessionUser['assignment'] ?? null) !== 'super') ? 'cc.users.index' : 'cc.dashboard')
                 : 'dashboard';
 
             return redirect()->route($targetRoute);
@@ -55,7 +55,7 @@ class AuthController extends Controller
         ]);
 
         $targetRoute = match ($user->system) {
-            'cc' => $user->admin_prev ? 'cc.users.index' : 'cc.dashboard',
+            'cc' => ($user->admin_prev && $user->assignment !== 'super') ? 'cc.users.index' : 'cc.dashboard',
             default => 'dashboard',
         };
 

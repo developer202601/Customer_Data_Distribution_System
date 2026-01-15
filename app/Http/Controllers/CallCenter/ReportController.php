@@ -244,7 +244,7 @@ class ReportController extends Controller
             $rejectedRows = $assignmentSummary?->rejected_rows ?? 0;
             $assignmentPayments = $assignmentSummary?->assignment_payments ?? 0;
             $interactionPayments = $interactionSummary?->interaction_payments ?? 0;
-            $totalPayments = round($assignmentPayments + $interactionPayments, 2);
+            $totalPayments = round($interactionPayments, 2);
             $interactions = $interactionSummary?->interactions ?? 0;
             $acceptanceRate = $assignedRows ? round(($acceptedRows / $assignedRows) * 100, 1) : 0;
 
@@ -290,8 +290,7 @@ class ReportController extends Controller
         $acceptanceRate = $assignedCount ? round(($acceptedCount / $assignedCount) * 100, 1) : 0;
         $interactionCollection = $assignments->flatMap->interactions;
         $totalInteractions = $interactionCollection->count();
-        $totalPayments = $interactionCollection->sum(fn(CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0)
-            + $assignments->sum(fn(CallCenterAssignment $assignment) => $assignment->paid_amount ?? 0);
+        $totalPayments = $interactionCollection->sum(fn(CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0);
 
         $agentMetrics = $assignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function ($group) {
             $assignmentCount = $group->count();
@@ -301,6 +300,7 @@ class ReportController extends Controller
             $callCount = $interactions->count();
             $paymentAmount = $interactions->sum(fn(CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0);
             $agent = $group->first()->agent;
+
             return [
                 'user_id' => $group->first()->assigned_user_id,
                 'name' => $this->formatAgentLabel($agent),
@@ -599,5 +599,45 @@ class ReportController extends Controller
         }
 
         return redirect()->route('cc.reports', ['report' => $reportId])->with('status', 'Distribution completed for your RTOM.');
+    }
+
+    public function getAgentDetails(Request $request)
+    {
+        $userId = $request->query('user_id');
+        $agent = User::find($userId);
+
+        if (!$agent) {
+            return response()->json(['error' => 'Agent not found'], 404);
+        }
+
+        $supervisor = null;
+        $rtom = null;
+        $region = null;
+
+        $supervisorUser = $agent->supervisor ? User::find($agent->supervisor) : null;
+        $supervisor = $supervisorUser ? $this->formatAgentLabel($supervisorUser) : 'N/A';
+
+        $assignment = $agent->assignment ?? null;
+        if ($assignment && str_starts_with($assignment, 'caller_')) {
+            $rtom = substr($assignment, 7); // after 'caller_'
+        }
+
+        // Find region by traversing supervisor chain
+        $currentUser = $supervisorUser;
+        while ($currentUser) {
+            $currentAssignment = $currentUser->assignment ?? null;
+            if ($currentAssignment && !str_starts_with($currentAssignment, 'caller_') && !str_starts_with($currentAssignment, 'rtom_') && !str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
+                $region = $currentAssignment;
+                break;
+            }
+            $currentUser = $currentUser->supervisor ? User::find($currentUser->supervisor) : null;
+        }
+
+        return response()->json([
+            'name' => $this->formatAgentLabel($agent),
+            'supervisor' => $supervisor,
+            'rtom' => $rtom ?? 'N/A',
+            'region' => $region ?? 'N/A',
+        ]);
     }
 }

@@ -78,6 +78,7 @@ Route::middleware('session.auth')->group(function () {
             Route::get('/reports/history', [CallCenterReportController::class, 'history'])->name('reports.history');
             Route::get('/reports/{report}/summary', [CallCenterReportController::class, 'summary'])->name('reports.summary');
             Route::get('/reports', [CallCenterReportController::class, 'index'])->name('reports');
+            Route::get('/reports/agent-details', [CallCenterReportController::class, 'getAgentDetails'])->name('reports.agentDetails');
             // Region admin pages (RTOM management)
             Route::get('/rtoms/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'dashboard'])->name('region.dashboard');
             Route::get('/rtoms', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'index'])->name('region.index');

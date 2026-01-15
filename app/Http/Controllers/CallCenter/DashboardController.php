@@ -16,6 +16,14 @@ class DashboardController extends Controller
 {
     public function index(): View
     {
+        $sessionUser = session('user');
+        $assignment = $sessionUser['assignment'] ?? null;
+        
+        // Only super admins can access the overview dashboard
+        if ($assignment !== 'super') {
+            abort(403, 'Only super admins can access the overview dashboard.');
+        }
+
         $monthStart = Carbon::now()->startOfMonth();
         $monthEnd = Carbon::now()->endOfMonth();
         $totalAssignedRows = CallCenterAssignment::whereNotNull('assigned_user_id')->count();

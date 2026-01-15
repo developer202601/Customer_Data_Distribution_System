@@ -82,6 +82,7 @@ Route::middleware('session.auth')->group(function () {
             // Region admin pages (RTOM management)
             Route::get('/rtoms/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'dashboard'])->name('region.dashboard');
             Route::get('/rtoms', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'index'])->name('region.index');
+            Route::get('/rtoms/search', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'search'])->name('region.search');
             Route::get('/rtoms/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'indexAssign'])->name('region.assign.index');
             Route::get('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'showAssignForm'])->name('region.assign');
             Route::post('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeAssignment'])->name('region.assign.store');

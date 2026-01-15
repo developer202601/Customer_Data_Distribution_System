@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CallCenter;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\MasterDatasetRow;
+use App\Models\CallCenterReport;
 use Illuminate\Http\Request;
 use App\Models\CallCenterAssignment;
 
@@ -350,33 +351,115 @@ class RegionAdminController extends Controller
     {
         $region = $this->ensureRegionAdmin();
 
-        $base = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+        // Get latest report data (most recent report with assignments)
+        $latestReport = CallCenterReport::whereHas('assignments', function($q) use ($region) {
+            $q->whereHas('row', function($rq) use ($region) {
+                $rq->where('region', $region);
+            });
+        })->latest('created_at')->first();
+
+        // Latest report data
+        $latestBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+            ->where('call_center_report_id', $latestReport?->id)
             ->whereHas('row', function($q) use ($region) {
                 $q->where('region', $region);
             });
 
-        $assignments = $base->get();
+        $latestAssignments = $latestBase->get();
+        $latestTotal = $latestAssignments->count();
+        $latestAssigned = $latestAssignments->whereNotNull('assigned_user_id')->count();
+        $latestUnassigned = $latestTotal - $latestAssigned;
+        $latestPaidCount = $latestAssignments->where('paid', true)->count();
+        $latestPaidAmount = $latestAssignments->sum(fn($a) => $a->paid_amount ?? 0);
 
-        $total = $assignments->count();
-        $assigned = $assignments->whereNotNull('assigned_user_id')->count();
-        $unassigned = $total - $assigned;
-        $accepted = $assignments->where('accepted', true)->count();
-        $rejected = $assignments->where('rejected', true)->count();
-        $paidCount = $assignments->where('paid', true)->count();
-        $paidAmount = $assignments->sum(fn($a) => $a->paid_amount ?? 0);
+        $latestRtomBreakdown = $latestAssignments->groupBy(fn($a) => $a->row->rtom ?? '—')->map(function($group, $rtom) use ($region, $latestReport) {
+            $total = $group->count();
+            $assigned = $group->whereNotNull('assigned_user_id')->count();
+            $paid = $group->where('paid', true)->count();
+            $paid_amount = $group->sum(fn($x) => $x->paid_amount ?? 0);
 
-        $rtomBreakdown = $assignments->groupBy(fn($a) => $a->row->rtom ?? '—')->map(function($group, $rtom) {
+            // Get supervisors for this RTOM
+            $supervisorAssignment = 'supervisor_rtom_' . strtolower(str_replace(' ', '_', $rtom));
+            $supervisors = User::where('assignment', $supervisorAssignment)->get();
+
+            $supervisorProfits = [];
+            foreach ($supervisors as $supervisor) {
+                // Sum paid_amount from assignments of users supervised by this supervisor
+                $profit = CallCenterAssignment::where('call_center_report_id', $latestReport?->id)
+                    ->whereHas('row', function($q) use ($region, $rtom) {
+                        $q->where('region', $region)->where('rtom', $rtom);
+                    })->whereHas('agent', function($q) use ($supervisor) {
+                        $q->where('supervisor', $supervisor->id);
+                    })->sum('paid_amount');
+
+                $supervisorProfits[] = [
+                    'name' => $supervisor->name ?? $supervisor->username,
+                    'profit' => $profit,
+                ];
+            }
+
             return [
                 'rtom' => $rtom,
-                'total' => $group->count(),
-                'assigned' => $group->whereNotNull('assigned_user_id')->count(),
-                'paid' => $group->where('paid', true)->count(),
-                'paid_amount' => $group->sum(fn($x) => $x->paid_amount ?? 0),
+                'total' => $total,
+                'assigned' => $assigned,
+                'paid' => $paid,
+                'paid_amount' => $paid_amount,
+                'supervisor_profits' => $supervisorProfits,
+            ];
+        })->values();
+
+        // All-time data
+        $allTimeBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+            ->whereHas('row', function($q) use ($region) {
+                $q->where('region', $region);
+            });
+
+        $allTimeAssignments = $allTimeBase->get();
+        $allTimeTotal = $allTimeAssignments->count();
+        $allTimeAssigned = $allTimeAssignments->whereNotNull('assigned_user_id')->count();
+        $allTimeUnassigned = $allTimeTotal - $allTimeAssigned;
+        $allTimePaidCount = $allTimeAssignments->where('paid', true)->count();
+        $allTimePaidAmount = $allTimeAssignments->sum(fn($a) => $a->paid_amount ?? 0);
+
+        $allTimeRtomBreakdown = $allTimeAssignments->groupBy(fn($a) => $a->row->rtom ?? '—')->map(function($group, $rtom) use ($region) {
+            $total = $group->count();
+            $assigned = $group->whereNotNull('assigned_user_id')->count();
+            $paid = $group->where('paid', true)->count();
+            $paid_amount = $group->sum(fn($x) => $x->paid_amount ?? 0);
+
+            // Get supervisors for this RTOM
+            $supervisorAssignment = 'supervisor_rtom_' . strtolower(str_replace(' ', '_', $rtom));
+            $supervisors = User::where('assignment', $supervisorAssignment)->get();
+
+            $supervisorProfits = [];
+            foreach ($supervisors as $supervisor) {
+                // Sum paid_amount from assignments of users supervised by this supervisor
+                $profit = CallCenterAssignment::whereHas('row', function($q) use ($region, $rtom) {
+                    $q->where('region', $region)->where('rtom', $rtom);
+                })->whereHas('agent', function($q) use ($supervisor) {
+                    $q->where('supervisor', $supervisor->id);
+                })->sum('paid_amount');
+
+                $supervisorProfits[] = [
+                    'name' => $supervisor->name ?? $supervisor->username,
+                    'profit' => $profit,
+                ];
+            }
+
+            return [
+                'rtom' => $rtom,
+                'total' => $total,
+                'assigned' => $assigned,
+                'paid' => $paid,
+                'paid_amount' => $paid_amount,
+                'supervisor_profits' => $supervisorProfits,
             ];
         })->values();
 
         return view('cc.region.dashboard', compact(
-            'region', 'total', 'assigned', 'unassigned', 'accepted', 'rejected', 'paidCount', 'paidAmount', 'rtomBreakdown'
+            'region', 'latestReport',
+            'latestTotal', 'latestAssigned', 'latestUnassigned', 'latestPaidCount', 'latestPaidAmount', 'latestRtomBreakdown',
+            'allTimeTotal', 'allTimeAssigned', 'allTimeUnassigned', 'allTimePaidCount', 'allTimePaidAmount', 'allTimeRtomBreakdown'
         ));
     }
 

@@ -43,4 +43,9 @@ class User extends Model
         'created_at' => 'datetime',
         'supervisor' => 'integer',
     ];
+
+    public function supervisedUsers()
+    {
+        return $this->hasMany(User::class, 'supervisor');
+    }
 }

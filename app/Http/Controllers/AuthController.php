@@ -15,7 +15,7 @@ class AuthController extends Controller
             $sessionUser = $request->session()->get('user');
 
             $targetRoute = ($sessionUser['system'] ?? null) === 'cc'
-                ? ((($sessionUser['is_admin'] ?? false) && ($sessionUser['assignment'] ?? null) !== 'super') ? 'cc.users.index' : 'cc.dashboard')
+                ? $this->getCCLoginRedirect($sessionUser)
                 : 'dashboard';
 
             return redirect()->route($targetRoute);
@@ -55,11 +55,48 @@ class AuthController extends Controller
         ]);
 
         $targetRoute = match ($user->system) {
-            'cc' => ($user->admin_prev && $user->assignment !== 'super') ? 'cc.users.index' : 'cc.dashboard',
+            'cc' => $this->getCCLoginRedirect([
+                'is_admin' => (bool) $user->admin_prev,
+                'assignment' => $user->assignment ?? null,
+            ]),
             default => 'dashboard',
         };
 
         return redirect()->route($targetRoute);
+    }
+
+    private function getCCLoginRedirect(array $user): string
+    {
+        $assignment = $user['assignment'] ?? null;
+        $isAdmin = $user['is_admin'] ?? false;
+
+        // Super admins go to overview
+        if ($assignment === 'super') {
+            return 'cc.dashboard';
+        }
+
+        // Regional admins go to region dashboard
+        if ($assignment && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
+            return 'cc.region.dashboard';
+        }
+
+        // RTOM admins go to RTOM assignment management
+        if (str_starts_with($assignment, 'rtom_')) {
+            return 'cc.region.assign.index';
+        }
+
+        // Supervisors go to reports for distributing rows to callers
+        if (str_starts_with($assignment, 'supervisor_')) {
+            return 'cc.reports';
+        }
+
+        // Regular admins go to user management
+        if ($isAdmin) {
+            return 'cc.users.index';
+        }
+
+        // Regular callers go to assignments
+        return 'cc.assignments.manage';
     }
 
     public function logout(Request $request): RedirectResponse

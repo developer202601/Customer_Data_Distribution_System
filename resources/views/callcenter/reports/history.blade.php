@@ -1,5 +1,12 @@
 @extends('layouts.cc')
 
+@section('navbar-right')
+<form action="{{ route('logout') }}" method="post" class="d-inline">
+    @csrf
+    <button type="submit" class="btn btn-outline-secondary">Logout</button>
+</form>
+@endsection
+
 @section('content')
 <div class="process-upload py-4">
     <div class="container-fluid">

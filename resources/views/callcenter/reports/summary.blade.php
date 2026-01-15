@@ -1,5 +1,12 @@
 @extends('layouts.cc')
 
+@section('navbar-right')
+<form action="{{ route('logout') }}" method="post" class="d-inline">
+    @csrf
+    <button type="submit" class="btn btn-outline-secondary">Logout</button>
+</form>
+@endsection
+
 @section('content')
 <div class="process-upload py-4">
     <div class="container-fluid">
@@ -61,7 +68,7 @@
                                 <p class="text-uppercase small text-muted mb-1">Customers</p>
                                 <h3 class="h5 mb-0">{{ data_get($topAgentByCoverage, 'coverage', 0) }}%</h3>
                                 @if($acceptedCount > 0)
-                                <p class="small text-muted mb-0">All customers {{ number_format(data_get($topAgentByCoverage, 'accepted_rows', 0)) }}/{{ number_format(data_get($topAgentByCoverage, 'assigned_rows', 0)) }}</p>
+                                <p class="small text-muted mb-0">All customers {{ number_format(data_get($topAgentByCoverage, 'paid_rows', 0)) }}/{{ number_format(data_get($topAgentByCoverage, 'assigned_rows', 0)) }}</p>
                                 <p class="small text-muted mb-0">Completed by {{ data_get($topAgentByCoverage, 'name', '—') }}</p>
                                 @else
                                 <p class="small text-muted mb-0">Coverage stats populate once agents accept their rows.</p>
@@ -105,7 +112,7 @@
                                             </th>
                                             <th>
                                                 <span class="sort-btn" data-sort="coverage" style="cursor: pointer;">
-                                                    Coverage / All <span class="sort-indicator">-</span>
+                                                    Paid Coverage (%) <span class="sort-indicator">-</span>
                                                 </span>
                                             </th>
                                         </tr>
@@ -127,7 +134,7 @@
                                             </td>
                                             <td>
                                                 <span class="badge bg-light text-dark">{{ $agent['coverage'] }}%</span>
-                                                <div class="text-muted small">{{ number_format($agent['accepted_rows']) }}/{{ number_format($agent['assigned_rows']) }}</div>
+                                                <div class="text-muted small">{{ number_format($agent['paid_rows']) }}/{{ number_format($agent['assigned_rows']) }}</div>
                                             </td>
                                         </tr>
                                         @endforeach

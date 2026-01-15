@@ -295,6 +295,7 @@ class ReportController extends Controller
         $agentMetrics = $assignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function ($group) {
             $assignmentCount = $group->count();
             $accepted = $group->where('accepted', true)->count();
+            $paid = $group->where('paid', true)->count();
             $rejected = $group->where('rejected', true)->count();
             $interactions = $group->flatMap->interactions;
             $callCount = $interactions->count();
@@ -306,9 +307,10 @@ class ReportController extends Controller
                 'name' => $this->formatAgentLabel($agent),
                 'assigned_rows' => $assignmentCount,
                 'accepted_rows' => $accepted,
+                'paid_rows' => $paid,
                 'rejected_rows' => $rejected,
                 'acceptance_rate' => $assignmentCount ? round(($accepted / $assignmentCount) * 100, 1) : 0,
-                'coverage' => $assignmentCount ? round(($accepted / $assignmentCount) * 100, 1) : 0,
+                'coverage' => $assignmentCount ? round(($paid / $assignmentCount) * 100, 1) : 0,
                 'call_count' => $callCount,
                 'payment_amount' => round($paymentAmount, 2),
             ];

@@ -96,16 +96,8 @@ class UserController extends Controller
             'system' => 'cc',
             'fixed' => 0,
             'created_at' => now(),
-            'supervisor' => \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_') ? (session('user')['id'] ?? null) : null,
-            'assignment' => (function() {
-                $assign = session('user.assignment') ?? '';
-                if (! $assign) return null;
-                // strip supervisor_ prefix then strip leading rtom_ if present
-                $rtomPart = preg_replace('/^supervisor_/', '', $assign);
-                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-                if ($rtomVal === '') return null;
-                return 'caller_rtom_' . $rtomVal;
-            })(),
+            'supervisor' => session('user')['id'] ?? null,
+            'assignment' => 'super',
         ]);
 
         return redirect()->route('cc.users.index')->with('status', 'User created successfully.');
@@ -153,7 +145,7 @@ class UserController extends Controller
             }
         }
 
-        return redirect()->route('cc.users.index')->with('status', 'User updated successfully.');
+        return redirect()->route(session('user.assignment') === 'super' ? 'cc.super.regions' : 'cc.users.index')->with('status', 'User updated successfully.');
     }
 
     public function disable(Request $request, CallCenterUser $ccUser): RedirectResponse
@@ -199,6 +191,10 @@ class UserController extends Controller
         }
 
         $ccUser->delete();
+        $return = request()->input('return_to');
+        if ($return) {
+            return redirect($return)->with('status', 'User deleted successfully.');
+        }
 
         return redirect()->route('cc.users.index')->with('status', 'User deleted successfully.');
     }

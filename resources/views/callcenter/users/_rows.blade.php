@@ -30,16 +30,8 @@
     <td>{{ $user->name ?: '—' }}</td>
     <td>{{ $role }}</td>
     <td>{{ $supervisorInfo }}</td>
-    @php
-        $isSupervisorView = \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_');
-        $currentSupervisorId = session('user')['id'] ?? null;
-        $canEdit = ! $isSupervisorView || ($user->supervisor && $user->supervisor === $currentSupervisorId);
-    @endphp
     <td class="text-end">
         <div class="d-inline-flex gap-1">
-            @if($canEdit)
-            <a href="{{ route('cc.users.edit', $user) }}" class="btn btn-sm btn-outline-secondary rounded-pill" onclick="event.stopPropagation()">Edit</a>
-            @endif
             @if($user->status)
             <button type="button" class="btn btn-sm btn-warning rounded-pill cc-disable-btn" data-action="{{ route('cc.users.disable', $user) }}" data-username="{{ $user->username }}" onclick="event.stopPropagation()">Disable</button>
             @else

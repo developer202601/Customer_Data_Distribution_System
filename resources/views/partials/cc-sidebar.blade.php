@@ -9,11 +9,10 @@
     <div class="offcanvas-body">
         <nav class="nav flex-column cc-sidebar-nav">
             @php $userAssignment = session('user.assignment') ?? null; @endphp
-            @if($userAssignment === 'super')
-                <a class="nav-link{{ $ccRouteName === 'cc.dashboard' ? ' active' : '' }}" href="{{ route('cc.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.dashboard' ? 'page' : '' }}">Overview</a>
-            @endif
             @if(session('user.is_admin'))
                 @if(session('user.assignment') === 'super')
+                    <a class="nav-link{{ $ccRouteName === 'cc.dashboard' ? ' active' : '' }}" href="{{ route('cc.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.dashboard' ? 'page' : '' }}">Overview</a>
+                    <a class="nav-link{{ $ccRouteName === 'cc.super.regions' ? ' active' : '' }}" href="{{ route('cc.super.regions') }}" aria-current="{{ $ccRouteName === 'cc.super.regions' ? 'page' : '' }}">Region Management</a>
                     <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">User Management</a>
                 @elseif(session('user.assignment') && session('user.assignment') !== 'super')
                     @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'rtom_'))

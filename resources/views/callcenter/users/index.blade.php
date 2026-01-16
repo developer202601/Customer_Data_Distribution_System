@@ -100,15 +100,8 @@
                                 <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
-                            @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
-                                <input type="hidden" name="admin_prev" value="0">
-                            @else
-                                <div class="form-check mb-3">
-                                    <input type="hidden" name="admin_prev" value="0">
-                                    <input type="checkbox" name="admin_prev" id="admin_prev" value="1" class="form-check-input" {{ old('admin_prev') ? 'checked' : '' }}>
-                                    <label for="admin_prev" class="form-check-label">Call Center Admin</label>
-                                </div>
-                            @endif
+                                <input type="hidden" name="admin_prev" value="1">
+                                <p class="text-muted small mb-0">This form only creates Call Center administrator accounts.</p>
                         </form>
                     </div>
                     <div class="modal-footer">
@@ -234,38 +227,65 @@
     @endpush
 
     @push('scripts')
-<script>
+    <script>
 document.addEventListener('DOMContentLoaded', function () {
     const createUserForm = document.getElementById('cc-create-user-form');
-    const adminCheckbox = document.getElementById('admin_prev');
     const usernameInput = document.getElementById('username');
     const confirmModalEl = document.getElementById('ccAdminConfirmModal');
     const confirmUsername = document.getElementById('ccConfirmUsername');
     const confirmCreateBtn = document.getElementById('ccConfirmCreate');
+    const addUserModalEl = document.getElementById('ccAddUserModal');
 
     if (!createUserForm) return;
 
-    // Bootstrap modal instance (if bootstrap loaded)
+    const adminConfirmMessage = 'You are creating a Call Center administrator account. Continue?';
     let bsModal = null;
-    if (window.bootstrap && confirmModalEl) {
-        bsModal = new bootstrap.Modal(confirmModalEl, { keyboard: true });
+    let addUserModal = null;
+    if (window.bootstrap) {
+        if (confirmModalEl) {
+            bsModal = new bootstrap.Modal(confirmModalEl, { keyboard: true });
+        }
+        if (addUserModalEl) {
+            addUserModal = bootstrap.Modal.getInstance(addUserModalEl) ?? new bootstrap.Modal(addUserModalEl);
+        }
     }
 
-    // When using the modal trigger button, handle clicks from the modal footer button
+    const fallbackConfirm = () => {
+        if (confirm(adminConfirmMessage)) {
+            createUserForm.submit();
+        }
+    };
+
+    const showAdminConfirmation = () => {
+        if (confirmUsername) {
+            confirmUsername.textContent = usernameInput?.value || '—';
+        }
+
+        const showConfirmModal = () => {
+            if (bsModal) {
+                bsModal.show();
+            } else {
+                fallbackConfirm();
+            }
+        };
+
+        if (addUserModal && addUserModalEl) {
+            const onHidden = () => {
+                showConfirmModal();
+            };
+            addUserModalEl.addEventListener('hidden.bs.modal', onHidden, { once: true });
+            addUserModal.hide();
+            return;
+        }
+
+        showConfirmModal();
+    };
+
     const modalCreateBtn = document.getElementById('cc-create-user-btn');
     if (modalCreateBtn) {
         modalCreateBtn.addEventListener('click', function (e) {
-            if (adminCheckbox && adminCheckbox.checked) {
-                e.preventDefault();
-                if (confirmUsername) confirmUsername.textContent = usernameInput?.value || '—';
-                if (bsModal) {
-                    bsModal.show();
-                } else if (confirm('You are creating a Call Center administrator account. Continue?')) {
-                    createUserForm.submit();
-                }
-                return;
-            }
-            createUserForm.submit();
+            e.preventDefault();
+            showAdminConfirmation();
         });
     }
 

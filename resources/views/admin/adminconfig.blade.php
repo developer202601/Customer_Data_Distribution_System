@@ -47,12 +47,12 @@
 
                                 <div class="admin-config-field">
                                     <label class="bill-upper" for="upper_range">Upper Range :</label>
-                                    <input type="number" name="upper_range" id="upper_range" value="{{ $configs['upper_range']->value ?? '' }}" placeholder="Current value" required />
+                                    <input type="number" min="0" name="upper_range" id="upper_range" value="{{ $configs['upper_range']->value ?? '' }}" placeholder="Current value" required />
                                 </div>
 
                                 <div class="admin-config-field">
                                     <label class="bill-lower" for="lower_range">Lower Range :</label>
-                                    <input type="number" name="lower_range" id="lower_range" value="{{ $configs['lower_range']->value ?? '' }}" placeholder="Current value" required />
+                                    <input type="number" min="0" name="lower_range" id="lower_range" value="{{ $configs['lower_range']->value ?? '' }}" placeholder="Current value" required />
                                 </div>
 
 
@@ -772,4 +772,28 @@
             });
         }
     });
-</script>  
+</script>
+@if($errors->any())
+<script>
+    var errors = @json($errors->all());
+    alert(errors.join('\n'));
+</script>
+@endif  
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var billRangeForm = document.querySelector('.bill_range-config form');
+        
+        if (billRangeForm) {
+            billRangeForm.addEventListener('submit', function(e) {
+                var upperRange = document.getElementById('upper_range').value;
+                var lowerRange = document.getElementById('lower_range').value;
+                
+                if (parseFloat(upperRange) < 0 || parseFloat(lowerRange) < 0) {
+                    e.preventDefault();
+                    alert('Error: Bill range values cannot be negative. Please enter positive values only.');
+                    return false;
+                }
+            });
+        }
+    });
+</script>

@@ -10,8 +10,8 @@ class BillRangeController extends Controller
 {
     public function createRange(Request $request){
         $incomingFields = $request->validate([
-            'upper_range' => 'required|integer',
-            'lower_range' => 'required|integer'
+            'upper_range' => 'required|integer|min:0|gt:lower_range',
+            'lower_range' => 'required|integer|min:0'
         ]);
 
         $incomingFields['upper_range'] = (int) strip_tags($incomingFields['upper_range']);
@@ -75,9 +75,9 @@ class BillRangeController extends Controller
 
     public function createStaff(Request $request){
         $incomingFields = $request->validate([
-            'ccs' => 'required|integer',
-            'cc' => 'required|integer',
-            's' => 'required|integer'
+            'ccs' => 'required|integer|min:0',
+            'cc' => 'required|integer|min:0',
+            's' => 'required|integer|min:0'
         ]);
 
         $incomingFields['ccs'] = (int) strip_tags($incomingFields['ccs']);

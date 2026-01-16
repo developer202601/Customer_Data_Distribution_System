@@ -523,4 +523,273 @@ class RegionAdminController extends Controller
 
         return redirect()->route('cc.region.assign.index')->with('status', 'Assignment updated');
     }
+
+    protected function ensureSupervisor()
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'cc') {
+            abort(403);
+        }
+        $assignment = $sessionUser['assignment'] ?? null;
+        if (! $assignment || !str_starts_with($assignment, 'supervisor_')) {
+            abort(403);
+        }
+        // Extract RTOM from assignment like 'supervisor_rtom_CODE'
+        $rtom = str_replace('supervisor_rtom_', '', $assignment);
+        $rtom = str_replace('_', ' ', $rtom);
+        return $rtom; // RTOM name
+    }
+
+    public function supervisorDashboard()
+    {
+        $rtom = $this->ensureSupervisor();
+        $supervisorId = session('user')['id'];
+
+        // Get latest report data (most recent report with assignments for this RTOM)
+        $latestReport = CallCenterReport::whereHas('assignments', function($q) use ($rtom) {
+            $q->whereHas('row', function($rq) use ($rtom) {
+                $rq->where('rtom', $rtom);
+            });
+        })->latest('created_at')->first();
+
+        // Latest report data for this supervisor's RTOM
+        $latestBase = CallCenterAssignment::with(['row', 'agent.supervisorUser', 'interactions'])
+            ->where('call_center_report_id', $latestReport?->id)
+            ->whereHas('row', function($q) use ($rtom) {
+                $q->where('rtom', $rtom);
+            });
+
+        $latestAssignments = $latestBase->get();
+        $latestTotal = $latestAssignments->count();
+        $latestAssigned = $latestAssignments->whereNotNull('assigned_user_id')->count();
+        $latestUnassigned = $latestTotal - $latestAssigned;
+        $latestPaidCount = $latestAssignments->where('paid', true)->count();
+        $latestPaidAmount = $latestAssignments->sum(fn($a) => $a->paid_amount ?? 0);
+
+        // For supervisor, breakdown by callers (agents in this RTOM)
+        $latestCallerBreakdown = $latestAssignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function($group) {
+            $agent = $group->first()->agent;
+            $total = $group->count();
+            $paid = $group->where('paid', true)->count();
+            $paid_amount = $group->sum(fn($x) => $x->paid_amount ?? 0);
+
+            // Get supervisor info
+            $supervisor = $agent ? $agent->supervisorUser : null;
+            $supervisorLabel = $supervisor ? ($supervisor->id === session('user')['id'] ? 'Me' : ($supervisor->name ?? $supervisor->username)) : 'Unknown';
+
+            return [
+                'agent' => $this->formatAgentLabel($agent),
+                'supervisor' => $supervisorLabel,
+                'total' => $total,
+                'paid' => $paid,
+                'paid_amount' => $paid_amount,
+            ];
+        })->values();
+
+        // All-time data
+        $allTimeBase = CallCenterAssignment::with(['row', 'agent.supervisorUser', 'interactions'])
+            ->whereHas('row', function($q) use ($rtom) {
+                $q->where('rtom', $rtom);
+            });
+
+        $allTimeAssignments = $allTimeBase->get();
+        $allTimeTotal = $allTimeAssignments->count();
+        $allTimeAssigned = $allTimeAssignments->whereNotNull('assigned_user_id')->count();
+        $allTimeUnassigned = $allTimeTotal - $allTimeAssigned;
+        $allTimePaidCount = $allTimeAssignments->where('paid', true)->count();
+        $allTimePaidAmount = $allTimeAssignments->sum(fn($a) => $a->paid_amount ?? 0);
+
+        $allTimeCallerBreakdown = $allTimeAssignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function($group) {
+            $agent = $group->first()->agent;
+            $total = $group->count();
+            $paid = $group->where('paid', true)->count();
+            $paid_amount = $group->sum(fn($x) => $x->paid_amount ?? 0);
+
+            // Get supervisor info
+            $supervisor = $agent ? $agent->supervisorUser : null;
+            $supervisorLabel = $supervisor ? ($supervisor->id === session('user')['id'] ? 'Me' : ($supervisor->name ?? $supervisor->username)) : 'Unknown';
+
+            return [
+                'agent' => $this->formatAgentLabel($agent),
+                'supervisor' => $supervisorLabel,
+                'total' => $total,
+                'paid' => $paid,
+                'paid_amount' => $paid_amount,
+            ];
+        })->values();
+
+        return view('cc.supervisor.dashboard', compact(
+            'rtom',
+            'latestReport',
+            'latestTotal',
+            'latestAssigned',
+            'latestUnassigned',
+            'latestPaidCount',
+            'latestPaidAmount',
+            'latestCallerBreakdown',
+            'allTimeTotal',
+            'allTimeAssigned',
+            'allTimeUnassigned',
+            'allTimePaidCount',
+            'allTimePaidAmount',
+            'allTimeCallerBreakdown'
+        ));
+    }
+
+    protected function ensureRtomAdmin()
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'cc') {
+            abort(403);
+        }
+        $assignment = $sessionUser['assignment'] ?? null;
+        if (! $assignment || !str_starts_with($assignment, 'rtom_')) {
+            abort(403);
+        }
+        // Extract RTOM from assignment like 'rtom_rtom_CODE'
+        $rtom = str_replace('rtom_', '', $assignment);
+        $rtom = str_replace('_', ' ', $rtom);
+        return $rtom; // RTOM name
+    }
+
+    public function rtomDashboard()
+    {
+        $rtom = $this->ensureRtomAdmin();
+        $rtomAdminId = session('user')['id'];
+
+        // Get latest report data (most recent report with assignments for this RTOM)
+        $latestReport = CallCenterReport::whereHas('assignments', function($q) use ($rtom) {
+            $q->whereHas('row', function($rq) use ($rtom) {
+                $rq->where('rtom', $rtom);
+            });
+        })->latest('created_at')->first();
+
+        // Latest report data for this RTOM
+        $latestBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+            ->where('call_center_report_id', $latestReport?->id)
+            ->whereHas('row', function($q) use ($rtom) {
+                $q->where('rtom', $rtom);
+            });
+
+        $latestAssignments = $latestBase->get();
+        $latestTotal = $latestAssignments->count();
+        $latestAssigned = $latestAssignments->whereNotNull('assigned_user_id')->count();
+        $latestUnassigned = $latestTotal - $latestAssigned;
+        $latestPaidCount = $latestAssignments->where('paid', true)->count();
+        $latestPaidAmount = $latestAssignments->sum(fn($a) => $a->paid_amount ?? 0);
+
+        // For RTOM admin, breakdown by supervisors (supervisors they created)
+        $latestSupervisorBreakdown = User::where('assignment', 'like', 'supervisor_%')
+            ->where('supervisor', $rtomAdminId)
+            ->get()
+            ->map(function($supervisor) use ($latestReport, $rtom) {
+                // Sum assignments handled by callers under this supervisor
+                $assignments = CallCenterAssignment::where('call_center_report_id', $latestReport?->id)
+                    ->whereHas('row', function($q) use ($rtom) {
+                        $q->where('rtom', $rtom);
+                    })
+                    ->whereHas('agent', function($q) use ($supervisor) {
+                        $q->where('supervisor', $supervisor->id);
+                    })
+                    ->get();
+
+                $total = $assignments->count();
+                $paid = $assignments->where('paid', true)->count();
+                $paid_amount = $assignments->sum(fn($x) => $x->paid_amount ?? 0);
+
+                // Get caller breakdown for this supervisor
+                $callerProfits = $assignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function($group) {
+                    $agent = $group->first()->agent;
+                    $profit = $group->sum(fn($x) => $x->paid_amount ?? 0);
+                    return [
+                        'name' => $this->formatAgentLabel($agent),
+                        'profit' => $profit,
+                    ];
+                })->values();
+
+                return [
+                    'supervisor' => $supervisor->name ?? $supervisor->username,
+                    'total' => $total,
+                    'paid' => $paid,
+                    'paid_amount' => $paid_amount,
+                    'caller_profits' => $callerProfits,
+                ];
+            })->values();
+
+        // All-time data
+        $allTimeBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+            ->whereHas('row', function($q) use ($rtom) {
+                $q->where('rtom', $rtom);
+            });
+
+        $allTimeAssignments = $allTimeBase->get();
+        $allTimeTotal = $allTimeAssignments->count();
+        $allTimeAssigned = $allTimeAssignments->whereNotNull('assigned_user_id')->count();
+        $allTimeUnassigned = $allTimeTotal - $allTimeAssigned;
+        $allTimePaidCount = $allTimeAssignments->where('paid', true)->count();
+        $allTimePaidAmount = $allTimeAssignments->sum(fn($a) => $a->paid_amount ?? 0);
+
+        $allTimeSupervisorBreakdown = User::where('assignment', 'like', 'supervisor_%')
+            ->where('supervisor', $rtomAdminId)
+            ->get()
+            ->map(function($supervisor) use ($rtom) {
+                // Sum assignments handled by callers under this supervisor
+                $assignments = CallCenterAssignment::whereHas('row', function($q) use ($rtom) {
+                    $q->where('rtom', $rtom);
+                })
+                ->whereHas('agent', function($q) use ($supervisor) {
+                    $q->where('supervisor', $supervisor->id);
+                })
+                ->get();
+
+                $total = $assignments->count();
+                $paid = $assignments->where('paid', true)->count();
+                $paid_amount = $assignments->sum(fn($x) => $x->paid_amount ?? 0);
+
+                // Get caller breakdown for this supervisor
+                $callerProfits = $assignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function($group) {
+                    $agent = $group->first()->agent;
+                    $profit = $group->sum(fn($x) => $x->paid_amount ?? 0);
+                    return [
+                        'name' => $this->formatAgentLabel($agent),
+                        'profit' => $profit,
+                    ];
+                })->values();
+
+                return [
+                    'supervisor' => $supervisor->name ?? $supervisor->username,
+                    'total' => $total,
+                    'paid' => $paid,
+                    'paid_amount' => $paid_amount,
+                    'caller_profits' => $callerProfits,
+                ];
+            })->values();
+
+        return view('cc.rtom.dashboard', compact(
+            'rtom',
+            'latestReport',
+            'latestTotal',
+            'latestAssigned',
+            'latestUnassigned',
+            'latestPaidCount',
+            'latestPaidAmount',
+            'latestSupervisorBreakdown',
+            'allTimeTotal',
+            'allTimeAssigned',
+            'allTimeUnassigned',
+            'allTimePaidCount',
+            'allTimePaidAmount',
+            'allTimeSupervisorBreakdown'
+        ));
+    }
+
+    protected function formatAgentLabel($agent)
+    {
+        if (!$agent) return 'Unknown';
+        
+        $username = $agent->username;
+        $name = $agent->name;
+        
+        return $name ? "{$username} ({$name})" : $username;
+    }
 }

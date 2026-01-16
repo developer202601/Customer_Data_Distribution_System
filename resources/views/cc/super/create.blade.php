@@ -24,7 +24,7 @@
                 @endif
 
                 @php
-                    $action = route('cc.users.create.store');
+                    $action = route('cc.super.store_user');
                 @endphp
                 @include('cc.partials._user_create_form', ['mode' => 'region', 'action' => $action, 'regions' => $regions])
         </div>

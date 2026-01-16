@@ -183,6 +183,176 @@ class SuperAdminController extends Controller
         $user->created_at = now();
         $user->save();
 
-        return redirect()->route('cc.users.assign.index')->with('status', 'User created and assigned');
+        return redirect()->route('cc.super.regions')->with('status', 'User created and assigned');
+    }
+
+    public function indexRegions()
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || (($sessionUser['assignment'] ?? null) !== 'super')) {
+            abort(403);
+        }
+
+        $lastTwo = MasterDatasetRow::select('process_id')
+            ->distinct()
+            ->orderBy('process_id', 'desc')
+            ->limit(2)
+            ->pluck('process_id')
+            ->toArray();
+
+        $allRegions = MasterDatasetRow::whereNotNull('region')
+            ->distinct()
+            ->pluck('region')
+            ->values();
+
+        $q = request()->query('q');
+        $selectedRegion = request()->query('region');
+
+        $query = User::where('system', 'cc');
+        if (! $allRegions->isEmpty()) {
+            $query->whereIn('assignment', $allRegions->toArray());
+        } else {
+            $query->where('assignment', 'like', 'REGION %');
+        }
+
+        if (! empty($q)) {
+            $query->where(function($w) use ($q) {
+                $w->where('username', 'like', "%{$q}%")
+                  ->orWhere('name', 'like', "%{$q}%");
+            });
+        }
+
+        if (! empty($selectedRegion)) {
+            $query->where('assignment', $selectedRegion);
+        }
+
+        $regionAdmins = $query->get();
+
+        $regions = $regionAdmins->pluck('assignment')
+            ->filter(fn ($assignment) => $assignment && str_starts_with($assignment, 'REGION'))
+            ->unique()
+            ->sort()
+            ->values();
+
+        return view('cc.super.regions', compact('regions', 'regionAdmins', 'q', 'selectedRegion'));
+    }
+
+    public function searchRegions(Request $request)
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || (($sessionUser['assignment'] ?? null) !== 'super')) {
+            abort(403);
+        }
+
+        $allRegions = MasterDatasetRow::whereNotNull('region')
+            ->distinct()
+            ->pluck('region')
+            ->values();
+
+        $query = User::where('system', 'cc');
+        if (! $allRegions->isEmpty()) {
+            $query->whereIn('assignment', $allRegions->toArray());
+        } else {
+            $query->where('assignment', 'like', 'REGION %');
+        }
+
+        $q = $request->query('q');
+        $selectedRegion = $request->query('region');
+
+        if (! empty($q)) {
+            $query->where(function($w) use ($q) {
+                $w->where('username', 'like', "%{$q}%")
+                  ->orWhere('name', 'like', "%{$q}%");
+            });
+        }
+
+        if (! empty($selectedRegion)) {
+            $query->where('assignment', $selectedRegion);
+        }
+
+        $regionAdmins = $query->get();
+
+        return view('cc.super._rows', compact('regionAdmins'));
+    }
+
+    public function editRegionAdminForm(User $user)
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || (($sessionUser['assignment'] ?? null) !== 'super')) {
+            abort(403);
+        }
+
+        $allRegions = MasterDatasetRow::whereNotNull('region')
+            ->distinct()
+            ->pluck('region')
+            ->values();
+
+        // only allow editing region admins
+        if (! $user->assignment || ! $allRegions->contains($user->assignment)) {
+            abort(404);
+        }
+
+        $lastTwoProcessIds = MasterDatasetRow::select('process_id')
+            ->distinct()
+            ->orderBy('process_id', 'desc')
+            ->limit(2)
+            ->pluck('process_id')
+            ->toArray();
+
+        $regions = collect();
+        if (! empty($lastTwoProcessIds)) {
+            $regions = MasterDatasetRow::whereIn('process_id', $lastTwoProcessIds)
+                ->whereNotNull('region')
+                ->pluck('region')
+                ->unique()
+                ->values();
+        }
+
+        if (! $regions->contains($user->assignment)) {
+            // gracefully allow editing even if the region isn’t in the latest two, fall back to all regions
+            $regions = $allRegions;
+        }
+        if (! $regions->contains($user->assignment)) {
+            abort(404);
+        }
+
+        return view('cc.super.edit_region', compact('user', 'regions'));
+    }
+
+    public function updateRegionAdmin(Request $request, User $user)
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || (($sessionUser['assignment'] ?? null) !== 'super')) {
+            abort(403);
+        }
+
+        if (! $user->assignment) {
+            abort(404);
+        }
+
+        $allRegions = MasterDatasetRow::whereNotNull('region')
+            ->distinct()
+            ->pluck('region')
+            ->values();
+
+        $request->validate([
+            'name' => 'nullable|string|max:45',
+            'region' => 'required|string|max:45',
+        ]);
+
+        $allowedRegions = $allRegions->toArray();
+
+        $region = $request->input('region');
+        if (! in_array($region, $allowedRegions, true)) {
+            return back()->withErrors(['region' => 'Selected region is not available.']);
+        }
+
+        $user->name = $request->input('name');
+        if (! $user->fixed) {
+            $user->assignment = $region;
+        }
+        $user->save();
+
+        return redirect()->route('cc.super.regions')->with('status', 'Region admin updated successfully.');
     }
 }

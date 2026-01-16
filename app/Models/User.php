@@ -48,4 +48,9 @@ class User extends Model
     {
         return $this->hasMany(User::class, 'supervisor');
     }
+
+    public function supervisorUser()
+    {
+        return $this->belongsTo(User::class, 'supervisor');
+    }
 }

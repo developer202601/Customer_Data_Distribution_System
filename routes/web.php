@@ -51,6 +51,12 @@ Route::middleware('session.auth')->group(function () {
         Route::get('/payments/list', [CallCenterDashboardController::class, 'paymentList'])->name('payments.list');
         Route::get('/caller/{id}/calls7', [CallCenterDashboardController::class, 'callerCalls7'])->name('caller.calls7');
 
+        // Supervisor dashboard
+        Route::get('/supervisor/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'supervisorDashboard'])->name('supervisor.dashboard');
+
+        // RTOM dashboard
+        Route::get('/rtom/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'rtomDashboard'])->name('rtom.dashboard');
+
         // Call center staff assignment endpoints
         Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
         Route::get('/assignments/manage', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'manage'])->name('assignments.manage');
@@ -66,6 +72,8 @@ Route::middleware('session.auth')->group(function () {
 
         Route::middleware('session.cc_admin')->group(function () {
             Route::get('/users', [CallCenterUserController::class, 'index'])->name('users.index');
+            Route::get('/users/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'createUserForm'])->name('users.create');
+            Route::post('/users/super', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'storeUser'])->name('super.store_user');
             Route::post('/users', [CallCenterUserController::class, 'store'])->name('users.store');
             Route::get('/users/assign', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexAssign'])->name('users.assign.index');
             Route::get('/users/{ccUser}/edit', [CallCenterUserController::class, 'edit'])->name('users.edit');
@@ -99,6 +107,11 @@ Route::middleware('session.auth')->group(function () {
             Route::put('/rtoms/supervisors/{user}/disable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'disableSupervisor'])->name('region.disable_supervisor');
             Route::put('/rtoms/supervisors/{user}/enable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'enableSupervisor'])->name('region.enable_supervisor');
             Route::delete('/rtoms/supervisors/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroySupervisor'])->name('region.destroy_supervisor');
+            // Super admin pages (Region management)
+            Route::get('/regions', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexRegions'])->name('super.regions');
+            Route::get('/regions/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editRegionAdminForm'])->name('super.edit_region');
+            Route::put('/regions/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateRegionAdmin'])->name('super.update_region');
+            Route::get('/regions/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchRegions'])->name('super.regions.search');
             // Region admins create RTOM admins only; regular user creation removed
             Route::post('/reports/{report}/distribute', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'distribute'])->name('reports.distribute');
             Route::post('/reports/{report}/distribute-supervisor', [\App\Http\Controllers\CallCenter\ReportController::class, 'distributeSupervisor'])->name('reports.distribute_supervisor');

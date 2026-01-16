@@ -51,6 +51,12 @@ Route::middleware('session.auth')->group(function () {
         Route::get('/payments/list', [CallCenterDashboardController::class, 'paymentList'])->name('payments.list');
         Route::get('/caller/{id}/calls7', [CallCenterDashboardController::class, 'callerCalls7'])->name('caller.calls7');
 
+        // Supervisor dashboard
+        Route::get('/supervisor/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'supervisorDashboard'])->name('supervisor.dashboard');
+
+        // RTOM dashboard
+        Route::get('/rtom/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'rtomDashboard'])->name('rtom.dashboard');
+
         // Call center staff assignment endpoints
         Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
         Route::get('/assignments/manage', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'manage'])->name('assignments.manage');

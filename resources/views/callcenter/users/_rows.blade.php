@@ -18,12 +18,18 @@
     } else {
         $role = $user->admin_prev ? 'Call Center Admin' : 'Call Center User';
     }
-    $supervisorInfo = optional($user->supervisorUser)->name ? (optional($user->supervisorUser)->name . ' (' . optional($user->supervisorUser)->username . ')') : '—';
+    $currentUserId = session('user')['id'] ?? null;
+    if ($user->supervisor && $user->supervisor == $currentUserId) {
+        $supervisorInfo = 'Me';
+    } else {
+        $supervisorInfo = optional($user->supervisorUser)->name ? (optional($user->supervisorUser)->name . ' (' . optional($user->supervisorUser)->username . ')') : '—';
+    }
 @endphp
 <tr class="user-row" title="Click to view more details" data-user-id="{{ $user->id }}" data-username="{{ $user->username }}" data-name="{{ $user->name }}" data-role="{{ $role }}" data-supervisor="{{ $supervisorInfo }}" data-status="{{ $user->status ? 'Active' : 'Disabled' }}" data-created="{{ optional($user->created_at)->format('Y-m-d H:i') ?? '—' }}">
     <td>{{ $user->username }}</td>
     <td>{{ $user->name ?: '—' }}</td>
     <td>{{ $role }}</td>
+    <td>{{ $supervisorInfo }}</td>
     @php
         $isSupervisorView = \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_');
         $currentSupervisorId = session('user')['id'] ?? null;
@@ -47,6 +53,6 @@
 </tr>
 @empty
 <tr>
-    <td colspan="4" class="text-center text-muted">No call center users yet.</td>
+    <td colspan="5" class="text-center text-muted">No call center users yet.</td>
 </tr>
 @endforelse

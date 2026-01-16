@@ -1,7 +1,6 @@
 @extends('layouts.cc')
 
 @section('navbar-right')
-<a href="{{ route('cc.dashboard') }}" class="btn btn-outline-secondary">Call Center Home</a>
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf
     <button type="submit" class="btn btn-outline-secondary">Logout</button>

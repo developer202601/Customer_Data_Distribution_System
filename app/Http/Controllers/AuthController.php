@@ -85,9 +85,9 @@ class AuthController extends Controller
             return 'cc.region.assign.index';
         }
 
-        // Supervisors go to reports for distributing rows to callers
+        // Supervisors go to supervisor dashboard
         if (str_starts_with($assignment, 'supervisor_')) {
-            return 'cc.reports';
+            return 'cc.supervisor.dashboard';
         }
 
         // Regular admins go to user management

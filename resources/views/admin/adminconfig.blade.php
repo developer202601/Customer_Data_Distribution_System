@@ -110,23 +110,16 @@
                                 </div>
 
                                 <div class="user-account-list" aria-live="polite">
-                                    <div class="user-account-item" data-user-id="1" data-blocked="false">
-                                        <div class="user-account-item-label">User 1</div>
+                                    @foreach($users as $user)
+                                    <div class="user-account-item" data-user-id="{{ $user->id }}" data-blocked="{{ $user->status ? 'false' : 'true' }}">
+                                        <div class="user-account-item-label">{{ $user->name ?? $user->username }}</div>
                                         <div class="user-account-item-controls">
                                             <button type="button" class="user-account-item-edit">Edit</button>
-                                            <button type="button" class="user-account-item-block">Block</button>
+                                            <button type="button" class="user-account-item-block">{{ $user->status ? 'Block' : 'Unblock' }}</button>
                                             <button type="button" class="user-account-item-remove" aria-label="Remove">×</button>
                                         </div>
                                     </div>
-
-                                    <div class="user-account-item" data-user-id="2" data-blocked="false">
-                                        <div class="user-account-item-label">User 2</div>
-                                        <div class="user-account-item-controls">
-                                            <button type="button" class="user-account-item-edit">Edit</button>
-                                            <button type="button" class="user-account-item-block">Block</button>
-                                            <button type="button" class="user-account-item-remove" aria-label="Remove">×</button>
-                                        </div>
-                                    </div>
+                                    @endforeach
                                 </div>
 
                                 <div class="user-account-actions">

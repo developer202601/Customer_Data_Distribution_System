@@ -21,10 +21,17 @@ class AdminController extends Controller
         $billRangeUpdated = $this->latestMeta($configs, ['upper_range', 'lower_range']);
         $staffUpdated = $this->latestMeta($configs, ['ccs', 'cc', 's']);
 
+        // Fetch master system users (excluding call center users)
+        $users = User::where('system', '!=', 'cc')
+            ->orWhereNull('system')
+            ->orderBy('username')
+            ->get();
+
         return view('admin/adminconfig', [
             'configs' => $configs,
             'billRangeUpdated' => $billRangeUpdated,
             'staffUpdated' => $staffUpdated,
+            'users' => $users,
         ]);
     }
 

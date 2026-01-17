@@ -89,15 +89,28 @@ class UserController extends Controller
             'admin_prev' => ['sometimes', 'boolean'],
         ]);
 
+        $sessionUser = session('user');
+        $assignment = 'super'; // default for admins
+        $adminPrev = $request->boolean('admin_prev');
+
+        if (\Illuminate\Support\Str::startsWith($sessionUser['assignment'] ?? '', 'supervisor_')) {
+            // Supervisors create callers
+            $assign = $sessionUser['assignment'] ?? '';
+            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+            $assignment = 'caller_rtom_' . $rtomVal;
+            $adminPrev = false; // callers are not admins
+        }
+
         CallCenterUser::create([
             'username' => $validated['username'],
-            'admin_prev' => $request->boolean('admin_prev'),
+            'admin_prev' => $adminPrev,
             'status' => 1,
             'system' => 'cc',
             'fixed' => 0,
             'created_at' => now(),
-            'supervisor' => session('user')['id'] ?? null,
-            'assignment' => 'super',
+            'supervisor' => $sessionUser['id'] ?? null,
+            'assignment' => $assignment,
         ]);
 
         return redirect()->route('cc.users.index')->with('status', 'User created successfully.');

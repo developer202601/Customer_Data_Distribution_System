@@ -42,6 +42,12 @@ class ReportController extends Controller
             ->rejected()
             ->where('status', 'pending')
             ->orderByDesc('rejected_at')
+            ->when(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'), function ($q) {
+                $assign = session('user.assignment') ?? '';
+                $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+                return $q->whereHas('row', fn($rowQ) => $rowQ->where('rtom', $rtomVal));
+            })
             ->get()
             : collect();
 
@@ -50,6 +56,12 @@ class ReportController extends Controller
             ->where('call_center_report_id', $selectedReport->id)
             ->where('accepted', true)
             ->orderByDesc('accepted_at')
+            ->when(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'), function ($q) {
+                $assign = session('user.assignment') ?? '';
+                $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+                return $q->whereHas('row', fn($rowQ) => $rowQ->where('rtom', $rtomVal));
+            })
             ->get()
             : collect();
 
@@ -77,13 +89,21 @@ class ReportController extends Controller
         }
 
         $pendingCounts = [];
+        $isSupervisor = \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_');
+        $rtomVal = null;
+        if ($isSupervisor) {
+            $assign = session('user.assignment') ?? '';
+            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+        }
         foreach ($ccUsers as $u) {
-            $pendingCounts[$u->id] = $selectedReport
-                ? CallCenterAssignment::where('assigned_user_id', $u->id)
+            $query = CallCenterAssignment::where('assigned_user_id', $u->id)
                 ->where('call_center_report_id', $selectedReport->id)
-                ->pendingApproval()
-                ->count()
-                : 0;
+                ->pendingApproval();
+            if ($isSupervisor && $rtomVal) {
+                $query->whereHas('row', fn($rowQ) => $rowQ->where('rtom', $rtomVal));
+            }
+            $pendingCounts[$u->id] = $selectedReport ? $query->count() : 0;
         }
 
         // Also compute previous-report pending counts for each user so admins can see carry-overs
@@ -143,7 +163,7 @@ class ReportController extends Controller
 
         $anyAssigned = $assignedCount > 0;
         $allAssigned = $selectedReport ? ($selectedReport->row_count > 0 && $assignedCount >= $selectedReport->row_count) : false;
-        $distributableRows = $selectedReport ? max(0, (count($allowedRowIds) ?: $selectedReport->row_count) - $assignedCount) : 0;
+        $distributableRows = $selectedReport ? max(0, (isset($allowedRowIds) ? count($allowedRowIds) : $selectedReport->row_count) - $assignedCount) : 0;
 
         $hasInteractions = false;
         if ($selectedReport) {
@@ -211,9 +231,24 @@ class ReportController extends Controller
 
     public function history(): View
     {
-        $reports = CallCenterReport::with('process')
-            ->orderByDesc('created_at')
-            ->get();
+        $reportsQuery = CallCenterReport::with('process')
+            ->orderByDesc('created_at');
+
+        // Filter for supervisors: only show reports that have assignments to callers in their RTOM
+        if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
+            $assign = session('user.assignment') ?? '';
+            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
+            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
+            if ($rtomVal !== '') {
+                $reportsQuery->whereHas('assignments', function ($q) use ($rtomVal) {
+                    $q->whereHas('agent', function ($uq) use ($rtomVal) {
+                        $uq->where('assignment', 'caller_rtom_' . $rtomVal);
+                    });
+                });
+            }
+        }
+
+        $reports = $reportsQuery->get();
 
         $assignmentStats = CallCenterAssignment::selectRaw(
             'call_center_report_id,
@@ -293,11 +328,11 @@ class ReportController extends Controller
         $totalPayments = $interactionCollection->sum(fn(CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0);
 
         $agentMetrics = $assignments->whereNotNull('assigned_user_id')->groupBy('assigned_user_id')->map(function ($group) {
-            $assignmentCount = $group->count();
-            $accepted = $group->where('accepted', true)->count();
-            $paid = $group->where('paid', true)->count();
+            $acceptedAssignments = $group->where('accepted', true);
+            $assignmentCount = $acceptedAssignments->count();
+            $paid = $acceptedAssignments->where('paid', true)->count();
             $rejected = $group->where('rejected', true)->count();
-            $interactions = $group->flatMap->interactions;
+            $interactions = $acceptedAssignments->flatMap->interactions;
             $callCount = $interactions->count();
             $paymentAmount = $interactions->sum(fn(CallCenterInteraction $interaction) => $interaction->paid_amount ?? 0);
             $agent = $group->first()->agent;
@@ -306,15 +341,15 @@ class ReportController extends Controller
                 'user_id' => $group->first()->assigned_user_id,
                 'name' => $this->formatAgentLabel($agent),
                 'assigned_rows' => $assignmentCount,
-                'accepted_rows' => $accepted,
+                'accepted_rows' => $assignmentCount, // since already filtered
                 'paid_rows' => $paid,
                 'rejected_rows' => $rejected,
-                'acceptance_rate' => $assignmentCount ? round(($accepted / $assignmentCount) * 100, 1) : 0,
+                'acceptance_rate' => $group->count() ? round(($assignmentCount / $group->count()) * 100, 1) : 0,
                 'coverage' => $assignmentCount ? round(($paid / $assignmentCount) * 100, 1) : 0,
                 'call_count' => $callCount,
                 'payment_amount' => round($paymentAmount, 2),
             ];
-        })->values();
+        })->values()->filter(fn($m) => $m['assigned_rows'] > 0);
 
         $agentCollection = $agentMetrics->sortByDesc('payment_amount')->values();
         $topAgentByPayment = $agentCollection->first();

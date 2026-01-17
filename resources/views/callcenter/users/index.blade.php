@@ -87,7 +87,13 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="ccAddUserLabel">Add Call Center User</h5>
+                        <h5 class="modal-title" id="ccAddUserLabel">
+                            @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
+                                Add Caller
+                            @else
+                                Add Call Center User
+                            @endif
+                        </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -100,13 +106,23 @@
                                 <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
+                            @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
+                                <p class="text-muted small mb-0">This form creates a new caller account.</p>
+                            @else
                                 <input type="hidden" name="admin_prev" value="1">
                                 <p class="text-muted small mb-0">This form only creates Call Center administrator accounts.</p>
+                            @endif
                         </form>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" id="cc-create-user-btn" class="btn btn-warning rounded-pill px-4">Create User</button>
+                        <button type="button" id="cc-create-user-btn" class="btn btn-warning rounded-pill px-4">
+                            @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
+                                Create Caller
+                            @else
+                                Create User
+                            @endif
+                        </button>
                     </div>
                 </div>
             </div>
@@ -236,6 +252,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmCreateBtn = document.getElementById('ccConfirmCreate');
     const addUserModalEl = document.getElementById('ccAddUserModal');
 
+    const isSupervisor = '{{ \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_') ? 'true' : 'false' }}' === 'true';
+
     if (!createUserForm) return;
 
     const adminConfirmMessage = 'You are creating a Call Center administrator account. Continue?';
@@ -285,7 +303,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (modalCreateBtn) {
         modalCreateBtn.addEventListener('click', function (e) {
             e.preventDefault();
-            showAdminConfirmation();
+            if (isSupervisor) {
+                createUserForm.submit();
+            } else {
+                showAdminConfirmation();
+            }
         });
     }
 

@@ -40,6 +40,9 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
+    Route::put('/admin/users/{user}/status', [AdminController::class, 'updateUserStatus'])->name('admin.updateUserStatus');
+    Route::put('/admin/users/{user}/name', [AdminController::class, 'updateUserName'])->name('admin.updateUserName');
+    Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.deleteUser');
     Route::post('/configurations/billrange', [BillRangeController::class, 'createRange'])->name('configurations.billrange');
     
     Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');

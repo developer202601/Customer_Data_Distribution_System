@@ -712,11 +712,31 @@
                 if (target.classList.contains('user-account-item-edit')) {
                     var row = target.closest('.user-account-item');
                     if (!row) return;
+                    var userId = row.getAttribute('data-user-id');
                     var labelEl = row.querySelector('.user-account-item-label');
                     var current = labelEl ? labelEl.textContent.trim() : '';
-                    var newVal = prompt('Edit user', current);
-                    if (newVal !== null) {
-                        labelEl.textContent = newVal.trim() || current;
+                    var newVal = prompt('Edit user name', current);
+                    if (newVal !== null && newVal.trim() !== current) {
+                        fetch('/admin/users/' + userId + '/name', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            },
+                            body: JSON.stringify({ name: newVal.trim() })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                labelEl.textContent = newVal.trim();
+                            } else {
+                                alert('Failed to update user name');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('Error updating user name');
+                        });
                     }
                     return;
                 }
@@ -724,9 +744,57 @@
                 if (target.classList.contains('user-account-item-block')) {
                     var row = target.closest('.user-account-item');
                     if (!row) return;
-                    var blocked = row.classList.toggle('blocked');
-                    row.setAttribute('data-blocked', blocked ? 'true' : 'false');
-                    target.textContent = blocked ? 'Unblock' : 'Block';
+                    var userId = row.getAttribute('data-user-id');
+                    var blocked = !row.classList.contains('blocked');
+                    fetch('/admin/users/' + userId + '/status', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify({ status: !blocked })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            row.classList.toggle('blocked');
+                            row.setAttribute('data-blocked', blocked ? 'true' : 'false');
+                            target.textContent = blocked ? 'Unblock' : 'Block';
+                        } else {
+                            alert('Failed to update user status');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error updating user status');
+                    });
+                    return;
+                }
+
+                if (target.classList.contains('user-account-item-remove')) {
+                    var row = target.closest('.user-account-item');
+                    if (!row) return;
+                    var userId = row.getAttribute('data-user-id');
+                    if (confirm('Are you sure you want to disable this user?')) {
+                        fetch('/admin/users/' + userId, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                row.remove();
+                            } else {
+                                alert('Failed to disable user');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('Error disabling user');
+                        });
+                    }
                     return;
                 }
             });

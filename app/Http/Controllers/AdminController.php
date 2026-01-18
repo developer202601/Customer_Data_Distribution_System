@@ -49,4 +49,34 @@ class AdminController extends Controller
             'editor' => $latest?->editor,
         ];
     }
+
+    public function updateUserStatus(User $user, Request $request)
+    {
+        $request->validate([
+            'status' => 'required|boolean',
+        ]);
+
+        $user->update(['status' => $request->status]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function updateUserName(User $user, Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $user->update(['name' => $request->name]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function deleteUser(User $user)
+    {
+        // Instead of deleting, set status to false
+        $user->update(['status' => false]);
+
+        return response()->json(['success' => true]);
+    }
 }

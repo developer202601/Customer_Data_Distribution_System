@@ -27,7 +27,7 @@
                 </div>
 
                 <div class="admin-config-right">
-                    <form action="{{ route('configurations.billrange') }}" method="POST" class="card shadow-sm border-0">
+                    <form action="{{ route('configurations.billrange') }}" method="POST" class="card shadow-sm border-0" novalidate>
                             @csrf
                             @method('post')
                         <div class="admin-config-form is-active bill_range-config" data-config-block="latest-bill-range">
@@ -625,6 +625,44 @@
         }
     }
 
+    /* Modal Styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 400px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .close:hover,
+    .close:focus {
+        color: black;
+        text-decoration: none;
+    }
+
     
     
 </style>
@@ -840,9 +878,40 @@
     alert(errors.join('\n'));
 </script>
 @endif  
+<!-- Custom Modal for Validation Errors -->
+<div id="validationModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <p id="modalMessage">Value must be greater than or equal to 0.</p>
+        <button id="modalOkBtn" class="btn btn-primary">OK</button>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var billRangeForm = document.querySelector('.bill_range-config form');
+        var modal = document.getElementById('validationModal');
+        var modalMessage = document.getElementById('modalMessage');
+        var closeBtn = document.querySelector('.close');
+        var okBtn = document.getElementById('modalOkBtn');
+        
+        function showModal(message) {
+            modalMessage.textContent = message;
+            modal.style.display = 'block';
+        }
+        
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+        
+        closeBtn.onclick = closeModal;
+        okBtn.onclick = closeModal;
+        
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
         
         if (billRangeForm) {
             billRangeForm.addEventListener('submit', function(e) {
@@ -851,7 +920,7 @@
                 
                 if (parseFloat(upperRange) < 0 || parseFloat(lowerRange) < 0) {
                     e.preventDefault();
-                    alert('Error: Bill range values cannot be negative. Please enter positive values only.');
+                    showModal('Error: Bill range values cannot be negative. Please enter positive values only.');
                     return false;
                 }
             });

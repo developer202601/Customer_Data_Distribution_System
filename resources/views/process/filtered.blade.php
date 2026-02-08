@@ -149,7 +149,7 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 (() => {
     const routeRows = "{{ route('process.upload.rows') }}";
     const headersOrder = @json(array_keys($headers));

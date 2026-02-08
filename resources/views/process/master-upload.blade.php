@@ -117,7 +117,7 @@
 </div>
 
 @push('scripts')
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('master-upload-form');
     const dropzone = document.getElementById('master-dropzone');
@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubmitState();
 });
 </script>
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
     const refreshButton = document.getElementById('assignment-config-refresh');
     const status = document.getElementById('assignment-config-status');

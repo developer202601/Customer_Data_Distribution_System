@@ -3,6 +3,8 @@
 use App\Http\Middleware\EnsureCallCenterAdmin;
 use App\Http\Middleware\EnsureCallCenterUser;
 use App\Http\Middleware\EnsureUserIsAuthenticated;
+use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\ScanUnused::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(SecurityHeaders::class);
+
+        $middleware->web(replace: [
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class => ValidateCsrfToken::class,
+        ]);
+
         $middleware->alias([
             'session.auth' => EnsureUserIsAuthenticated::class,
             'session.cc_user' => EnsureCallCenterUser::class,

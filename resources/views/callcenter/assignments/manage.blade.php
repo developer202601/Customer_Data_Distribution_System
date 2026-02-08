@@ -8,7 +8,7 @@
 @endsection
 
 @push('styles')
-<style>
+<style nonce="{{ $cspNonce ?? '' }}">
     .cc-fallback-backdrop {
         position: fixed;
         inset: 0;
@@ -110,7 +110,7 @@
                             </div>
                         </div>
                     </div>
-                    <script>
+                    <script nonce="{{ $cspNonce ?? '' }}">
                         document.addEventListener('DOMContentLoaded', function () {
                             try {
                                 var t = document.getElementById('cc-status-toast');
@@ -335,7 +335,7 @@
         </div>
     </div>
 </div>
-                <script>
+                <script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', function () {
     const assignmentRowModal = document.getElementById('ccAssignmentRowModal');
     const detailFields = document.getElementById('ccAssignmentDetailFields');

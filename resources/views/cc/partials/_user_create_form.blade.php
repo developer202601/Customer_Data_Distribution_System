@@ -48,7 +48,7 @@
 
 @if($mode === 'region')
     @push('scripts')
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         const REGIONS = @json($regions->values());
         (function(){
             const input = document.getElementById('region-input');

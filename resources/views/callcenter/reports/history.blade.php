@@ -143,7 +143,7 @@
 @endsection
 
 @push('styles')
-<style>
+<style nonce="{{ $cspNonce ?? '' }}">
     .card.text-decoration-none:hover {
         transform: translateY(-2px);
         transition: transform 0.2s ease;

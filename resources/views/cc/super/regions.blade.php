@@ -108,7 +108,7 @@
                     <form id="cc-delete-form" method="post" style="display:none">@csrf @method('delete')<input type="hidden" name="return_to" value="{{ url()->current() }}"></form>
 
                     @push('scripts')
-                    <script>
+                    <script nonce="{{ $cspNonce ?? '' }}">
                     document.addEventListener('DOMContentLoaded', function () {
                         const disableUsernameEl = document.getElementById('ccDisableConfirmUsername');
                         const deleteUsernameEl = document.getElementById('ccDeleteConfirmUsername');

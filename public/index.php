@@ -5,6 +5,10 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
+// Reduce information leakage via default PHP response headers.
+// (Note: The most robust fix is also setting expose_php=Off in php.ini / server config.)
+header_remove('X-Powered-By');
+
 // Determine if the application is in maintenance mode...
 if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
     require $maintenance;

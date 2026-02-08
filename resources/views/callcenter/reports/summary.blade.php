@@ -398,7 +398,7 @@
 @endsection
 
 @push('styles')
-<style>
+<style nonce="{{ $cspNonce ?? '' }}">
     .card ul li:first-child {
         border-top: none;
     }
@@ -528,7 +528,7 @@
 @endpush
 
 @push('scripts')
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', function() {
         const agentRows = document.querySelectorAll('.agent-row, .agent-link');
         const modal = new bootstrap.Modal(document.getElementById('agentDetailsModal'));

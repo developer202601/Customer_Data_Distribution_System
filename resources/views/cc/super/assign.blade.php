@@ -54,7 +54,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     // Data from server
     const ROLES = @json(array_map(function($k) use ($roles) { return ['key' => $k, 'label' => $roles[$k]]; }, array_keys($roles)));
     const REGIONS = @json($regions->values());

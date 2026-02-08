@@ -46,7 +46,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     // Data from server
     const RTOMS = @json($rtoms->values());
 

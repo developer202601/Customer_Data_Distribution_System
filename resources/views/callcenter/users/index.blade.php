@@ -235,7 +235,7 @@
 @endsection
 
     @push('styles')
-    <style>
+    <style nonce="{{ $cspNonce ?? '' }}">
     /* Page-specific: keep footer flush but preserve CC layout padding; only remove bottom spacing */
     .cc-layout .content-wrapper { padding-bottom: 0 !important; }
     .user-row { cursor: pointer; }
@@ -243,7 +243,7 @@
     @endpush
 
     @push('scripts')
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', function () {
     const createUserForm = document.getElementById('cc-create-user-form');
     const usernameInput = document.getElementById('username');

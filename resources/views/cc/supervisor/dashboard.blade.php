@@ -166,7 +166,7 @@
 </div>
 
 @push('scripts')
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 // View mode toggle: switch between latest report and all-time
 function setSupervisorViewMode(mode) {
     document.querySelectorAll('[data-mode]:not(button)').forEach(function (el) {

@@ -313,7 +313,7 @@
 @endsection
 
 @push('scripts')
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
   console.log('JavaScript loaded and DOMContentLoaded event fired.');
 

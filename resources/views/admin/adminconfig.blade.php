@@ -139,7 +139,7 @@
 </div>
 @endsection  
 
-<style>
+<style nonce="{{ $cspNonce ?? '' }}">
 
     .bill-upper .bill-lower label{
         color: black;
@@ -669,7 +669,7 @@
 
 
 
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', function() {
         var buttons = document.querySelectorAll('.admin-config-btn[data-config-target]');
         var blocks = document.querySelectorAll('.admin-config-form[data-config-block]');
@@ -704,7 +704,7 @@
         }
     });
 </script>  
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', function() {
         var addBtn = document.querySelector('.user-account-add-btn');
         var input = document.getElementById('user-account-input');
@@ -873,7 +873,7 @@
     });
 </script>
 @if($errors->any())
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     var errors = @json($errors->all());
     alert(errors.join('\n'));
 </script>
@@ -887,7 +887,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', function() {
         var billRangeForm = document.querySelector('.bill_range-config form');
         var modal = document.getElementById('validationModal');

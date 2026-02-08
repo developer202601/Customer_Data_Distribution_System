@@ -165,8 +165,8 @@
 </div>
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
+<script nonce="{{ $cspNonce ?? '' }}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script nonce="{{ $cspNonce ?? '' }}">
 let callerProfitChart = null; // Global variable to hold the chart instance
 
 // View mode toggle: switch between latest report and all-time

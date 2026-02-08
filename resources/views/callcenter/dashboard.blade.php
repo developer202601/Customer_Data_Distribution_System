@@ -124,7 +124,7 @@
     
         <!-- Payments modal -->
         @push('styles')
-        <style>
+        <style nonce="{{ $cspNonce ?? '' }}">
             /* Ensure modal and backdrop appear above fixed navbar */
             .modal-backdrop {
                 z-index: 1990 !important;
@@ -200,7 +200,7 @@
         </div>
 
         @push('scripts')
-        <script>
+        <script nonce="{{ $cspNonce ?? '' }}">
         // View mode toggle: switch primary/secondary month vs all-time
         function setCCViewMode(mode) {
             document.querySelectorAll('.cc-table-container').forEach(function (el) {

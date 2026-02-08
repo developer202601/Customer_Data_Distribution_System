@@ -9,7 +9,7 @@
             </div>
         </div>
     </div>
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         (function () {
             try {
                 var toastEl = document.getElementById('topToast');

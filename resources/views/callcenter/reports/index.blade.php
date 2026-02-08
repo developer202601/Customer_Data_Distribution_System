@@ -146,7 +146,7 @@
                                             <div class="small text-muted mt-1">* = callers you own (supervisor-created)</div>
                                         @endif
 
-                                        <style>
+                                        <style nonce="{{ $cspNonce ?? '' }}">
                                             .cc-user-scroll {
                                                 border: 1px solid #e9ecef;
                                                 border-radius: 0.375rem;
@@ -234,7 +234,7 @@
                                         <button type="submit" class="btn btn-primary btn-sm w-100">Distribute</button>
                                     </div>
                                 </form>
-                                <script>
+                                <script nonce="{{ $cspNonce ?? '' }}">
                                     document.addEventListener('DOMContentLoaded', function() {
                                         const distributable = Number(@json((int)($distributableRows ?? 0)));
                                         const checkboxes = Array.from(document.querySelectorAll('.cc-user-checkbox-input'));
@@ -440,7 +440,7 @@
             </div>
         </div>
         <!-- Recent reports section removed per request -->
-        <script>
+        <script nonce="{{ $cspNonce ?? '' }}">
             document.addEventListener('DOMContentLoaded', () => {
                 const loader = document.getElementById('cc-report-loader');
                 const download = document.getElementById('cc-report-download');
@@ -785,7 +785,7 @@
         @endsection
 
         @push('styles')
-        <style>
+            <style nonce="{{ $cspNonce ?? '' }}">
             #cc-user-checkboxes .list-group-item {
                 border: 1px solid #e7e7f0;
                 border-radius: 0.85rem;

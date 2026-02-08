@@ -43,7 +43,7 @@
     <!-- ./wrapper -->
 
     <!-- Bootstrap fallback (loads if app bundle doesn't provide it) -->
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         // If Bootstrap's JS isn't present (e.g., dev assets not running), load from CDN.
         (function () {
             function loadScript(src, cb) {

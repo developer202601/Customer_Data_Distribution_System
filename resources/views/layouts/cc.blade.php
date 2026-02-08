@@ -48,7 +48,7 @@
         All right reserved
     </footer>
 
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         // If Bootstrap's JS isn't present (e.g., dev assets not running), load from CDN.
         (function () {
             function loadScript(src, cb) {
@@ -112,7 +112,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         (function () {
             document.addEventListener('DOMContentLoaded', function () {
                 var modalEl = document.getElementById('ccSetNameModal');
@@ -149,7 +149,7 @@
     </script>
     @endif
 
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         (function () {
             document.addEventListener('DOMContentLoaded', function () {
                     var off = document.getElementById('ccSidebar');

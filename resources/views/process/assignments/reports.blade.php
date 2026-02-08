@@ -148,7 +148,7 @@
 </div>
 
 @push('scripts')
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', () => {
         const modalEl = document.getElementById('datasetDeleteModal');
         if (!modalEl) return;

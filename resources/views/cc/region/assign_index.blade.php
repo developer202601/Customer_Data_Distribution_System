@@ -114,7 +114,7 @@
                 <form id="cc-delete-form" method="post" style="display:none">@csrf @method('delete')</form>
 
                 @push('scripts')
-                <script>
+                <script nonce="{{ $cspNonce ?? '' }}">
                 document.addEventListener('DOMContentLoaded', function () {
                     const disableUsernameEl = document.getElementById('ccDisableConfirmUsername');
                     const deleteUsernameEl = document.getElementById('ccDeleteConfirmUsername');

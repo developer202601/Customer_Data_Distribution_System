@@ -124,7 +124,7 @@
 </div>
 
 @push('scripts')
-<script>
+<script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', () => {
         const maxFiles = <?php echo (int) $maxFiles; ?>;
         const dropzone = document.getElementById('exclusion-dropzone');

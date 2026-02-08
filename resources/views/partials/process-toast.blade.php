@@ -21,7 +21,7 @@
 
 @push('scripts')
     @once
-    <script>
+    <script nonce="{{ $cspNonce ?? '' }}">
         document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('[data-process-toast]').forEach(function (toast) {
                 if (toast.dataset.toastReady === '1') {

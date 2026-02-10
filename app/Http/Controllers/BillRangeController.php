@@ -37,18 +37,18 @@ class BillRangeController extends Controller
         // Record changes for audit/history
         try {
 
-            $config = Configurations::updateorCreate(
+            $upperConfig = Configurations::updateorCreate(
                 ['config_name' => 'upper_range'],
                 ['value' => $incomingFields['upper_range'], 'changedby_id' => $incomingFields['user_id']]
             );
 
-            $config = Configurations::updateorCreate(
+            $lowerConfig = Configurations::updateorCreate(
                 ['config_name' => 'lower_range'],
                 ['value' => $incomingFields['lower_range'], 'changedby_id' => $incomingFields['user_id']]
             );
 
             ConfigurationChange::create([
-                'configuration_id' => $config->id,
+				'configuration_id' => $upperConfig->id,
                 'config_key' => 'upper_range',
                 'old_value' => $previous->get('upper_range') ? (string) $previous->get('upper_range')->value : null,
                 'new_value' => (string) $incomingFields['upper_range'],
@@ -56,7 +56,7 @@ class BillRangeController extends Controller
             ]);
 
             ConfigurationChange::create([
-                'configuration_id' => $config->id,
+				'configuration_id' => $lowerConfig->id,
                 'config_key' => 'lower_range',
                 'old_value' => $previous->get('lower_range') ? (string) $previous->get('lower_range')->value : null,
                 'new_value' => (string) $incomingFields['lower_range'],
@@ -104,23 +104,23 @@ class BillRangeController extends Controller
         // Record changes for audit/history
         try {
 
-            $config = Configurations::updateorCreate(
+            $ccsConfig = Configurations::updateorCreate(
                 ['config_name' => 'ccs'],
                 ['value' => $incomingFields['ccs'], 'changedby_id' => $incomingFields['user_id']]
             );
 
-            $config = Configurations::updateorCreate(
+            $ccConfig = Configurations::updateorCreate(
                 ['config_name' => 'cc'],
                 ['value' => $incomingFields['cc'], 'changedby_id' => $incomingFields['user_id']]
             );
 
-            $config = Configurations::updateorCreate(
+            $sConfig = Configurations::updateorCreate(
                 ['config_name' => 's'],
                 ['value' => $incomingFields['s'], 'changedby_id' => $incomingFields['user_id']]
             );
 
             ConfigurationChange::create([
-                'configuration_id' => $config->id,
+				'configuration_id' => $ccsConfig->id,
                 'config_key' => 'ccs',
                 'old_value' => $previous->get('ccs') ? (string) $previous->get('ccs')->value : null,
                 'new_value' => (string) $incomingFields['ccs'],
@@ -128,7 +128,7 @@ class BillRangeController extends Controller
             ]);
 
             ConfigurationChange::create([
-                'configuration_id' => $config->id,
+				'configuration_id' => $ccConfig->id,
                 'config_key' => 'cc',
                 'old_value' => $previous->get('cc') ? (string) $previous->get('cc')->value : null,
                 'new_value' => (string) $incomingFields['cc'],
@@ -136,7 +136,7 @@ class BillRangeController extends Controller
             ]);
 
             ConfigurationChange::create([
-                'configuration_id' => $config->id,
+				'configuration_id' => $sConfig->id,
                 'config_key' => 's',
                 'old_value' => $previous->get('s') ? (string) $previous->get('s')->value : null,
                 'new_value' => (string) $incomingFields['s'],

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConfigurationChange extends Model
 {
@@ -24,8 +25,8 @@ class ConfigurationChange extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function configuration()
+    public function configuration(): BelongsTo
     {
-        return $this->belongsTo(Configuration::class);
+        return $this->belongsTo(Configurations::class, 'configuration_id');
     }
 }

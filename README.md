@@ -17,7 +17,39 @@ This project ingests very large (800k+ row) Excel workbooks through a hybrid PHP
 - Python is responsible for streaming the workbook into the `master_dataset_rows_staging` table (and applying the exclusion ZIPs) before exiting with a status payload.
 - Once Python exits successfully, Laravel promotes the staging rows into `master_dataset_rows`, recalculates assignments, and unlocks the UI.
 
-Set the `PYTHON_BINARY` environment variable if the runtime is not available as `python` on your PATH.
+Set the `PYTHON_BINARY` environment variable if the runtime is not available as `python` on your PATH (on most Linux images, this is usually `python3`).
+
+## Database (single-file schema for DevOps)
+
+If your goal is to help DevOps / new developers spin up the database quickly, the best Laravel-native approach is **Schema Dump** (a single SQL file) + normal migrations for ongoing changes. This avoids maintaining one huge “all tables” migration.
+
+### Prerequisite (Windows)
+
+Laravel’s `php artisan schema:dump` uses the **MySQL client tools** (`mysqldump` and `mysql`). If you see:
+
+`'mysqldump' is not recognized as an internal or external command`
+
+add your MySQL Server `bin` folder to your `PATH` (example):
+
+`C:\Program Files\MySQL\MySQL Server 8.0\bin`
+
+Then open a new terminal and confirm:
+
+`mysqldump --version`
+
+Note: Some Laravel database inspection commands (like `php artisan db:show`) require the PHP `intl` extension.
+
+### Generate the single schema file
+
+`php artisan schema:dump --database=mysql`
+
+This will create `database/schema/mysql-schema.sql` (schema only, plus the `migrations` table data).
+
+### Use the schema file to bootstrap
+
+`php artisan migrate --schema-path=database/schema/mysql-schema.sql`
+
+This is especially helpful in CI / fresh environments because it applies the full schema quickly, then runs any newer migrations normally.
 
 ## About Laravel
 

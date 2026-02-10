@@ -7,6 +7,7 @@ use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 class PythonIngestionService
@@ -98,6 +99,17 @@ class PythonIngestionService
 
     private function pythonBinary(): string
     {
-        return config('services.master_ingest.python_binary', env('PYTHON_BINARY', 'python'));
+        $configured = config('services.master_ingest.python_binary') ?: env('PYTHON_BINARY');
+        $binary = $configured ?: (PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3');
+
+        $finder = new ExecutableFinder;
+        $resolved = $finder->find($binary);
+        if (! $resolved) {
+            throw new RuntimeException(
+                "Python executable not found: '{$binary}'. Install Python and ensure it is on PATH, or set PYTHON_BINARY (e.g. 'python3')."
+            );
+        }
+
+        return $binary;
     }
 }

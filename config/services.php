@@ -34,8 +34,9 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
-        'master_ingest' => [
-            'python_binary' => env('PYTHON_BINARY', 'python'),
-        ],
+
+    'master_ingest' => [
+        'python_binary' => env('PYTHON_BINARY', PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3'),
+    ],
 
 ];

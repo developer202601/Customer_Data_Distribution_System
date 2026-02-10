@@ -65,6 +65,7 @@ class SecurityHeaders
 
             $connectSrc = array_merge([
                 "'self'",
+                'https://cdn.jsdelivr.net',
             ], array_merge($viteHosts, $viteWsHosts));
 
             $csp = [

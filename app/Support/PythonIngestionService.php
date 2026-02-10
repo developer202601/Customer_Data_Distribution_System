@@ -102,6 +102,17 @@ class PythonIngestionService
         $configured = config('services.master_ingest.python_binary') ?: env('PYTHON_BINARY');
         $binary = $configured ?: (PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3');
 
+        // Allow absolute paths (common on Windows) as well as PATH lookups.
+        if (strpbrk($binary, '\\/') !== false) {
+            if (! is_file($binary)) {
+                throw new RuntimeException(
+                    "Python executable not found at path: '{$binary}'. Fix PYTHON_BINARY or install Python."
+                );
+            }
+
+            return $binary;
+        }
+
         $finder = new ExecutableFinder;
         $resolved = $finder->find($binary);
         if (! $resolved) {

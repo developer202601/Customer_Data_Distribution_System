@@ -86,6 +86,7 @@ class ProcessExclusionUpload implements ShouldQueue
         } catch (Throwable $exception) {
             Log::error('Exclusion job failed: ' . $exception->getMessage(), [
                 'process_id' => $this->processId,
+                'exception' => $exception,
             ]);
             throw $exception;
         } finally {

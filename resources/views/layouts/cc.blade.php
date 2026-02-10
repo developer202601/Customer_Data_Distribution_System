@@ -48,22 +48,6 @@
         All right reserved
     </footer>
 
-    <script nonce="{{ $cspNonce ?? '' }}">
-        // If Bootstrap's JS isn't present (e.g., dev assets not running), load from CDN.
-        (function () {
-            function loadScript(src, cb) {
-                var s = document.createElement('script'); s.src = src; s.async = true; s.onload = cb; document.head.appendChild(s);
-            }
-            if (typeof window.bootstrap === 'undefined') {
-                loadScript('https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js', function () {
-                    console.log('Bootstrap fallback loaded from CDN');
-                });
-            } else {
-                console.log('Bootstrap already available');
-            }
-        })();
-    </script>
-
     @php
         $ccUsernameMissing = false;
         $sessionUser = session('user');
@@ -160,10 +144,22 @@
                         // remove any leftover offcanvas backdrop elements and related body classes
                         try {
                             document.querySelectorAll('.offcanvas-backdrop').forEach(function (el) { el.parentNode && el.parentNode.removeChild(el); });
+                            document.querySelectorAll('.modal-backdrop').forEach(function (el) { el.parentNode && el.parentNode.removeChild(el); });
                             document.body.classList.remove('offcanvas-backdrop');
                             document.body.classList.remove('modal-open');
+                            // Bootstrap may also apply inline scroll locks.
+                            document.body.style.overflow = '';
+                            document.body.style.paddingRight = '';
                         } catch (e) { }
                     }
+
+                    // When returning via browser back/forward cache, DOMContentLoaded won't re-run.
+                    // Ensure any stale scroll locks/backdrops are removed so the page scrolls.
+                    window.addEventListener('pageshow', function () {
+                        cleanupBackdrop();
+                        clearBodyOpen();
+                        showToggle();
+                    });
 
                     var hideToggle = function () {
                         toggle.classList.add('cc-toggle-hidden');

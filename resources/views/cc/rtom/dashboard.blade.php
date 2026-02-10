@@ -165,7 +165,6 @@
 </div>
 
 @push('scripts')
-<script nonce="{{ $cspNonce ?? '' }}" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script nonce="{{ $cspNonce ?? '' }}">
 let callerProfitChart = null; // Global variable to hold the chart instance
 

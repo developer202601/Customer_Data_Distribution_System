@@ -33,7 +33,7 @@
                         @php
                         $recallDisabled = $acceptedAssignments->isNotEmpty() || !empty($hasInteractions);
                         @endphp
-                        <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4">Download Excel</a>
+                        <a id="cc-report-download" href="{{ route('cc.reports.download', $selectedReport->id) }}" class="btn btn-outline-secondary rounded-pill px-4" download data-loader-off="1">Download Excel</a>
                         @if(($anyAssigned ?? false) && !($recallDisabled))
                         <!-- Recall modal trigger -->
                         <button type="button" class="btn btn-outline-warning rounded-pill px-3" id="cc-recall-open-btn"
@@ -870,8 +870,5 @@
                 pointer-events: none;
             }
         </style>
-        <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-        <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
         <script src="/js/cc-user-select2.js"></script>
         @endpush

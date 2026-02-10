@@ -1,10 +1,17 @@
 import './bootstrap';
+
+import jQuery from 'jquery';
+window.$ = window.jQuery = jQuery;
+
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import * as bootstrap from 'bootstrap';
 // Ensure legacy inline scripts can access bootstrap via `window.bootstrap`
 window.bootstrap = bootstrap;
 import 'admin-lte/dist/js/adminlte.min.js';
-import 'jquery/dist/jquery.min.js';
+import 'select2';
+import 'select2/dist/css/select2.css';
+import Chart from 'chart.js/auto';
+window.Chart = Chart;
 
 document.addEventListener('DOMContentLoaded', () => {
   // Theme handling preserved

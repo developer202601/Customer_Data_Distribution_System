@@ -23,7 +23,14 @@
                         <label class="form-label">RTOM</label>
                         <select name="rtom" class="form-select">
                             @foreach($rtoms as $r)
-                                <option value="{{ $r }}" {{ (old('rtom') ?: str_replace('rtom_','', $user->assignment)) === $r ? 'selected' : '' }}>{{ $r }}</option>
+                                @php
+                                    $currentKey = str_replace('rtom_', '', (string) $user->assignment);
+                                    $oldKey = old('rtom') !== null
+                                        ? preg_replace('/\s+/', '_', strtolower((string) old('rtom')))
+                                        : null;
+                                    $optionKey = preg_replace('/\s+/', '_', strtolower((string) $r));
+                                @endphp
+                                <option value="{{ $r }}" {{ ($oldKey ?? $currentKey) === $optionKey ? 'selected' : '' }}>{{ $r }}</option>
                             @endforeach
                         </select>
                     </div>

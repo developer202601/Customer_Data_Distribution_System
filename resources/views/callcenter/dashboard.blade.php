@@ -222,15 +222,6 @@
             setCCViewMode('month');
         });
 
-        // Caller 7-day chart logic
-        function ensureChartJsLoaded(cb) {
-            if (typeof Chart !== 'undefined') return cb();
-            var s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-            s.onload = cb;
-            document.head.appendChild(s);
-        }
-
         let callerChartInstance = null;
         document.addEventListener('DOMContentLoaded', function () {
             const modalEl = document.getElementById('callerChartModal');
@@ -249,30 +240,28 @@
                         const bs = new bootstrap.Modal(modalEl);
                         function onShown() {
                             try {
-                                ensureChartJsLoaded(function () {
-                                    if (callerChartInstance) callerChartInstance.destroy();
-                                    callerChartInstance = new Chart(ctx, {
-                                        type: 'bar',
-                                        data: {
-                                            labels: payload.labels || [],
-                                            datasets: [{
-                                                label: 'Calls',
-                                                data: payload.data || [],
-                                                backgroundColor: 'rgba(54,162,235,0.9)',
-                                                borderRadius: 4
-                                            }]
+                                if (callerChartInstance) callerChartInstance.destroy();
+                                callerChartInstance = new Chart(ctx, {
+                                    type: 'bar',
+                                    data: {
+                                        labels: payload.labels || [],
+                                        datasets: [{
+                                            label: 'Calls',
+                                            data: payload.data || [],
+                                            backgroundColor: 'rgba(54,162,235,0.9)',
+                                            borderRadius: 4
+                                        }]
+                                    },
+                                    options: {
+                                        animation: false,
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        scales: {
+                                            x: { grid: { display: false }, ticks: { color: '#666' } },
+                                            y: { grid: { display: false }, beginAtZero: true, ticks: { stepSize: 1, color: '#666' } }
                                         },
-                                        options: {
-                                            animation: false,
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            scales: {
-                                                x: { grid: { display: false }, ticks: { color: '#666' } },
-                                                y: { grid: { display: false }, beginAtZero: true, ticks: { stepSize: 1, color: '#666' } }
-                                            },
-                                            plugins: { legend: { display: false } }
-                                        }
-                                    });
+                                        plugins: { legend: { display: false } }
+                                    }
                                 });
                             } catch (e) {
                                 console.error(e);

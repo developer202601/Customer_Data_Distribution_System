@@ -54,18 +54,15 @@ class SecurityHeaders
             $scriptSrc = array_merge([
                 "'self'",
                 "'nonce-{$cspNonce}'",
-                'https://cdn.jsdelivr.net',
             ], $viteHosts);
 
             $styleSrc = array_merge([
                 "'self'",
                 "'nonce-{$cspNonce}'",
-                'https://cdn.jsdelivr.net',
             ], $viteHosts);
 
             $connectSrc = array_merge([
                 "'self'",
-                'https://cdn.jsdelivr.net',
             ], array_merge($viteHosts, $viteWsHosts));
 
             $csp = [

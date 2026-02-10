@@ -42,24 +42,6 @@
     </div>
     <!-- ./wrapper -->
 
-    <!-- Bootstrap fallback (loads if app bundle doesn't provide it) -->
-    <script nonce="{{ $cspNonce ?? '' }}">
-        // If Bootstrap's JS isn't present (e.g., dev assets not running), load from CDN.
-        (function () {
-            function loadScript(src, cb) {
-                var s = document.createElement('script'); s.src = src; s.async = true; s.onload = cb; document.head.appendChild(s);
-            }
-            if (typeof window.bootstrap === 'undefined') {
-                // Use a reasonably recent Bootstrap 5 bundle from jsDelivr
-                loadScript('https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js', function () {
-                    console.log('Bootstrap fallback loaded from CDN');
-                });
-            } else {
-                console.log('Bootstrap already available');
-            }
-        })();
-    </script>
-
     @stack('scripts')
 </body>
 

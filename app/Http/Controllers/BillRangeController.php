@@ -67,7 +67,9 @@ class BillRangeController extends Controller
             logger()->error('Failed to record configuration change: ' . $e->getMessage());
         }
 
-        return redirect()->route('admin.config')->with('success', 'Bill range saved successfully.');
+        return redirect()
+            ->route('admin.config', ['tab' => $request->input('tab', 'latest-bill-range')])
+            ->with('success', 'Bill range saved successfully.');
     }
 
 
@@ -148,6 +150,8 @@ class BillRangeController extends Controller
             logger()->error('Failed to record configuration change: ' . $e->getMessage());
         }
 
-        return redirect()->route('admin.config')->with('success', 'staff saved successfully.');
+        return redirect()
+            ->route('admin.config', ['tab' => $request->input('tab', 'bill-arears-quota')])
+            ->with('success', 'staff saved successfully.');
     }
 }

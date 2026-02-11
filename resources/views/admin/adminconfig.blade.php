@@ -27,9 +27,10 @@
                 </div>
 
                 <div class="admin-config-right">
-                    <form action="{{ route('configurations.billrange') }}" method="POST" class="card shadow-sm border-0" novalidate>
+                        <form action="{{ route('configurations.billrange') }}" method="POST" class="card shadow-sm border-0" novalidate>
                             @csrf
                             @method('post')
+                            <input type="hidden" name="tab" value="latest-bill-range" />
                         <div class="admin-config-form is-active bill_range-config" data-config-block="latest-bill-range">
                             <div class="card-body config-card">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
@@ -56,7 +57,7 @@
                                 </div>
 
 
-                                <button type="submit" class="btn btn-primary px-4 range_btn">Save</button>
+                                <button type="submit" class="btn btn-primary px-4 admin-config-save-btn">Save</button>
                             </div>
                         </div>
                     </form>
@@ -64,6 +65,7 @@
                     <form action="{{ route('configurations.billarears') }}" method="POST" class="card shadow-sm border-0">
                         @csrf
                         @method('post')
+                        <input type="hidden" name="tab" value="bill-arears-quota" />
                         <div class="admin-config-form" data-config-block="bill-arears-quota">
                             <div class="card-body config-card">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
@@ -94,7 +96,7 @@
                                     <input type="text" name="s" id="staff" value="{{ $configs['s']->value ?? '' }}" placeholder="Enter Staff" />
                                 </div>
 
-                                <button type="submit" class="btn btn-primary px-4">Save</button>
+                                <button type="submit" class="btn btn-primary px-4 admin-config-save-btn">Save</button>
                             </div>
                         </div>
                     </form>
@@ -105,18 +107,23 @@
 
                             <div class="user-account-panel">
                                 <div class="user-account-add">
-                                    <input type="text" id="user-account-input" class="user-acc-input" placeholder="Enter name or id" />
-                                    <button type="button" class="user-account-add-btn">Add</button>
+                                    <input type="text" id="user-account-input" class="user-acc-input" placeholder="Enter 6-digit ID" inputmode="numeric" autocomplete="off" />
+                                    <button type="button" class="btn btn-primary user-account-add-btn">Add</button>
                                 </div>
 
                                 <div class="user-account-list" aria-live="polite">
                                     @foreach($users as $user)
-                                    <div class="user-account-item" data-user-id="{{ $user->id }}" data-blocked="{{ $user->status ? 'false' : 'true' }}">
-                                        <div class="user-account-item-label">{{ $user->name ?? $user->username }}</div>
+                                    <div class="user-account-item" data-user-id="{{ $user->id }}" data-username="{{ $user->username }}" data-blocked="{{ $user->status ? 'false' : 'true' }}">
+                                        <div class="user-account-item-label">
+                                            <span class="user-account-display-name">{{ $user->name ?? $user->username }}</span>
+                                            <span class="user-account-username text-muted small">({{ $user->username }})</span>
+                                        </div>
                                         <div class="user-account-item-controls">
-                                            <button type="button" class="user-account-item-edit">Edit</button>
-                                            <button type="button" class="user-account-item-block">{{ $user->status ? 'Block' : 'Unblock' }}</button>
-                                            <button type="button" class="user-account-item-remove" aria-label="Remove">×</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill user-account-item-edit">Edit</button>
+                                            <button type="button" class="btn btn-sm rounded-pill user-account-item-block {{ $user->status ? 'btn-warning' : 'btn-success' }}">{{ $user->status ? 'Block' : 'Unblock' }}</button>
+                                            @if(empty($user->has_generated_reports))
+                                            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill user-account-item-remove">Delete</button>
+                                            @endif
                                         </div>
                                     </div>
                                     @endforeach
@@ -124,7 +131,6 @@
 
                                 <div class="user-account-actions">
                                     <div class="user-account-save-status" aria-live="polite"></div>
-                                    <button type="button" class="user-account-save-btn">Save</button>
                                 </div>
                             </div>
                         </div>
@@ -137,6 +143,46 @@
     </div>
 </div>
 </div>
+
+<!-- Edit display name modal (replaces browser prompt so it doesn't show "localhost says") -->
+<div class="modal fade" id="adminUserEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit display name</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <label for="adminUserEditInput" class="form-label">Display name</label>
+                <input id="adminUserEditInput" type="text" class="form-control" maxlength="255" />
+                <div class="form-text text-muted">Username will not change.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="adminUserEditSave">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete user modal (replaces browser confirm so it doesn't show "localhost says") -->
+<div class="modal fade" id="adminUserDisableModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete user</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Are you sure you want to delete this user?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="adminUserDisableConfirm">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection  
 
 <style nonce="{{ $cspNonce ?? '' }}">
@@ -145,13 +191,8 @@
         color: black;
     }
 
-    .range_btn{
+    .admin-config-save-btn{
         justify-content: center;
-        margin-left: 170px;
-        margin-top: 30px;
-    }
-
-    .config-card .btn{
         margin-left: 170px;
         margin-top: 30px;
     }
@@ -175,30 +216,9 @@
         font-weight: 600;
     }
 
-    .user-account-item-controls .user-account-item-edit{
-        background: #00b4eb;   
-    }
+    
 
-    .user-account-item-controls .user-account-item-edit:hover{
-        background: #33c9ff;   
-    }
-
-    .user-account-item-controls .user-account-item-block{
-        background: red;    
-    }
-
-    .user-account-item-controls .user-account-item-block:hover{
-        background: #ff4c4c;
-
-    }
-
-    .user-account-add button{
-        background: #11760a;
-    }
-
-    .user-account-add button:hover{
-        background: #15940c;
-    }
+    
 
 
     .config-bill-areas{
@@ -334,15 +354,15 @@
 
     .admin-config-form.is-active {
         display: flex;
-        background: rgba(17, 118, 10, 0.08);
-        border-color: #11760a;
-        box-shadow: 0 18px 32px rgba(17, 118, 10, 0.18);
+        background: var(--surface-card);
+        border-color: var(--surface-border);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.06);
     }
 
     .admin-config-visual-panel {
         background-color: transparent;
         color: var(--text-primary);
-        border-right: 1px solid var(--surface-border);
+        border-right: none;
     }
 
     .admin-config-visual-inner {
@@ -373,7 +393,7 @@
     .admin-config-field input {
         flex: 1;
         padding: 8px 25px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--bs-border-color, #dee2e6);
         border-radius: 10px;
     }
 
@@ -397,14 +417,14 @@
 
     .admin-config-hint {
         margin: 0 0 16px 0;
-        color: #11760a;
+        color: var(--bs-body-color, #212529);
         font-size: 15px;
-        font-weight: 700;
+        font-weight: 600;
         text-align: center;
-        background: rgba(17, 118, 10, 0.04);
+        background: var(--bs-secondary-bg-subtle, #f8f9fa);
         padding: 10px 14px;
         border-radius: 8px;
-        border: 1px solid rgba(17, 118, 10, 0.08);
+        border: 1px solid var(--bs-border-color, #dee2e6);
     }
 
     /* User account list styles (matches attachment) */
@@ -458,17 +478,10 @@
         display: flex;
         gap: 8px;
         align-items: center;
+        margin-left: auto;
     }
 
-    .user-account-item-edit,
-    .user-account-item-block {
-        padding: 6px 10px;
-        border-radius: 6px;
-        border: 1px solid var(--surface-border);
-        background: white;
-        cursor: pointer;
-        font-size: 13px;
-    }
+    
 
     .user-account-item.blocked {
         opacity: 0.6;
@@ -480,29 +493,9 @@
         margin-bottom: 0;
     }
 
-    .user-account-item-remove {
-        background: transparent;
-        border: none;
-        font-size: 18px;
-        line-height: 1;
-        cursor: pointer;
-        color: #333;
-    }
+    
 
-    .user-account-save-btn {
-        padding: 8px 14px;
-        border-radius: 6px;
-        border: 1px solid #11760a;
-        background: #11760a;
-        color: white;
-        cursor: pointer;
-        font-weight: 600;
-    }
-
-    .user-account-save-btn:disabled {
-        opacity: 0.6;
-        cursor: default;
-    }
+    
 
     /* Center save area in user account panel */
     .user-account-actions {
@@ -537,8 +530,8 @@
 
     .config-btn-range {
         padding: 10px 40px;
-        background: #11760a;
-        color: white;
+        background: var(--bs-primary, #0d6efd);
+        color: #fff;
         border: none;
         border-radius: 50px;
         cursor: pointer;
@@ -548,7 +541,7 @@
     }
 
     .config-btn-range:hover {
-        background: #15940c;
+        background: rgba(var(--bs-primary-rgb, 13, 110, 253), 0.9);
     }
 
     /* ============================
@@ -674,6 +667,16 @@
         var buttons = document.querySelectorAll('.admin-config-btn[data-config-target]');
         var blocks = document.querySelectorAll('.admin-config-form[data-config-block]');
 
+        function setTabInUrl(target) {
+            try {
+                var url = new URL(window.location.href);
+                url.searchParams.set('tab', target);
+                window.history.replaceState({}, '', url.toString());
+            } catch (e) {
+                // ignore
+            }
+        }
+
         function activate(target) {
             if (!target) {
                 return;
@@ -688,6 +691,8 @@
                 var matches = block.getAttribute('data-config-block') === target;
                 block.classList.toggle('is-active', matches);
             });
+
+            setTabInUrl(target);
         }
 
         buttons.forEach(function(button) {
@@ -695,6 +700,21 @@
                 activate(button.getAttribute('data-config-target'));
             });
         });
+
+        var urlTab = null;
+        try {
+            urlTab = new URLSearchParams(window.location.search).get('tab');
+        } catch (e) {
+            urlTab = null;
+        }
+
+        var oldTab = @json(old('tab'));
+        var initialTarget = urlTab || oldTab || null;
+
+        if (initialTarget) {
+            activate(initialTarget);
+            return;
+        }
 
         var initialButton = document.querySelector('.admin-config-btn.is-active');
         if (initialButton) {
@@ -709,72 +729,187 @@
         var addBtn = document.querySelector('.user-account-add-btn');
         var input = document.getElementById('user-account-input');
         var list = document.querySelector('.user-account-list');
+        var saveStatus = document.querySelector('.user-account-save-status');
+
+        var editModalEl = document.getElementById('adminUserEditModal');
+        var editInputEl = document.getElementById('adminUserEditInput');
+        var editSaveBtn = document.getElementById('adminUserEditSave');
+        var editModal = (window.bootstrap && editModalEl) ? new bootstrap.Modal(editModalEl) : null;
+        var editingRow = null;
+        var editingLabelEl = null;
+
+        var disableModalEl = document.getElementById('adminUserDisableModal');
+        var disableConfirmBtn = document.getElementById('adminUserDisableConfirm');
+        var disableModal = (window.bootstrap && disableModalEl) ? new bootstrap.Modal(disableModalEl) : null;
+        var disablingRow = null;
 
         function escapeHtml(str) {
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         if (addBtn && input && list) {
-            function createItem(label, id) {
+            function setSaveStatus(message) {
+                if (saveStatus) saveStatus.textContent = message || '';
+            }
+
+            function normalizeUsername(val) {
+                return String(val || '').trim();
+            }
+
+            function isSixDigitUsername(val) {
+                return /^\d{6}$/.test(val);
+            }
+
+            function cssEscape(val) {
+                if (window.CSS && typeof window.CSS.escape === 'function') {
+                    return window.CSS.escape(val);
+                }
+                return String(val).replace(/[^a-zA-Z0-9_\-]/g, function (ch) {
+                    return '\\' + ch;
+                });
+            }
+
+            function hasUsernameInList(username) {
+                var needle = normalizeUsername(username);
+                if (!needle) return false;
+                return !!list.querySelector('.user-account-item[data-username="' + cssEscape(needle) + '"]');
+            }
+
+            function createItem(user) {
                 var item = document.createElement('div');
                 item.className = 'user-account-item';
-                if (id) item.setAttribute('data-user-id', id);
-                item.setAttribute('data-blocked', 'false');
-                item.innerHTML = '<div class="user-account-item-label">' + escapeHtml(label) + '</div>' +
+                item.setAttribute('data-user-id', user.id);
+                item.setAttribute('data-username', user.username);
+                item.setAttribute('data-blocked', user.status ? 'false' : 'true');
+                item.innerHTML = '<div class="user-account-item-label">' +
+                    '<span class="user-account-display-name">' + escapeHtml(user.name || user.username) + '</span>' +
+                    '<span class="user-account-username text-muted small">(' + escapeHtml(user.username) + ')</span>' +
+                    '</div>' +
                     '<div class="user-account-item-controls">' +
-                    '<button type="button" class="user-account-item-edit">Edit</button>' +
-                    '<button type="button" class="user-account-item-block">Block</button>' +
-                    '<button type="button" class="user-account-item-remove" aria-label="Remove">×</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-secondary rounded-pill user-account-item-edit">Edit</button>' +
+                    '<button type="button" class="btn btn-sm rounded-pill user-account-item-block ' + (user.status ? 'btn-warning' : 'btn-success') + '">' + (user.status ? 'Block' : 'Unblock') + '</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger rounded-pill user-account-item-remove">Delete</button>' +
                     '</div>';
                 return item;
             }
 
             addBtn.addEventListener('click', function() {
-                var val = input.value.trim();
+                var val = normalizeUsername(input.value);
                 if (!val) return;
-                var id = Date.now();
-                var item = createItem(val, id);
-                list.appendChild(item);
+
+                if (!isSixDigitUsername(val)) {
+                    setSaveStatus('Please enter a 6-digit ID');
+                    input.focus();
+                    return;
+                }
+
+                if (hasUsernameInList(val)) {
+                    setSaveStatus('This ID is already added');
+                    input.select();
+                    return;
+                }
+
+                addBtn.disabled = true;
+                setSaveStatus('Adding...');
+
+                fetch('/admin/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({ username: val })
+                })
+                .then(async function (response) {
+                    var payload = null;
+                    try { payload = await response.json(); } catch (e) { payload = null; }
+                    if (!response.ok) {
+                        var message = 'Failed to add user';
+                        if (payload && payload.errors && payload.errors.username && payload.errors.username.length) {
+                            message = payload.errors.username[0];
+                        }
+                        throw new Error(message);
+                    }
+                    return payload;
+                })
+                .then(function (data) {
+                    if (!data || !data.success || !data.user) {
+                        throw new Error('Failed to add user');
+                    }
+
+                    if (hasUsernameInList(data.user.username)) {
+                        setSaveStatus('This ID is already added');
+                        return;
+                    }
+
+                    var item = createItem(data.user);
+                    list.appendChild(item);
+                    setSaveStatus('Added');
+                    setTimeout(function () { setSaveStatus(''); }, 1500);
+                })
+                .catch(function (error) {
+                    console.error('Error:', error);
+                    setSaveStatus(error && error.message ? error.message : 'Failed to add user');
+                })
+                .finally(function () {
+                    addBtn.disabled = false;
+                });
+
                 input.value = '';
                 input.focus();
             });
 
             list.addEventListener('click', function(e) {
                 var target = e.target;
-                if (target.classList.contains('user-account-item-remove')) {
-                    var row = target.closest('.user-account-item');
-                    if (row) row.remove();
-                    return;
-                }
 
                 if (target.classList.contains('user-account-item-edit')) {
                     var row = target.closest('.user-account-item');
                     if (!row) return;
-                    var userId = row.getAttribute('data-user-id');
                     var labelEl = row.querySelector('.user-account-item-label');
-                    var current = labelEl ? labelEl.textContent.trim() : '';
-                    var newVal = prompt('Edit user name', current);
-                    if (newVal !== null && newVal.trim() !== current) {
-                        fetch('/admin/users/' + userId + '/name', {
-                            method: 'PUT',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                            },
-                            body: JSON.stringify({ name: newVal.trim() })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                labelEl.textContent = newVal.trim();
-                            } else {
-                                alert('Failed to update user name');
+                    var nameEl = row.querySelector('.user-account-display-name');
+                    var current = nameEl ? nameEl.textContent.trim() : '';
+
+                    editingRow = row;
+                    editingLabelEl = nameEl || labelEl;
+                    if (editInputEl) editInputEl.value = current;
+
+                    if (editModal) {
+                        editModal.show();
+                        setTimeout(function () { try { editInputEl && editInputEl.focus(); } catch (e) {} }, 150);
+                    } else {
+                        // Fallback (if bootstrap missing) - keep behavior functional
+                        var newVal = prompt('Edit display name', current);
+                        if (newVal !== null) {
+                            var trimmed = newVal.trim();
+                            if (trimmed && trimmed !== current) {
+                                // mimic modal save behavior
+                                if (row.getAttribute('data-local-only') === '1') {
+                                    if (labelEl) labelEl.textContent = trimmed;
+                                } else {
+                                    var userId = row.getAttribute('data-user-id');
+                                    fetch('/admin/users/' + userId + '/name', {
+                                        method: 'PUT',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                                        },
+                                        body: JSON.stringify({ name: trimmed })
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success) {
+                                            if (labelEl) labelEl.textContent = trimmed;
+                                        } else {
+                                            alert('Failed to update display name');
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error:', error);
+                                        alert('Error updating display name');
+                                    });
+                                }
                             }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            alert('Error updating user name');
-                        });
+                        }
                     }
                     return;
                 }
@@ -784,6 +919,16 @@
                     if (!row) return;
                     var userId = row.getAttribute('data-user-id');
                     var blocked = !row.classList.contains('blocked');
+
+                    if (row.getAttribute('data-local-only') === '1') {
+                        row.classList.toggle('blocked');
+                        row.setAttribute('data-blocked', blocked ? 'true' : 'false');
+                        target.textContent = blocked ? 'Unblock' : 'Block';
+                        target.classList.remove('btn-warning', 'btn-success');
+                        target.classList.add(blocked ? 'btn-success' : 'btn-warning');
+                        return;
+                    }
+
                     fetch('/admin/users/' + userId + '/status', {
                         method: 'PUT',
                         headers: {
@@ -798,6 +943,8 @@
                             row.classList.toggle('blocked');
                             row.setAttribute('data-blocked', blocked ? 'true' : 'false');
                             target.textContent = blocked ? 'Unblock' : 'Block';
+                            target.classList.remove('btn-warning', 'btn-success');
+                            target.classList.add(blocked ? 'btn-success' : 'btn-warning');
                         } else {
                             alert('Failed to update user status');
                         }
@@ -813,61 +960,118 @@
                     var row = target.closest('.user-account-item');
                     if (!row) return;
                     var userId = row.getAttribute('data-user-id');
-                    if (confirm('Are you sure you want to disable this user?')) {
-                        fetch('/admin/users/' + userId, {
-                            method: 'DELETE',
-                            headers: {
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                            }
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                row.remove();
-                            } else {
-                                alert('Failed to disable user');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            alert('Error disabling user');
-                        });
+
+                    if (row.getAttribute('data-local-only') === '1') {
+                        row.remove();
+                        return;
+                    }
+
+                    disablingRow = row;
+                    if (disableModal) {
+                        disableModal.show();
+                    } else {
+                        // Fallback if bootstrap missing
+                        if (confirm('Are you sure you want to disable this user?')) {
+                            fetch('/admin/users/' + userId, {
+                                method: 'DELETE',
+                                headers: {
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                                }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    row.remove();
+                                } else {
+                                    alert('Failed to disable user');
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                alert('Error disabling user');
+                            });
+                        }
                     }
                     return;
                 }
             });
         }
-        // Save button handler: collect current list and show saved status (client-side)
-        var saveBtn = document.querySelector('.user-account-save-btn');
-        var saveStatus = document.querySelector('.user-account-save-status');
-        if (saveBtn && list) {
-            saveBtn.addEventListener('click', function() {
-                var rows = list.querySelectorAll('.user-account-item');
-                var data = [];
-                rows.forEach(function(r) {
-                    var label = r.querySelector('.user-account-item-label')?.textContent.trim() || '';
-                    var id = r.getAttribute('data-user-id') || null;
-                    var blocked = r.getAttribute('data-blocked') === 'true' || r.classList.contains('blocked');
-                    data.push({
-                        id: id,
-                        label: label,
-                        blocked: blocked
-                    });
+
+        if (disableConfirmBtn) {
+            disableConfirmBtn.addEventListener('click', function () {
+                var row = disablingRow;
+                disablingRow = null;
+                if (!row) {
+                    if (disableModal) disableModal.hide();
+                    return;
+                }
+
+                var userId = row.getAttribute('data-user-id');
+                disableConfirmBtn.disabled = true;
+
+                fetch('/admin/users/' + userId, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        row.remove();
+                        if (disableModal) disableModal.hide();
+                    } else {
+                        alert('Failed to disable user');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error disabling user');
+                })
+                .finally(function () {
+                    disableConfirmBtn.disabled = false;
                 });
+            });
+        }
+        if (editSaveBtn && editInputEl && list) {
+            editSaveBtn.addEventListener('click', function () {
+                if (!editingRow || !editingLabelEl) return;
+                var current = editingLabelEl.textContent.trim();
+                var nextVal = String(editInputEl.value || '').trim();
 
-                // simple UI feedback
-                saveBtn.disabled = true;
-                if (saveStatus) saveStatus.textContent = 'Saving...';
+                if (!nextVal || nextVal === current) {
+                    if (editModal) editModal.hide();
+                    return;
+                }
 
-                // simulate save delay
-                setTimeout(function() {
-                    saveBtn.disabled = false;
-                    if (saveStatus) saveStatus.textContent = 'Saved ' + data.length + ' account(s)';
-                    console.log('User accounts saved (client-side):', data);
-                    setTimeout(function() {
-                        if (saveStatus) saveStatus.textContent = '';
-                    }, 2500);
-                }, 600);
+                if (editingRow.getAttribute('data-local-only') === '1') {
+                    editingLabelEl.textContent = nextVal;
+                    if (editModal) editModal.hide();
+                    return;
+                }
+
+                var userId = editingRow.getAttribute('data-user-id');
+                fetch('/admin/users/' + userId + '/name', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({ name: nextVal })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (editingLabelEl) editingLabelEl.textContent = nextVal;
+                        if (editModal) editModal.hide();
+                    } else {
+                        alert('Failed to update display name');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error updating display name');
+                });
             });
         }
     });

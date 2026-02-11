@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Configurations;
+use App\Models\DatasetExport;
+use App\Models\MasterDatasetProcess;
 use App\Models\User;
+use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
@@ -21,10 +24,39 @@ class AdminController extends Controller
         $staffUpdated = $this->latestMeta($configs, ['ccs', 'cc', 's']);
 
         // Fetch master system users (excluding call center users)
-        $users = User::where('system', '!=', 'cc')
-            ->orWhereNull('system')
+        $users = User::where(function ($q) {
+                $q->where('system', '!=', 'cc')
+                    ->orWhereNull('system');
+            })
+            ->where('admin_prev', false)
             ->orderBy('username')
             ->get();
+
+        $userIds = $users->pluck('id')->filter()->values();
+        $processUserIds = $userIds->isEmpty()
+            ? collect()
+            : MasterDatasetProcess::query()
+                ->whereIn('user_id', $userIds)
+                ->whereNotNull('user_id')
+                ->distinct()
+                ->pluck('user_id');
+
+        $exportUserIds = $userIds->isEmpty()
+            ? collect()
+            : DatasetExport::query()
+                ->whereIn('user_id', $userIds)
+                ->whereNotNull('user_id')
+                ->distinct()
+                ->pluck('user_id');
+
+        $usersWithReports = $processUserIds
+            ->merge($exportUserIds)
+            ->unique()
+            ->flip();
+
+        $users->each(function (User $u) use ($usersWithReports) {
+            $u->setAttribute('has_generated_reports', $usersWithReports->has($u->id));
+        });
 
         return view('admin/adminconfig', [
             'configs' => $configs,
@@ -73,9 +105,65 @@ class AdminController extends Controller
 
     public function deleteUser(User $user)
     {
-        // Instead of deleting, set status to false
-        $user->update(['status' => false]);
+        $hasGeneratedReports = MasterDatasetProcess::query()
+            ->where('user_id', $user->id)
+            ->exists()
+            || DatasetExport::query()
+                ->where('user_id', $user->id)
+                ->exists();
+
+        if ($hasGeneratedReports) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This user has generated reports and cannot be deleted.',
+            ], 422);
+        }
+
+        try {
+            $user->delete();
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete user.',
+            ], 500);
+        }
 
         return response()->json(['success' => true]);
+    }
+
+    public function createUser(Request $request)
+    {
+        $validated = $request->validate([
+            'username' => [
+                'required',
+                'string',
+                'regex:/^\d{6}$/',
+                Rule::unique('users', 'username'),
+            ],
+        ]);
+
+        $user = User::create([
+            'username' => $validated['username'],
+            'name' => null,
+            'admin_prev' => false,
+            // Match existing master system rows.
+            'system' => 'master',
+            'fixed' => false,
+            'status' => true,
+            'created_at' => now(),
+        ]);
+
+        $user->setAttribute('has_generated_reports', false);
+
+        return response()->json([
+            'success' => true,
+            'user' => [
+                'id' => $user->id,
+                'username' => $user->username,
+                'name' => $user->name,
+                'status' => (bool) $user->status,
+                'has_generated_reports' => false,
+            ],
+        ]);
     }
 }

@@ -48,12 +48,12 @@
 
                                 <div class="admin-config-field">
                                     <label class="bill-upper" for="upper_range">Upper Range :</label>
-                                    <input type="number" min="0" name="upper_range" id="upper_range" value="{{ $configs['upper_range']->value ?? '' }}" placeholder="Current value" required />
+                                    <input type="number" class="admin-config-input" min="0" name="upper_range" id="upper_range" value="{{ $configs['upper_range']->value ?? '' }}" placeholder="Current value" required />
                                 </div>
 
                                 <div class="admin-config-field">
                                     <label class="bill-lower" for="lower_range">Lower Range :</label>
-                                    <input type="number" min="0" name="lower_range" id="lower_range" value="{{ $configs['lower_range']->value ?? '' }}" placeholder="Current value" required />
+                                    <input type="number" class="admin-config-input" min="0" name="lower_range" id="lower_range" value="{{ $configs['lower_range']->value ?? '' }}" placeholder="Current value" required />
                                 </div>
 
 
@@ -83,17 +83,17 @@
 
                                 <div class="admin-config-field admin_config_staff">
                                     <label for="call-centre-staff" class="config-bill-areas">Call Centre Staff :</label>
-                                    <input type="text" name="ccs" id="call-centre-staff" value="{{ $configs['ccs']->value ?? '' }}" placeholder="Enter Call Centre Staff" />
+                                    <input type="text" class="admin-config-input" name="ccs" id="call-centre-staff" value="{{ $configs['ccs']->value ?? '' }}" placeholder="Enter Call Centre Staff" />
                                 </div>
 
                                 <div class="admin-config-field admin_config_staff">
                                     <label for="call-centre" class="config-bill-areas">Call Centre :</label>
-                                    <input type="text" name="cc" id="call-centre" value="{{ $configs['cc']->value ?? '' }}" placeholder="Enter Call Centre" />
+                                    <input type="text" class="admin-config-input" name="cc" id="call-centre" value="{{ $configs['cc']->value ?? '' }}" placeholder="Enter Call Centre" />
                                 </div>
 
                                 <div class="admin-config-field  admin_config_staff">
                                     <label for="staff" class="config-bill-areas">Staff :</label>
-                                    <input type="text" name="s" id="staff" value="{{ $configs['s']->value ?? '' }}" placeholder="Enter Staff" />
+                                    <input type="text" class="admin-config-input" name="s" id="staff" value="{{ $configs['s']->value ?? '' }}" placeholder="Enter Staff" />
                                 </div>
 
                                 <button type="submit" class="btn btn-primary px-4 admin-config-save-btn">Save</button>
@@ -107,7 +107,7 @@
 
                             <div class="user-account-panel">
                                 <div class="user-account-add">
-                                    <input type="text" id="user-account-input" class="user-acc-input" placeholder="Enter 6-digit ID" inputmode="numeric" autocomplete="off" />
+                                    <input type="text" id="user-account-input" class="user-acc-input admin-config-input" placeholder="Enter 6-digit ID" inputmode="numeric" autocomplete="off" />
                                     <button type="button" class="btn btn-primary user-account-add-btn">Add</button>
                                 </div>
 

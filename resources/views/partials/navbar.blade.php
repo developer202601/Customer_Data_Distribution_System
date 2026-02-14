@@ -20,6 +20,9 @@
             @endforeach
         </ul>
         <div class="ms-auto d-flex align-items-center" style="gap: 1rem;">
+            <span class="text-warning small d-none d-xl-inline-block" style="font-size: 0.75rem; font-weight: 500;">
+                <i class="fas fa-exclamation-triangle me-1"></i> Dark mode is experimental
+            </span>
             <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme" data-theme="light">
                 <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
                 <span class="theme-toggle__icon theme-toggle__icon--moon">☾</span>

@@ -14,13 +14,25 @@ use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
-    public function index(): View
+    public function index()
     {
         $sessionUser = session('user');
         $assignment = $sessionUser['assignment'] ?? null;
         
-        // Only super admins can access the overview dashboard
+        // Redirect non-super users to their respective dashboards
         if ($assignment !== 'super') {
+            if ($assignment && str_starts_with($assignment, 'caller_')) {
+                return redirect()->route('cc.assignments.list');
+            }
+            if ($assignment && str_starts_with($assignment, 'supervisor_')) {
+                return redirect()->route('cc.supervisor.dashboard');
+            }
+            if ($assignment && str_starts_with($assignment, 'rtom_')) {
+                return redirect()->route('cc.rtom.dashboard');
+            }
+            if ($assignment) {
+                return redirect()->route('cc.region.dashboard');
+            }
             abort(403, 'Only super admins can access the overview dashboard.');
         }
 

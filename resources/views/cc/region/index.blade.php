@@ -103,9 +103,17 @@
                     </div>
 
                     <!-- Hidden forms used by JS to submit disable/delete actions -->
-                    <form id="cc-disable-form" method="post" style="display:none">@csrf @method('put')</form>
-                    <form id="cc-enable-form" method="post" style="display:none">@csrf @method('put')</form>
-                    <form id="cc-delete-form" method="post" style="display:none">@csrf @method('delete')</form>
+                    <form id="cc-disable-form" method="post" style="display:none">
+                        @csrf 
+                        @method('put')
+                        <input type="hidden" name="return_to" value="{{ route('cc.region.index') }}">
+                    </form>
+                    <form id="cc-enable-form" method="post" style="display:none">
+                        @csrf 
+                        @method('put')
+                        <input type="hidden" name="return_to" value="{{ route('cc.region.index') }}">
+                    </form>
+                    <form id="cc-delete-form" method="post" style="display:none">
 
                 @push('scripts')
                 <script nonce="{{ $cspNonce ?? '' }}">
@@ -158,14 +166,31 @@
                     if (disableConfirmBtn) {
                         disableConfirmBtn.addEventListener('click', () => {
                             if (!pendingAction) return;
-                            if (pendingAction.indexOf('/enable') !== -1 && enableForm) {
-                                enableForm.action = pendingAction;
-                                disableModal?.hide();
-                                enableForm.submit();
-                            } else if (disableForm) {
-                                disableForm.action = pendingAction;
-                                disableModal?.hide();
-                                disableForm.submit();
+                            
+                            // Check if enabling or disabling based on pendingAction (if necessary)
+                            // However, we rely on the forms. If enableForm is involved, we set its action.
+                            
+                            // But wait! The existing logic below sets pendingAction -> form.action
+                            // and then submits.
+                            // The problem is that the "enable" button's data-action points to users.enable route
+                            // and the "disable" button points to users.disable route.
+                            // The backend UserController::disable/enable methods ALREADY support `return_to`.
+                            // So adding the hidden input to the form ABOVE is correct.
+                            // But the JS logic below was slightly messy with `enableForm` vs `disableForm`.
+                            // Let's fix that too to be sure.
+
+                            if (pendingAction.indexOf('/enable') !== -1) {
+                                if (enableForm) {
+                                    enableForm.action = pendingAction;
+                                    disableModal?.hide();
+                                    enableForm.submit();
+                                }
+                            } else {
+                                if (disableForm) {
+                                    disableForm.action = pendingAction;
+                                    disableModal?.hide();
+                                    disableForm.submit();
+                                }
                             }
                         });
                     }

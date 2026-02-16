@@ -55,6 +55,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const showLoader = () => loader.classList.remove('page-loader--hidden');
   const hideLoader = () => loader.classList.add('page-loader--hidden');
 
+  // Hide loader when restoring from bfcache (Back/Forward Cache)
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2)) {
+        hideLoader();
+    }
+  });
+
   const setWidths = (value) => {
     if (els.bar) { els.bar.style.width = value + '%'; els.bar.setAttribute('aria-valuenow', String(value)); }
     if (els.line) { els.line.style.width = value + '%'; }

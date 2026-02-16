@@ -146,6 +146,7 @@ class SuperAdminController extends Controller
 
         $request->validate([
             'username' => 'required|string|size:6|unique:users,username',
+            'name' => 'nullable|string|max:255',
             'region' => 'required|string|max:45',
         ]);
 
@@ -173,6 +174,7 @@ class SuperAdminController extends Controller
 
         $user = new User();
         $user->username = $request->input('username');
+        $user->name = $request->input('name');
         $user->system = 'cc';
         $user->admin_prev = 1;
         $user->assignment = $region;

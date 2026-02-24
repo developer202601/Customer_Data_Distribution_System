@@ -170,7 +170,8 @@ class MasterDatasetImporter
      */
     public function processStoredArchive(
         MasterDatasetProcess $process,
-        ?array $userContext = null
+        ?array $userContext = null,
+        bool $skipAssignment = false
     ): MasterDatasetProcess {
         if ($process->status === MasterDatasetProcessStatus::READY) {
             return $process->fresh();
@@ -204,7 +205,7 @@ class MasterDatasetImporter
                 $process->save();
             }
 
-            return $this->ingestWorkbook($process, $process->master_archive_path, $workbookAbsolute, $userContext);
+            return $this->ingestWorkbook($process, $process->master_archive_path, $workbookAbsolute, $userContext, $skipAssignment);
         } catch (Throwable $exception) {
             $process->update([
                 'status' => 'failed',
@@ -229,7 +230,8 @@ class MasterDatasetImporter
         MasterDatasetProcess $process,
         string $zipPath,
         string $workbookAbsolutePath,
-        ?array $userContext
+        ?array $userContext,
+        bool $skipAssignment
     ): MasterDatasetProcess
     {
         $reader = IOFactory::createReader('Xlsx');
@@ -316,7 +318,30 @@ class MasterDatasetImporter
             }
 
             $process->refresh();
-            app(MasterDatasetAssignmentService::class)->assign($process);
+
+            if (! $skipAssignment) {
+                app(MasterDatasetAssignmentService::class)->assign($process);
+
+                // Audit: assignments were created using default configuration.
+                if (! $process->assignment_config_source) {
+                    $defaults = app(MasterDatasetAssignmentConfiguration::class)->toArray();
+                    $normalized = [
+                        'upper_range' => (int) ($defaults['upper_range'] ?? 0),
+                        'lower_range' => (int) ($defaults['lower_range'] ?? 0),
+                        'call_center_staff_quota' => (int) ($defaults['call_center_staff_quota'] ?? 0),
+                        'call_center_quota' => (int) ($defaults['call_center_quota'] ?? 0),
+                        'staff_quota' => (int) ($defaults['staff_quota'] ?? 0),
+                    ];
+
+                    $process->update([
+                        'assignment_config_source' => 'default',
+                        'assignment_config_overrides' => $normalized,
+                        'assignment_config_default_snapshot' => $normalized,
+                        'assignment_config_set_by_user_id' => null,
+                        'assignment_config_set_at' => now(),
+                    ]);
+                }
+            }
 
             $process->update([
                 'row_count' => $statistics['row_count'] ?? 0,

@@ -166,7 +166,7 @@ class ExclusionUploadController extends Controller
             return response()->json([
                 'status' => 'ok',
                 'message' => $message,
-                'redirect_url' => route('process.assignments.index'),
+                'redirect_url' => route('process.confirm.create'),
             ]);
         }
 
@@ -178,7 +178,7 @@ class ExclusionUploadController extends Controller
         }
 
         return redirect()
-            ->route('process.assignments.index')
+            ->route('process.confirm.create')
             ->with('status', $message);
     }
 

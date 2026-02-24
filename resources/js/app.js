@@ -79,10 +79,14 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       setWidths(lastProgress);
     }
-    if (data.status === 'ready' || data.status === 'failed') {
+    if (data.status === 'ready' || data.status === 'failed' || data.redirect_url) {
       clearInterval(pollTimer);
       // Slight delay to allow final UI update before redirect/hide
       setTimeout(() => {
+        if (data.redirect_url) {
+            window.location.href = data.redirect_url;
+            return;
+        }
         if (data.status === 'ready' && readyRedirect) {
           // Avoid redirect loop if already on target
           const targetUrl = readyRedirect;

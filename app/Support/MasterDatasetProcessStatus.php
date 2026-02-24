@@ -15,6 +15,7 @@ class MasterDatasetProcessStatus
     public const RECORDS_INSERTED = 'records_inserted';
     public const EXCLUSIONS_APPLYING = 'exclusions_applying';
     public const EXCLUSIONS_APPLIED = 'exclusions_applied';
+    public const WAITING_CONFIRMATION = 'waiting_confirmation';
     public const VIP_CHECKING = 'vip_checking';
     public const VIP_READY = 'vip_ready';
     public const RETAIL_MICRO_CHECKING = 'retail_micro_checking';
@@ -36,6 +37,7 @@ class MasterDatasetProcessStatus
         self::RECORDS_INSERTED,
         self::EXCLUSIONS_APPLYING,
         self::EXCLUSIONS_APPLIED,
+        self::WAITING_CONFIRMATION,
         self::VIP_CHECKING,
         self::VIP_READY,
         self::RETAIL_MICRO_CHECKING,

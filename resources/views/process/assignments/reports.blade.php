@@ -81,6 +81,8 @@
                                     $statusLabel = ucfirst($processRow->status ?? 'ready');
                                     $badgeColor = $processRow->status === 'failed' ? 'danger' : 'success';
                                     $generatorName = $processRow->user?->username ?? $processRow->user_name ?? 'System';
+                                    $isContinuable = ! in_array(($processRow->status ?? 'ready'), ['ready', 'failed'], true);
+                                    $actionLabel = $isContinuable ? 'Continue' : 'View assignments';
                                 @endphp
                                 <tr>
                                     <td>{{ $datasetLabel }}</td>
@@ -92,7 +94,7 @@
                                         <span class="badge bg-{{ $badgeColor }}">{{ $statusLabel }}</span>
                                     </td>
                                     <td class="text-end d-flex justify-content-end gap-2">
-                                        <a href="{{ route('process.assignments.report', ['process' => $processRow]) }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">View assignments</a>
+                                        <a href="{{ route('process.assignments.report', ['process' => $processRow]) }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">{{ $actionLabel }}</a>
                                         @if(session('user.is_admin'))
                                         <button
                                             type="button"

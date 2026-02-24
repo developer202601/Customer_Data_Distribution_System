@@ -68,18 +68,7 @@ class ProcessExclusionUpload implements ShouldQueue
 
         try {
             if (! empty($uploadedFiles)) {
-                $workflowService->finalizeWithExclusions($process, $uploadedFiles, $this->userContext);
-                
-                // After exclusions workflow completes, wait a moment before moving to exports
-                sleep(2);
-                
-                $process = $process->fresh();
-                $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::EXPORTS_PENDING);
-                
-                // Give polling time to capture EXPORTS_PENDING status
-                sleep(1);
-                
-                $exportCoordinator->ensureFresh($process, $this->userContext);
+                $workflowService->ingestAndApplyExclusions($process, $uploadedFiles, $this->userContext);
             } else {
                 Log::warning('No exclusion files remained by the time the job ran.');
             }

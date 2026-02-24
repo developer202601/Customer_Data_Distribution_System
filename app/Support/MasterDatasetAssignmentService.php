@@ -29,13 +29,13 @@ class MasterDatasetAssignmentService
         $this->configuration = $configuration;
     }
 
-    public function assign(MasterDatasetProcess $process): array
+    public function assign(MasterDatasetProcess $process, ?array $configOverrides = null): array
     {
-        return DB::transaction(function () use ($process) {
+        return DB::transaction(function () use ($process, $configOverrides) {
             $this->resetAssignableRows($process);
             $this->excludeRetailMicroCopper($process);
             $this->assignRetailHighBillToRegion($process);
-            $this->assignRetailArrearsBands($process);
+            $this->assignRetailArrearsBands($process, $configOverrides);
             $this->assignNonRetailHighBill($process);
             $this->assignRemainderToRegion($process);
 
@@ -90,12 +90,16 @@ class MasterDatasetAssignmentService
         $query->update(['assigned_to' => self::REGION_LABEL]);
     }
 
-    private function assignRetailArrearsBands(MasterDatasetProcess $process): void
+    private function assignRetailArrearsBands(MasterDatasetProcess $process, ?array $configOverrides = null): void
     {
-        $desiredTotal = $this->configuration->getTotalRetailSelectionGoal();
+        $callCenterStaffQuota = $configOverrides['call_center_staff_quota'] ?? $this->configuration->getCallCenterStaffQuota();
+        $callCenterQuota = $configOverrides['call_center_quota'] ?? $this->configuration->getCallCenterQuota();
+        $staffQuota = $configOverrides['staff_quota'] ?? $this->configuration->getStaffQuota();
 
-        $retailMin = $this->configuration->getRetailLowerBound();
-        $retailMax = $this->configuration->getRetailUpperBound();
+        $desiredTotal = $callCenterStaffQuota + $callCenterQuota + $staffQuota;
+
+        $retailMin = $configOverrides['lower_range'] ?? $this->configuration->getRetailLowerBound();
+        $retailMax = $configOverrides['upper_range'] ?? $this->configuration->getRetailUpperBound();
 
         $candidates = MasterDatasetRow::query()
             ->where('process_id', $process->id)
@@ -133,13 +137,13 @@ class MasterDatasetAssignmentService
         $start = max(0, intdiv($filtered->count() - $sliceSize, 2));
         $selection = $filtered->slice($start, $sliceSize)->values();
 
-        $callCenterStaffIds = $selection->slice(0, $this->configuration->getCallCenterStaffQuota())->pluck('id')->all();
+        $callCenterStaffIds = $selection->slice(0, $callCenterStaffQuota)->pluck('id')->all();
         $offset = count($callCenterStaffIds);
 
-        $callCenterIds = $selection->slice($offset, $this->configuration->getCallCenterQuota())->pluck('id')->all();
+        $callCenterIds = $selection->slice($offset, $callCenterQuota)->pluck('id')->all();
         $offset += count($callCenterIds);
 
-        $staffIds = $selection->slice($offset, $this->configuration->getStaffQuota())->pluck('id')->all();
+        $staffIds = $selection->slice($offset, $staffQuota)->pluck('id')->all();
 
         if (! empty($callCenterStaffIds)) {
             MasterDatasetRow::query()

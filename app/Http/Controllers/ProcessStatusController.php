@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\MasterDatasetProcess;
 use App\Support\MasterDatasetProcessStatus;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProcessStatusController extends Controller
 {
-    public function show(Request $request): JsonResponse
+    public function show(Request $request): JsonResponse|RedirectResponse
     {
         $processId = $request->session()->get('master.dataset.process_id');
 
@@ -38,6 +39,19 @@ class ProcessStatusController extends Controller
         // Force refresh from database to avoid stale model state
         $process->refresh();
         $freshStatus = $process->status;
+
+        if ($freshStatus === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+            if (! $request->expectsJson()) {
+                return redirect()->route('process.confirm.create');
+            }
+
+            return response()->json([
+                'status' => 'waiting_confirmation',
+                'progress' => 50,
+                'message' => 'Waiting for configuration confirmation...',
+                'redirect_url' => route('process.confirm.create'),
+            ]);
+        }
 
         if (! $freshStatus) {
             \Log::warning("STATUS CONTROLLER: Process {$processId} has no status");

@@ -26,6 +26,69 @@ class MasterDatasetWorkflowService
     }
 
     /**
+     * Ingest master dataset and apply exclusions, but pause before assignment.
+     */
+    public function ingestAndApplyExclusions(
+        MasterDatasetProcess $process,
+        array $exclusionArchives,
+        ?array $userContext = null
+    ): array {
+        $filteredExclusions = array_values(array_filter(
+            $exclusionArchives,
+            static fn ($file) => $file instanceof UploadedFile
+        ));
+
+        if (empty($filteredExclusions)) {
+            throw ValidationException::withMessages([
+                'exclusions' => 'Please upload at least one exclusion ZIP archive.',
+            ]);
+        }
+
+        $processed = $this->importer->processStoredArchive($process, $userContext, skipAssignment: true)->fresh();
+
+        $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::EXCLUSIONS_APPLYING);
+        sleep(1); 
+        
+        $exclusionResult = $this->exclusionService->apply($processed, $filteredExclusions);
+
+        $processed = MasterDatasetProcessStatus::set($processed->fresh(), MasterDatasetProcessStatus::EXCLUSIONS_APPLIED);
+        sleep(1);
+
+        $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::WAITING_CONFIRMATION);
+        
+        return [
+            'process' => $processed->fresh(),
+            'exclusions' => $exclusionResult,
+        ];
+    }
+
+    /**
+     * Resume processing after configuration confirmation.
+     */
+    public function finalizeAssignment(
+        MasterDatasetProcess $process,
+        array $configOverrides
+    ): array {
+        $processed = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VIP_CHECKING);
+        sleep(1); 
+        
+        $assignmentResult = $this->assignmentService->assign($processed->fresh(), $configOverrides);
+        $processed = MasterDatasetProcessStatus::set($processed->fresh(), MasterDatasetProcessStatus::VIP_READY);
+        sleep(1); 
+        
+        $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::RETAIL_MICRO_CHECKING);
+        sleep(1); 
+        
+        $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::RETAIL_MICRO_READY);
+        sleep(1); 
+
+        return [
+            'process' => $processed->fresh(),
+            'assignments' => $assignmentResult,
+        ];
+    }
+
+    /**
      * Once exclusions are provided, validate/ingest the master workbook and then
      * apply the uploaded exclusion archives.
      */

@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\MasterDatasetUploadController;
 use App\Http\Controllers\ProcessFileController;
+use App\Http\Controllers\ProcessRunningController;
 use App\Http\Controllers\ProcessStatusController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
@@ -31,6 +32,11 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
     Route::get('/process/exclusions', [ExclusionUploadController::class, 'create'])->name('process.exclusions.create');
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
+    
+    Route::get('/process/confirm', [App\Http\Controllers\ProcessConfirmController::class, 'create'])->name('process.confirm.create');
+    Route::post('/process/confirm', [App\Http\Controllers\ProcessConfirmController::class, 'store'])->name('process.confirm.store');
+    Route::get('/process/running', [ProcessRunningController::class, 'show'])->name('process.running.show');
+    
     Route::get('/process/status', [ProcessStatusController::class, 'show'])->name('process.status.current');
     Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
     Route::get('/process/assignments/reports', [AssignmentController::class, 'reports'])->name('process.assignments.reports');

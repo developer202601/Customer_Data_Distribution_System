@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfigurationChange;
+use App\Models\Configurations;
 use App\Models\DatasetExport;
 use App\Models\MasterDatasetProcess;
+use App\Models\MasterDatasetRow;
+use App\Support\MasterDatasetAssignmentConfiguration;
 use App\Support\MasterDatasetExportCoordinator;
 use App\Support\MasterDatasetExportService;
+use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetViewService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,12 +31,42 @@ class AssignmentController extends Controller
     ) {
     }
 
-    public function index(Request $request): View|RedirectResponse
+    public function index(Request $request, MasterDatasetAssignmentConfiguration $assignmentConfiguration): View|RedirectResponse
     {
         $process = $this->resolveProcessOrRedirect('Upload the master dataset to review assignments.');
 
         if ($process instanceof RedirectResponse) {
             return $process;
+        }
+
+        // Enforce the new two-step workflow: do not show assignments until the
+        // user has confirmed configuration and processing has completed.
+        if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+            return redirect()->route('process.confirm.create');
+        }
+
+        if ($process->status !== MasterDatasetProcessStatus::READY && $process->status !== MasterDatasetProcessStatus::FAILED) {
+            return redirect()->route('process.running.show');
+        }
+
+        // Backfill: older processes created before we stored a default snapshot.
+        // Infer defaults at the time of confirmation using configuration change history.
+        if (empty($process->assignment_config_default_snapshot) && ! empty($process->assignment_config_set_at)) {
+            $snapshot = $this->inferAssignmentDefaultsAt($process->assignment_config_set_at);
+            if (! empty($snapshot)) {
+                $process->forceFill([
+                    'assignment_config_default_snapshot' => $snapshot,
+                ])->save();
+                $process->refresh();
+            }
+        }
+
+        // Backfill: store FTTH count used at confirmation time (older processes).
+        if ($process->assignment_config_ftth_count === null) {
+            $process->forceFill([
+                'assignment_config_ftth_count' => $this->computeFtthCountForProcess($process->id),
+            ])->save();
+            $process->refresh();
         }
 
         $search = trim((string) $request->query('search', ''));
@@ -78,7 +113,83 @@ class AssignmentController extends Controller
             'rows' => $rows,
             'assignmentLabels' => $this->viewService->assignmentLabelMap(),
             'reportGroups' => $reportGroups,
+            'assignmentConfigDefault' => $assignmentConfiguration->toArray(),
         ]);
+    }
+
+    private function inferAssignmentDefaultsAt(Carbon $at): array
+    {
+        $map = [
+            'upper_range' => 'upper_range',
+            'lower_range' => 'lower_range',
+            'call_center_staff_quota' => 'ccs',
+            'call_center_quota' => 'cc',
+            'staff_quota' => 's',
+        ];
+
+        $snapshot = [];
+
+        foreach ($map as $outputKey => $configKey) {
+            $value = null;
+
+            // If config changed after the process was confirmed, use the old value.
+            $after = ConfigurationChange::query()
+                ->where('config_key', $configKey)
+                ->where('created_at', '>', $at)
+                ->orderBy('created_at')
+                ->first();
+
+            if ($after && $after->old_value !== null) {
+                $value = (int) $after->old_value;
+            }
+
+            // Otherwise, use the latest new value at/before the confirmation time.
+            if ($value === null) {
+                $before = ConfigurationChange::query()
+                    ->where('config_key', $configKey)
+                    ->where('created_at', '<=', $at)
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($before && $before->new_value !== null) {
+                    $value = (int) $before->new_value;
+                }
+            }
+
+            // Final fallback: use the current value in the configurations table.
+            if ($value === null) {
+                $current = Configurations::query()
+                    ->where('config_name', $configKey)
+                    ->value('value');
+
+                if ($current !== null) {
+                    $value = (int) $current;
+                }
+            }
+
+            if ($value === null) {
+                $value = 0;
+            }
+
+            $snapshot[$outputKey] = max(0, (int) $value);
+        }
+
+        return $snapshot;
+    }
+
+    private function computeFtthCountForProcess(int $processId): int
+    {
+        return MasterDatasetRow::query()
+            ->where('process_id', $processId)
+            ->where('excluded', false)
+            ->where(function ($query) {
+                $query
+                    ->whereRaw('LOWER(slt_gl_sub_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness'])
+                    ->orWhereIn('customer_segment', ['11', '35'])
+                    ->orWhereRaw('LOWER(customer_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness']);
+            })
+            ->whereRaw('LOWER(medium) IN (?, ?)', ['ftth', 'fiber'])
+            ->count();
     }
 
     public function reports(Request $request): View
@@ -188,6 +299,14 @@ class AssignmentController extends Controller
             return $process;
         }
 
+        if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+            return redirect()->route('process.confirm.create');
+        }
+
+        if ($process->status !== MasterDatasetProcessStatus::READY) {
+            return redirect()->route('process.running.show');
+        }
+
         if (! $this->bucketAllowed($group, $bucket)) {
             return redirect()->route('process.assignments.index')->withErrors([
                 'assignments' => 'The requested download is not available.',
@@ -240,7 +359,7 @@ class AssignmentController extends Controller
             ]);
         }
 
-        $process = MasterDatasetProcess::find($processId);
+        $process = MasterDatasetProcess::with(['assignmentConfigSetter'])->find($processId);
 
         if (! $process) {
             session()->forget('master.dataset.process_id');

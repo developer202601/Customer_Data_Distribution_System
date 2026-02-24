@@ -39,6 +39,13 @@ class MasterDatasetProcess extends Model
         'region_billing_count',
         'status',
         'failure_reason',
+
+        'assignment_config_source',
+        'assignment_config_overrides',
+        'assignment_config_default_snapshot',
+        'assignment_config_ftth_count',
+        'assignment_config_set_by_user_id',
+        'assignment_config_set_at',
     ];
 
     protected $casts = [
@@ -54,6 +61,12 @@ class MasterDatasetProcess extends Model
         'region_billing_count' => 'integer',
         'python_ran_at' => 'datetime',
         'python_exit_code' => 'integer',
+
+        'assignment_config_overrides' => 'array',
+        'assignment_config_default_snapshot' => 'array',
+        'assignment_config_ftth_count' => 'integer',
+        'assignment_config_set_by_user_id' => 'integer',
+        'assignment_config_set_at' => 'datetime',
     ];
 
     public function rows(): HasMany
@@ -69,6 +82,11 @@ class MasterDatasetProcess extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function assignmentConfigSetter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assignment_config_set_by_user_id');
     }
 
     public function scopeForMonth($query, string $month)

@@ -26,6 +26,105 @@
             </div>
         </div>
 
+        @php
+            $configSource = $process->assignment_config_source;
+            $configOverrides = is_array($process->assignment_config_overrides) ? $process->assignment_config_overrides : null;
+            $defaultSnapshot = is_array($process->assignment_config_default_snapshot) ? $process->assignment_config_default_snapshot : null;
+            $defaultConfig = is_array($assignmentConfigDefault ?? null) ? $assignmentConfigDefault : null;
+            $configSetter = $process->assignmentConfigSetter;
+            $configSetterLabel = null;
+            if ($configSetter) {
+                $configSetterLabel = $configSetter->username ?: ($configSetter->name ?: ('User #' . $configSetter->id));
+            }
+
+            $usedConfig = $configOverrides;
+            $defaultForCompare = $defaultSnapshot ?: $defaultConfig;
+            $configRows = [
+                'lower_range' => ['label' => 'Lower range (LKR)'],
+                'upper_range' => ['label' => 'Upper range (LKR)'],
+                'call_center_staff_quota' => ['label' => 'Call Center Staff quota'],
+                'call_center_quota' => ['label' => 'Call Center quota'],
+                'staff_quota' => ['label' => 'Staff quota'],
+            ];
+        @endphp
+
+        <div class="card mb-4 shadow-sm" style="border-radius:1rem;">
+            <div class="card-body p-4 p-lg-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                    <div>
+                        <h2 class="h5 mb-1">Assignment configuration</h2>
+                        <div class="text-muted">
+                            @if($configSource === 'manual')
+                                <span class="badge text-bg-warning">Manual</span>
+                            @elseif($configSource === 'default')
+                                <span class="badge text-bg-secondary">Default</span>
+                            @else
+                                <span class="badge text-bg-light">Unknown</span>
+                            @endif
+                            @if($process->assignment_config_set_at)
+                                <span class="ms-2">Set at {{ $process->assignment_config_set_at->format('Y-m-d H:i') }}</span>
+                            @endif
+                        </div>
+                        @if($process->assignment_config_set_by_user_id)
+                            <div class="text-muted">Set by: {{ $configSetterLabel ?? ('User #' . $process->assignment_config_set_by_user_id) }} (ID {{ $process->assignment_config_set_by_user_id }})</div>
+                        @endif
+                    </div>
+                    <div class="text-muted small">
+                        Applied counts: Call Center Staff {{ number_format((int) $process->call_center_staff_count) }}, Call Center {{ number_format((int) $process->call_center_count) }}, Staff {{ number_format((int) $process->staff_count) }}
+                        @if($process->assignment_config_ftth_count !== null)
+                            <div>FTTH records (Retail/Micro, post-exclusion): {{ number_format((int) $process->assignment_config_ftth_count) }}</div>
+                        @endif
+                    </div>
+                </div>
+
+                @if($usedConfig)
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm mb-0 align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 240px;">Field</th>
+                                    <th>Default (at run time)</th>
+                                    <th>Used for this process</th>
+                                    <th style="width: 110px;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($configRows as $key => $meta)
+                                    @php
+                                        $defaultVal = $defaultForCompare[$key] ?? null;
+                                        $usedVal = $usedConfig[$key] ?? null;
+                                        $changed = $defaultForCompare ? ((string) (int) $defaultVal !== (string) (int) $usedVal) : null;
+                                    @endphp
+                                    <tr>
+                                        <th>{{ $meta['label'] }}</th>
+                                        <td>{{ $defaultVal === null ? '—' : number_format((int) $defaultVal) }}</td>
+                                        <td>{{ $usedVal === null ? '—' : number_format((int) $usedVal) }}</td>
+                                        <td>
+                                            @if($changed === null)
+                                                <span class="badge text-bg-light">Unknown</span>
+                                            @elseif($changed)
+                                                <span class="badge text-bg-warning">Changed</span>
+                                            @else
+                                                <span class="badge text-bg-secondary">Default</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if($defaultSnapshot && $defaultConfig && $defaultSnapshot !== $defaultConfig)
+                        <div class="text-muted small mt-2">
+                            Note: admin defaults were changed after this process ran, so "Default (at run time)" may differ from current configuration.
+                        </div>
+                    @endif
+                @else
+                    <div class="text-muted mt-3">No configuration audit data recorded for this dataset.</div>
+                @endif
+            </div>
+        </div>
+
         @if(session('status'))
         <div class="alert alert-success" role="alert">{{ session('status') }}</div>
         @endif

@@ -895,8 +895,24 @@ class MasterDatasetImporter
         for ($index = 0; $index < $zip->numFiles; $index++) {
             $stat = $zip->statIndex($index);
             $name = $stat['name'] ?? '';
+            $name = str_replace('\\', '/', $name);
 
             if ($name === '' || str_ends_with($name, '/')) {
+                continue;
+            }
+
+            if (str_starts_with($name, '__MACOSX/')) {
+                continue;
+            }
+
+            $base = basename($name);
+
+            if ($base === ''
+                || $base === '.DS_Store'
+                || str_starts_with($base, '._')
+                || str_starts_with($base, '~$')
+                || str_starts_with($base, '.')
+            ) {
                 continue;
             }
 
@@ -910,7 +926,11 @@ class MasterDatasetImporter
         }
 
         if (count($entries) > 1) {
-            throw new RuntimeException('The ZIP file must contain exactly one Excel (.xlsx) workbook.');
+            throw new RuntimeException(sprintf(
+                'The ZIP file must contain exactly one Excel (.xlsx) workbook. Found %d: %s',
+                count($entries),
+                implode(', ', $entries)
+            ));
         }
 
         return $entries[0];

@@ -26,7 +26,7 @@
                             <button type="button" class="btn btn-outline-secondary" data-mode="all-time">All reports</button>
                         </div>
                         <div class="d-flex gap-2">
-                            <a href="{{ route('cc.region.index') }}" class="btn btn-outline-success rounded-pill px-4">RTOMs & Admins</a>
+                            <a href="{{ route('cc.region.index') }}" class="btn btn-outline-success rounded-pill px-4">RTOs & Admins</a>
                         </div>
                     </div>
                 </div>
@@ -87,14 +87,14 @@
 
                 <div data-mode="latest">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">RTOM Breakdown (Latest Report)</h6>
-                        <input type="search" class="form-control form-control-sm" id="latestRtomSearch" placeholder="Search RTOMs..." style="width: 300px;">
+                        <h6 class="mb-0">RTO Breakdown (Latest Report)</h6>
+                        <input type="search" class="form-control form-control-sm" id="latestRtomSearch" placeholder="Search RTOs..." style="width: 300px;">
                     </div>
                     <div class="table-responsive cc-table-container">
                         <table class="table align-middle mb-0">
                             <thead>
                                 <tr>
-                                    <th>RTOM</th>
+                                    <th>RTO</th>
                                     <th>Total</th>
                                     <th>Assigned</th>
                                     <th>Paid</th>
@@ -120,14 +120,14 @@
 
                 <div data-mode="all-time" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">RTOM Breakdown (All-Time)</h6>
-                        <input type="search" class="form-control form-control-sm" id="allTimeRtomSearch" placeholder="Search RTOMs..." style="width: 300px;">
+                        <h6 class="mb-0">RTO Breakdown (All-Time)</h6>
+                        <input type="search" class="form-control form-control-sm" id="allTimeRtomSearch" placeholder="Search RTOs..." style="width: 300px;">
                     </div>
                     <div class="table-responsive cc-table-container">
                         <table class="table align-middle mb-0">
                             <thead>
                                 <tr>
-                                    <th>RTOM</th>
+                                    <th>RTO</th>
                                     <th>Total</th>
                                     <th>Assigned</th>
                                     <th>Paid</th>
@@ -210,13 +210,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const supervisors = JSON.parse(this.dataset.supervisors || '[]');
 
             if (supervisors.length === 0) {
-                alert('No supervisors found for this RTOM.');
+                alert('No supervisors found for this RTO.');
                 return;
             }
 
             // Show modal
             const modal = document.getElementById('supervisorProfitModal');
-            modal.querySelector('.modal-title').textContent = `Supervisor Profits for RTOM: ${rtom}`;
+            modal.querySelector('.modal-title').textContent = `Supervisor Profits for RTO: ${rtom}`;
             modal.style.display = 'block';
 
             // Destroy previous chart if it exists

@@ -31,7 +31,7 @@
         </div>
     @elseif($mode === 'rtom')
         <div class="form-group mt-3">
-            <label for="rtom">RTOM</label>
+            <label for="rtom">RTO</label>
             <select id="rtom" name="rtom" class="form-select">
                 @foreach($rtoms as $r)
                     <option value="{{ $r }}">{{ $r }}</option>

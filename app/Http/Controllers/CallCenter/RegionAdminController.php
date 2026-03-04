@@ -181,7 +181,7 @@ class RegionAdminController extends Controller
             'supervisor' => session('user')['id'] ?? null,
         ]);
 
-        return redirect()->route('cc.region.index')->with('status', 'RTOM admin created');
+        return redirect()->route('cc.region.index')->with('status', 'RTO admin created');
     }
 
     public function storeSupervisor(Request $request)
@@ -254,7 +254,7 @@ class RegionAdminController extends Controller
         $user->assignment = 'rtom_' . preg_replace('/\s+/', '_', strtolower($request->input('rtom')));
         $user->save();
 
-        return redirect()->route('cc.region.index')->with('status', 'RTOM admin updated');
+        return redirect()->route('cc.region.index')->with('status', 'RTO admin updated');
     }
 
     public function destroyAdmin(User $user)
@@ -270,7 +270,7 @@ class RegionAdminController extends Controller
         }
 
         $user->delete();
-        return redirect()->route('cc.region.index')->with('status', 'RTOM admin deleted');
+        return redirect()->route('cc.region.index')->with('status', 'RTO admin deleted');
     }
 
     // --- Supervisor management for RTOM users ---
@@ -513,7 +513,7 @@ class RegionAdminController extends Controller
 
         $allowedRtoms = $this->regionRtoms($region);
         if (! $allowedRtoms->contains($rtom)) {
-            return back()->withErrors(['rtom' => 'Selected RTOM is not available in your region.']);
+            return back()->withErrors(['rtom' => 'Selected RTO is not available in your region.']);
         }
 
         $user->admin_prev = 1;

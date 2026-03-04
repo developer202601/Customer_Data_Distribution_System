@@ -561,7 +561,7 @@ class ReportController extends Controller
         $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
 
         if ($rtomVal === '') {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'Unable to determine your RTOM assignment.']);
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'Unable to determine your RTO assignment.']);
         }
 
         // Only allow selecting callers that belong to this RTOM (callers may be owned by any supervisor)
@@ -588,7 +588,7 @@ class ReportController extends Controller
         })->values()->all();
 
         if (empty($allowedRowIds)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No rows match your RTOM.']);
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No rows match your RTO.']);
         }
 
         // Exclude rows already assigned for this report
@@ -600,7 +600,7 @@ class ReportController extends Controller
 
         $available = array_values(array_diff($allowedRowIds, $alreadyAssigned));
         if (empty($available)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No distributable rows available for your RTOM.']);
+            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No distributable rows available for your RTO.']);
         }
 
         // Distribute evenly among allowed users
@@ -635,7 +635,7 @@ class ReportController extends Controller
             \Illuminate\Support\Facades\DB::table('call_center_row_assignments')->insert($batch);
         }
 
-        return redirect()->route('cc.reports', ['report' => $reportId])->with('status', 'Distribution completed for your RTOM.');
+        return redirect()->route('cc.reports', ['report' => $reportId])->with('status', 'Distribution completed for your RTO.');
     }
 
     public function getAgentDetails(Request $request)

@@ -51,7 +51,7 @@
                                     @if(!\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
                                     <option value="super_admin" {{ (isset($filter_role) && $filter_role==='super_admin') ? 'selected' : '' }}>Super Admin</option>
                                     <option value="region_admin" {{ (isset($filter_role) && $filter_role==='region_admin') ? 'selected' : '' }}>Region Admin</option>
-                                    <option value="rtom_admin" {{ (isset($filter_role) && $filter_role==='rtom_admin') ? 'selected' : '' }}>RTOM Admin</option>
+                                    <option value="rtom_admin" {{ (isset($filter_role) && $filter_role==='rtom_admin') ? 'selected' : '' }}>RTO Admin</option>
                                     <option value="supervisor" {{ (isset($filter_role) && $filter_role==='supervisor') ? 'selected' : '' }}>Supervisor</option>
                                     @endif
                                     <option value="caller" {{ (isset($filter_role) && $filter_role==='caller') ? 'selected' : '' }}>Caller</option>

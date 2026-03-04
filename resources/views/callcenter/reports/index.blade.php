@@ -581,7 +581,7 @@
                     assignmentDetailFields.innerHTML = `
                                 <div class="mb-2"><strong>Phone:</strong> ${data.phone ?? '—'}</div>
                                 <div class="mb-2"><strong>Address:</strong> ${data.address ?? '—'}</div>
-                                <div class="mb-2"><strong>RTOM:</strong> ${data.rtom ?? '—'}</div>
+                                <div class="mb-2"><strong>RTO:</strong> ${data.rtom ?? '—'}</div>
                                 <div class="mb-2"><strong>Customer ref:</strong> ${data.customer_ref ?? '—'}</div>
                                 <div class="mb-2"><strong>Account #:</strong> ${data.account_num ?? '—'}</div>
                                 <div class="mb-2"><strong>Sales person:</strong> ${data.sales_person ?? '—'}</div>

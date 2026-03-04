@@ -8,13 +8,13 @@
         $role = 'Region Admin for ' . $region;
     } elseif (str_starts_with($assignment, 'rtom_')) {
         $rtom = str_replace('rtom_', '', $assignment);
-        $role = 'RTOM Admin for ' . $rtom;
+        $role = 'RTO Admin for ' . $rtom;
     } elseif (str_starts_with($assignment, 'supervisor_rtom_')) {
         $rtom = str_replace('supervisor_rtom_', '', $assignment);
-        $role = 'Supervisor for RTOM ' . $rtom;
+        $role = 'Supervisor for RTO ' . $rtom;
     } elseif (str_starts_with($assignment, 'caller_rtom_')) {
         $rtom = str_replace('caller_rtom_', '', $assignment);
-        $role = 'Caller for RTOM ' . $rtom;
+        $role = 'Caller for RTO ' . $rtom;
     } else {
         $role = $user->admin_prev ? 'Call Center Admin' : 'Call Center User';
     }

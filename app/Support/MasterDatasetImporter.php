@@ -634,7 +634,7 @@ class MasterDatasetImporter
             }
 
             if (! $present) {
-                $missing[] = $column;
+                $missing[] = $column === 'RTOM' ? 'RTO' : $column;
             }
         }
 

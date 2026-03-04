@@ -14,8 +14,8 @@
             <div class="card-body p-4 p-lg-5">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                     <div>
-                        <p class="text-uppercase text-muted mb-1">Call Center — RTOM: {{ $rtom }}</p>
-                        <h1 class="process-upload-title mb-0">RTOM Dashboard</h1>
+                        <p class="text-uppercase text-muted mb-1">Call Center — RTO: {{ $rtom }}</p>
+                        <h1 class="process-upload-title mb-0">RTO Dashboard</h1>
                         @if($latestReport)
                             <p class="text-muted small mb-0">Latest report: {{ $latestReport->dataset_month ? substr($latestReport->dataset_month, 0, 4) . '/' . substr($latestReport->dataset_month, 4, 2) : 'Report #' . $latestReport->id }}</p>
                         @endif

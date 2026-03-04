@@ -53,8 +53,13 @@ trait ProcessesExcelRows
         $normalised = strtoupper(trim($header));
         $normalised = preg_replace('/\s+/', '_', $normalised);
         $normalised = preg_replace('/[^A-Z0-9_]/', '_', $normalised);
+        $normalised = preg_replace('/_+/', '_', $normalised);
 
-        return preg_replace('/_+/', '_', $normalised);
+        if ($normalised === 'RTO') {
+            return 'RTOM';
+        }
+
+        return $normalised;
     }
 
     private function rowHasData(array $columns): bool

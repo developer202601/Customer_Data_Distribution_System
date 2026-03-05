@@ -7,7 +7,7 @@
             <div class="card-body p-4 p-lg-5">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                     <div>
-                        <p class="text-uppercase text-muted mb-1">Edit RTOM Admin</p>
+                        <p class="text-uppercase text-muted mb-1">Edit RTO Admin</p>
                         <h1 class="process-upload-title mb-0">{{ $user->username }}</h1>
                     </div>
                 </div>
@@ -20,7 +20,7 @@
                         <input name="name" type="text" class="form-control" value="{{ old('name', $user->name) }}">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">RTOM</label>
+                        <label class="form-label">RTO</label>
                         <select name="rtom" class="form-select">
                             @foreach($rtoms as $r)
                                 @php

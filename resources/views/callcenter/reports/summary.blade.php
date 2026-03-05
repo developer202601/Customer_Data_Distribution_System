@@ -389,7 +389,7 @@
             <div class="modal-body">
                 <p><strong>Caller:</strong> <span id="modal-agent-name"></span></p>
                 <p><strong>Supervisor:</strong> <span id="modal-supervisor"></span></p>
-                <p><strong>RTOM:</strong> <span id="modal-rtom"></span></p>
+                <p><strong>RTO:</strong> <span id="modal-rtom"></span></p>
                 <p><strong>Region:</strong> <span id="modal-region"></span></p>
             </div>
         </div>

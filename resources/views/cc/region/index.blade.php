@@ -15,10 +15,10 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                     <div>
                         <p class="text-uppercase text-muted mb-1">Call Center — Region: {{ $region }}</p>
-                        <h1 class="process-upload-title mb-0">RTOMs & RTOM Admins</h1>
+                        <h1 class="process-upload-title mb-0">RTOs & RTO Admins</h1>
                     </div>
                     <div class="d-flex gap-2">
-                        <a href="{{ route('cc.region.create_admin') }}" class="btn btn-outline-success rounded-pill px-4">Add RTOM Admin</a>
+                        <a href="{{ route('cc.region.create_admin') }}" class="btn btn-outline-success rounded-pill px-4">Add RTO Admin</a>
                     </div>
                 </div>
 
@@ -27,11 +27,11 @@
                 <div class="row g-4">
                     <div class="col-12">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h2 class="h6 mb-0">RTOM Admins</h2>
+                            <h2 class="h6 mb-0">RTO Admins</h2>
                             <form method="get" action="{{ route('cc.region.index') }}" class="d-flex gap-2">
                                 <input type="search" name="q" class="form-control form-control-sm" placeholder="Search username or name" value="{{ old('q', $q ?? request('q')) }}">
                                 <select name="rtom" class="form-select form-select-sm">
-                                    <option value="">All RTOMs</option>
+                                    <option value="">All RTOs</option>
                                     @foreach(($rtoms ?? collect()) as $r)
                                         <option value="{{ $r }}" {{ (string)($selectedRtom ?? request('rtom')) === (string)$r ? 'selected' : '' }}>{{ $r }}</option>
                                     @endforeach

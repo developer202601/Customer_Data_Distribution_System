@@ -12,7 +12,7 @@
                     </div>
                 </div>
 
-                <p class="text-muted">Region admins may only create RTOM admins. Use the <strong>Create RTOM Admin</strong> action instead.</p>
+                <p class="text-muted">Region admins may only create RTO admins. Use the <strong>Create RTO Admin</strong> action instead.</p>
 
                 <a href="{{ route('cc.region.index') }}" class="btn btn-outline-secondary">Back</a>
 

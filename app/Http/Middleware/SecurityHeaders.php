@@ -41,14 +41,17 @@ class SecurityHeaders
             // "Unrecognized source-expression".
             $viteHosts = $viteHotEnabled ? [
                 'http://127.0.0.1:5173',
+                'http://localhost:5173',
             ] : [];
 
             $viteWsHosts = $viteHotEnabled ? [
                 'ws://127.0.0.1:5173',
+                'ws://localhost:5173',
             ] : [];
 
             $viteHttpHosts = $viteHotEnabled ? [
                 'http://127.0.0.1:5173',
+                'http://localhost:5173',
             ] : [];
 
             $scriptSrc = array_merge([
@@ -60,6 +63,12 @@ class SecurityHeaders
                 "'self'",
                 "'nonce-{$cspNonce}'",
             ], $viteHosts);
+
+            // Vite HMR updates styles through runtime-injected <style> tags.
+            // Keep strict CSP in non-local environments.
+            if ($viteHotEnabled) {
+                $styleSrc[] = "'unsafe-inline'";
+            }
 
             $connectSrc = array_merge([
                 "'self'",

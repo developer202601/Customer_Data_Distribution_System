@@ -50,9 +50,14 @@ if (
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
 
+    $extension = strtolower((string) pathinfo($filePath, PATHINFO_EXTENSION));
     $mime = function_exists('mime_content_type') ? @mime_content_type($filePath) : null;
     if (!is_string($mime) || $mime === '') {
         $mime = 'application/octet-stream';
+    }
+
+    if ($extension === 'svg') {
+        $mime = 'image/svg+xml';
     }
 
     header('Content-Type: ' . $mime);

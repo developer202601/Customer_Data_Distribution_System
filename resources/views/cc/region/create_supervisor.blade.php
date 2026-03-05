@@ -28,7 +28,7 @@
                         <input type="hidden" name="supervisor" value="{{ session('user.assignment') }}">
                     @else
                         <div class="mb-3">
-                            <label class="form-label">RTOM</label>
+                            <label class="form-label">RTO</label>
                             <select name="supervisor" class="form-select">
                                 @foreach($rtoms as $r)
                                     <option value="{{ $r }}">{{ $r }}</option>

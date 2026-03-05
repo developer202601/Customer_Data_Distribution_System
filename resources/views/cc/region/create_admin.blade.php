@@ -7,8 +7,8 @@
             <div class="card-body p-4 p-lg-5">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                     <div>
-                        <p class="text-uppercase text-muted mb-1">{{ $isSupervisor ? 'Create Supervisor Admin' : 'Create RTOM Admin' }}</p>
-                        <h1 class="process-upload-title mb-0">{{ $isSupervisor ? 'New Supervisor Admin' : 'New RTOM Admin' }}</h1>
+                        <p class="text-uppercase text-muted mb-1">{{ $isSupervisor ? 'Create Supervisor Admin' : 'Create RTO Admin' }}</p>
+                        <h1 class="process-upload-title mb-0">{{ $isSupervisor ? 'New Supervisor Admin' : 'New RTO Admin' }}</h1>
                     </div>
                 </div>
 

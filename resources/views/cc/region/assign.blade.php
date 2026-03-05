@@ -29,8 +29,8 @@
         @csrf
 
         <div class="form-group position-relative">
-            <label for="rtom-input">RTOM</label>
-            <input id="rtom-input" type="text" class="form-control" placeholder="Type to search RTOMs..." autocomplete="off"
+                    <label for="rtom-input">RTO</label>
+                    <input id="rtom-input" type="text" class="form-control" placeholder="Type to search RTOs..." autocomplete="off"
                    value="{{ old('rtom', $user->assignment ? str_replace('rtom_', '', $user->assignment) : '') }}">
             <input id="rtom" name="rtom" type="hidden" value="{{ old('rtom', $user->assignment ? str_replace('rtom_', '', $user->assignment) : '') }}">
             <div id="rtom-suggestions" class="list-group position-absolute w-100" style="z-index:1050; display:none; max-height:320px; overflow:auto;"></div>

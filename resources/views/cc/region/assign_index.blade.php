@@ -17,7 +17,7 @@
                     <div>
                         <p class="text-uppercase text-muted mb-1">Call Center Administration</p>
                         <h1 class="process-upload-title mb-0">Assign Supervisors</h1>
-                        <div class="mt-2 text-muted">Your RTOM: <strong>{{ session('user.assignment') }}</strong></div>
+                        <div class="mt-2 text-muted">Your RTO: <strong>{{ session('user.assignment') }}</strong></div>
                     </div>
                     <div class="d-flex gap-2">
                         <a href="{{ route('cc.region.create_supervisor') }}" class="btn btn-outline-success rounded-pill px-4">Add Supervisors</a>

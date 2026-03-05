@@ -21,5 +21,5 @@
     </td>
 </tr>
 @empty
-<tr><td colspan="5" class="text-muted">No RTOM admins yet.</td></tr>
+<tr><td colspan="5" class="text-muted">No RTO admins yet.</td></tr>
 @endforelse

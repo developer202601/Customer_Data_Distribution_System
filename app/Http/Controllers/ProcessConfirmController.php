@@ -130,6 +130,9 @@ class ProcessConfirmController extends Controller
             'assignment_config_set_at' => now(),
         ]);
 
+        // Change status to indicate processing has started (prevents redirect loop back to confirm page)
+        MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VIP_CHECKING);
+
         Log::info('Process confirmation submitted; dispatching assignment job.', [
             'process_id' => $process->id,
             'overrides' => $validatedNormalized,

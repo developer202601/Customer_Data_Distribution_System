@@ -15,7 +15,9 @@
                 @else
                     <button type="button" class="btn btn-sm btn-success rounded-pill cc-enable-btn" data-action="{{ route('cc.users.enable', $a) }}" data-username="{{ $a->username }}">Enable</button>
                 @endif
-                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill cc-delete-btn" data-action="{{ route('cc.region.destroy_admin', $a) }}" data-username="{{ $a->username }}">Delete</button>
+                @if((int)($a->supervised_users_count ?? 0) === 0)
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill cc-delete-btn" data-action="{{ route('cc.region.destroy_admin', $a) }}" data-username="{{ $a->username }}">Delete</button>
+                @endif
             @endif
         </div>
     </td>

@@ -53,22 +53,35 @@ class AssignmentController extends Controller
 
         $currentUserId = auth()->id() ?? session('user.id') ?? null;
 
+        // If no specific report is requested, find the latest report for this user and only show that
+        if (!$reportId && $currentUserId) {
+            $latestReportId = CallCenterAssignment::where('assigned_user_id', $currentUserId)
+                ->whereNotNull('call_center_report_id')
+                ->max('call_center_report_id');
+            if ($latestReportId) {
+                $reportId = $latestReportId;
+            }
+        }
+
         $q = CallCenterAssignment::with(['row', 'agent', 'report'])
             ->whereNotNull('assigned_user_id');
 
-        // Always show only the current authenticated user's assignments (admins should not see other users' rows)
-        $currentUserId = Auth::id() ?? session('user.id') ?? null;
+        // Always show only the current authenticated user's assignments
         if ($currentUserId) {
             $q->where('assigned_user_id', $currentUserId);
         }
 
+        // Only show assignments from the latest/current report
         if ($reportId) {
             $q->where('call_center_report_id', (int) $reportId);
         }
 
-        if ($currentUserId) {
-            $q->where('assigned_user_id', $currentUserId);
-        }
+        // Only show accepted assignments (hide pending/rejected)
+        $q->where('accepted', true);
+
+        // Include all accepted assignments from current report, even if marked completed (paid)
+        // Completed status just means the interaction was recorded, not that it should be hidden
+
         $assignments = $q->orderBy('assigned_user_id')->orderBy('id')->get();
 
         // Build per-assignment metadata for filtering by call activity and promise status within the report period
@@ -80,6 +93,7 @@ class AssignmentController extends Controller
             'promise_overdue' => 0,
             'number_invalid' => 0,
             'not_answered' => 0,
+            'not_relevant_person' => 0,
         ];
 
         $now = Carbon::now();
@@ -154,6 +168,9 @@ class AssignmentController extends Controller
             }
             if ($latestOutcome === 'Not answered') {
                 $filterCounts['not_answered']++;
+            }
+            if ($latestOutcome === 'not relevant person contacted') {
+                $filterCounts['not_relevant_person']++;
             }
         }
 
@@ -626,10 +643,7 @@ class AssignmentController extends Controller
 
             $assignment->locked_at = null;
             $assignment->locked_by = null;
-            // If the interaction indicates paid or a terminal outcome, mark completed
-            if (! empty($payload['paid']) || in_array(($payload['outcome'] ?? ''), ['paid', 'promise_to_pay'])) {
-                $assignment->status = 'completed';
-            }
+            // Do NOT auto-complete assignments when paid - they should remain visible in current report
 
             // If the interaction includes a payment, mirror it on the assignment
             if (! empty($payload['paid'])) {

@@ -54,7 +54,8 @@ class RegionAdminController extends Controller
         $query = User::where('system', 'cc')
             ->where('admin_prev', 1)
             ->where('assignment', 'like', 'rtom_%')
-            ->where('supervisor', $currentSupervisor);
+            ->where('supervisor', $currentSupervisor)
+            ->withCount('supervisedUsers');
 
         if (! empty($q)) {
             $query->where(function($w) use ($q) {
@@ -88,7 +89,8 @@ class RegionAdminController extends Controller
         $query = User::where('system', 'cc')
             ->where('admin_prev', 1)
             ->where('assignment', 'like', 'rtom_%')
-            ->where('supervisor', $currentSupervisor);
+            ->where('supervisor', $currentSupervisor)
+            ->withCount('supervisedUsers');
 
         if (! empty($q)) {
             $query->where(function($w) use ($q) {
@@ -267,6 +269,10 @@ class RegionAdminController extends Controller
 
         if ($user->fixed) {
             return redirect()->route('cc.region.index')->withErrors(['delete' => 'This user is fixed and cannot be deleted.']);
+        }
+
+        if ($user->supervisedUsers()->exists()) {
+            return redirect()->route('cc.region.index')->withErrors(['delete' => 'This RTO admin has supervised employees and cannot be deleted.']);
         }
 
         $user->delete();

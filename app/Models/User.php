@@ -53,4 +53,14 @@ class User extends Model
     {
         return $this->belongsTo(User::class, 'supervisor');
     }
+
+    public function interactionsAsAgent()
+    {
+        return $this->hasMany(CallCenterInteraction::class, 'agent_id');
+    }
+
+    public function rowAssignments()
+    {
+        return $this->hasMany(CallCenterAssignment::class, 'assigned_user_id');
+    }
 }

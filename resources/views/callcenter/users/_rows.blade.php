@@ -25,6 +25,12 @@
         $supervisorInfo = optional($user->supervisorUser)->name ? (optional($user->supervisorUser)->name . ' (' . optional($user->supervisorUser)->username . ')') : '—';
     }
 @endphp
+@php
+    $canDelete = ! $user->fixed
+        && (int)($user->supervised_users_count ?? 0) === 0
+        && (int)($user->interactions_as_agent_count ?? 0) === 0
+        && (int)($user->row_assignments_count ?? 0) === 0;
+@endphp
 <tr class="user-row" title="Click to view more details" data-user-id="{{ $user->id }}" data-username="{{ $user->username }}" data-name="{{ $user->name }}" data-role="{{ $role }}" data-supervisor="{{ $supervisorInfo }}" data-status="{{ $user->status ? 'Active' : 'Disabled' }}" data-created="{{ optional($user->created_at)->format('Y-m-d H:i') ?? '—' }}">
     <td>{{ $user->username }}</td>
     <td>{{ $user->name ?: '—' }}</td>
@@ -37,7 +43,7 @@
             @else
             <button type="button" class="btn btn-sm btn-success rounded-pill cc-enable-btn" data-action="{{ route('cc.users.enable', $user) }}" data-username="{{ $user->username }}" onclick="event.stopPropagation()">Enable</button>
             @endif
-            @if(!$user->fixed)
+            @if($canDelete)
             <button type="button" class="btn btn-sm btn-outline-danger rounded-pill cc-delete-btn" data-action="{{ route('cc.users.destroy', $user) }}" data-username="{{ $user->username }}" onclick="event.stopPropagation()">Delete</button>
             @endif
         </div>

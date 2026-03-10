@@ -37,7 +37,8 @@ class UserController extends Controller
     protected function buildUsersQuery(string $status, string $q, string $role)
     {
         $usersQ = CallCenterUser::query();
-        $usersQ->with('supervisorUser');
+        $usersQ->with('supervisorUser')
+            ->withCount(['supervisedUsers', 'interactionsAsAgent', 'rowAssignments']);
         // If logged-in user is a supervisor, show callers for the supervisor's RTOM (exclude supervisor accounts)
         if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
             $assign = session('user.assignment') ?? '';
@@ -201,6 +202,19 @@ class UserController extends Controller
             return redirect()->route('cc.users.index')->withErrors([
                 'delete' => 'This user is fixed and cannot be deleted. Disable the user instead.',
             ]);
+        }
+
+        $hasSupervisedUsers = $ccUser->supervisedUsers()->exists();
+        $hasInteractions = $ccUser->interactionsAsAgent()->exists();
+        $hasAssignments = $ccUser->rowAssignments()->exists();
+        if ($hasSupervisedUsers || $hasInteractions || $hasAssignments) {
+            $return = request()->input('return_to');
+            $msg = 'This user has related records (supervised users, assignments, or interactions) and cannot be deleted. Disable the user instead.';
+            if ($return) {
+                return redirect($return)->withErrors(['delete' => $msg]);
+            }
+
+            return redirect()->route('cc.users.index')->withErrors(['delete' => $msg]);
         }
 
         $ccUser->delete();

@@ -130,12 +130,12 @@
 
                 <div class="mb-3 d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>Total assigned rows:</strong> <span id="ccTotalAssigned">{{ number_format($assignments->count()) }}</span>
+                        <strong>Accepted assignments:</strong> <span id="ccTotalAssigned">{{ number_format($assignments->count()) }}</span>
                     </div>
-                    <div class="text-muted small">{{ $reportLabel ?? 'All reports' }}</div>
+                    <div class="text-muted small">{{ $reportLabel ?? 'Current report' }}</div>
                 </div>
 
-                @if(($latestReportPending ?? 0) > 0)
+                @if(false && ($latestReportPending ?? 0) > 0)
                     <div class="mb-4">
                         <div class="card border-0 rounded-4 bg-white shadow-sm">
                             <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
@@ -212,17 +212,14 @@
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
-                                            <h3>Current Reports</h3>
+                                            <h3>My Assignments</h3>
                                             
                                         </div>
                                         <div class="text-end">
-                                            <span class="badge bg-success">Accepted ({{ $acceptedCount }})</span>
-                                            @if($pendingCount > 0)
-                                                <div class="text-muted small mt-1">Pending {{ $pendingCount }} rows</div>
-                                            @endif
+                                            <span class="badge bg-success">{{ $acceptedCount }} rows</span>
                                         </div>
                                     </div>
-                                    {{-- Pending rows are hidden here by design; only bulk actions are shown in the header. --}}
+                                    {{-- Only showing accepted rows from current report --}}
 
                                     {{-- Accepted rows (always shown below pending) --}}
                                     @if(true)
@@ -230,13 +227,14 @@
                                             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                                                 <p class="small text-uppercase text-muted mb-0">Accepted rows (click to view)</p>
                                                 <div class="btn-group btn-group-sm" role="group" aria-label="Assignment filters">
-                                                    <button type="button" class="btn btn-outline-secondary active" data-cc-filter="all">All (0)</button>
+                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="all">All (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="called">Called (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="uncalled">Not called (0)</button>
+                                                    <button type="button" class="btn btn-outline-secondary active" data-cc-filter="uncalled">Not called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="authorized">User Not Authorized (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="promise_overdue">Promise overdue (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="number_invalid">Number invalid (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_answered">Not answered (0)</button>
+                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_relevant_person">Not relevant person (0)</button>
                                                 </div>
                                             </div>
                                             <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">
@@ -307,6 +305,14 @@
                                     <option value="Not answered">Not answered</option>
                                 </select>
                             </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="ccNotRelevantPerson" name="not_relevant_person" value="1" disabled>
+                                    <label class="form-check-label small" for="ccNotRelevantPerson">
+                                        Not the relevant person contacted
+                                    </label>
+                                </div>
+                            </div>
                             <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
                                 <label class="form-label small">Payment expected at</label>
                                 <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" disabled>
@@ -349,11 +355,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
     const paymentDateWrap = document.getElementById('ccPaymentDateWrap');
     const paidAmountWrap = document.getElementById('ccPaidAmountWrap');
+    const notRelevantPersonEl = document.getElementById('ccNotRelevantPerson');
     const paymentInput = document.getElementById('ccPaymentExpected');
     const paymentDate = document.getElementById('ccPaymentDate');
     const paidAmount = document.getElementById('ccPaidAmount');
     const statusField = document.getElementById('ccCallStatus');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const NOT_RELEVANT_PERSON_OUTCOME = 'not relevant person contacted';
     let bootstrapModal = null;
     if (assignmentRowModal && window.bootstrap) {
         bootstrapModal = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
@@ -494,6 +502,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const wrapper = document.getElementById('ccCallFormWrapperAssign');
         if (outcome) outcome.disabled = true;
         if (note) note.disabled = true;
+        if (notRelevantPersonEl) {
+            notRelevantPersonEl.disabled = true;
+            notRelevantPersonEl.checked = false;
+        }
         if (pay) pay.disabled = true;
         if (paymentDate) paymentDate.disabled = true;
         if (paidAmount) paidAmount.disabled = true;
@@ -587,6 +599,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     startBtn.onclick = () => {
                         if (outcome) outcome.disabled = false;
                         if (note) note.disabled = false;
+                        if (notRelevantPersonEl) notRelevantPersonEl.disabled = false;
                         if (pay) pay.disabled = false;
                         if (paymentDate) paymentDate.disabled = false;
                         if (paidAmount) paidAmount.disabled = false;
@@ -610,12 +623,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const latestReportId = assignmentList?.dataset.latestReportId || '';
     const userId = assignmentList?.dataset.userId || '';
     let paging = { page: 1, per_page: 50, has_more: false };
-    let filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
-    // Show previous-report (completed) rows by default when there are pending
-    // new rows for the latest report so agents can review the last-owner history.
-    const initialLatestPending = Number(assignmentList?.dataset.latestReportPending || 0);
-    let showOldRows = initialLatestPending > 0;
-    let currentFilter = 'all';
+    let filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
+    // Always show previous-report rows by default so visible items match Accepted count.
+    let showOldRows = true;
+    let currentFilter = 'uncalled';
 
     function updateFilterCounts() {
         filterButtons.forEach(btn => {
@@ -639,12 +650,17 @@ document.addEventListener('DOMContentLoaded', function () {
             else if (targetFilter === 'promise_overdue') show = overdue;
             else if (targetFilter === 'number_invalid') show = outcome === 'number invalid';
             else if (targetFilter === 'not_answered') show = outcome === 'not answered';
+            else if (targetFilter === 'not_relevant_person') show = outcome === 'not relevant person contacted';
             row.style.display = show ? '' : 'none';
             enforceOldRowState(row);
         });
     }
 
     function enforceOldRowState(row) {
+        if (!toggleOldRowsBtn) {
+            row.style.display = row.style.display === 'none' ? 'none' : '';
+            return;
+        }
         if (row.dataset.oldRow === '1' && !showOldRows) {
             row.style.display = 'none';
         }
@@ -688,7 +704,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const rows = Array.isArray(data.rows) ? data.rows : [];
             if (!append) {
                 assignmentList.innerHTML = '';
-                filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0 };
+                filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
             }
             rows.forEach(r => {
                 filterCounts.all++;
@@ -697,6 +713,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (r.promise_overdue) filterCounts.promise_overdue++;
                 if ((r.latest_outcome || '').toLowerCase() === 'number invalid') filterCounts.number_invalid++;
                 if ((r.latest_outcome || '').toLowerCase() === 'not answered') filterCounts.not_answered++;
+                if ((r.latest_outcome || '').toLowerCase() === 'not relevant person contacted') filterCounts.not_relevant_person++;
 
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -776,7 +793,30 @@ document.addEventListener('DOMContentLoaded', function () {
     // initial fetch
     loadAssignments(false);
 
+    function clearPaymentFields() {
+        if (paymentWrap) paymentWrap.style.display = 'none';
+        if (paymentDateWrap) paymentDateWrap.style.display = 'none';
+        if (paidAmountWrap) paidAmountWrap.style.display = 'none';
+        if (paymentInput) paymentInput.value = '';
+        if (paymentDate) paymentDate.value = '';
+        if (paidAmount) paidAmount.value = '';
+    }
+
+    notRelevantPersonEl?.addEventListener('change', function () {
+        if (!outcomeEl) return;
+        if (this.checked) {
+            outcomeEl.value = '';
+            outcomeEl.disabled = true;
+            clearPaymentFields();
+        } else {
+            outcomeEl.disabled = false;
+        }
+    });
+
     outcomeEl?.addEventListener('change', function () {
+        if (notRelevantPersonEl && notRelevantPersonEl.checked) {
+            return;
+        }
         const v = this.value;
         if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
             paymentWrap.style.display = 'block';
@@ -814,7 +854,14 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         const formData = new FormData(this);
-        if (outcomeEl && outcomeEl.value === 'paid') {
+        if (notRelevantPersonEl && notRelevantPersonEl.checked) {
+            formData.set('outcome', NOT_RELEVANT_PERSON_OUTCOME);
+            formData.delete('payment_expected_at');
+            formData.delete('payment_date');
+            formData.delete('paid_amount');
+            formData.delete('paid');
+        }
+        if (outcomeEl && outcomeEl.value === 'paid' && !(notRelevantPersonEl && notRelevantPersonEl.checked)) {
             formData.set('paid', '1');
         }
         try {
@@ -824,13 +871,12 @@ document.addEventListener('DOMContentLoaded', function () {
             // clear the call form inputs so saved values don't "ghost" the form
             try {
                 callForm.reset();
-                if (paymentWrap) paymentWrap.style.display = 'none';
-                if (paymentDateWrap) paymentDateWrap.style.display = 'none';
-                if (paidAmountWrap) paidAmountWrap.style.display = 'none';
-                if (paymentInput) paymentInput.value = '';
-                if (paymentDate) paymentDate.value = '';
-                if (paidAmount) paidAmount.value = '';
+                clearPaymentFields();
                 if (outcomeEl) outcomeEl.selectedIndex = 0;
+                if (notRelevantPersonEl) {
+                    notRelevantPersonEl.checked = false;
+                    notRelevantPersonEl.disabled = true;
+                }
                 const saveBtn = document.getElementById('ccSaveCallBtn');
                 if (saveBtn) {
                     saveBtn.disabled = true;

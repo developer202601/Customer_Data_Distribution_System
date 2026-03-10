@@ -1,5 +1,7 @@
 @extends('layouts.cc')
 
+@section('title', 'RTOs & RTO Admins')
+
 @section('navbar-right')
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf

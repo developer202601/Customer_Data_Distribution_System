@@ -1,5 +1,7 @@
 @extends('layouts.cc')
 
+@section('title', 'New Supervisor Admin')
+
 @section('content')
 <div class="process-upload py-4">
     <div class="container-fluid">

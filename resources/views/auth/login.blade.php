@@ -1,6 +1,6 @@
 @extends('layouts.guest')
 
-@section('title', 'Login')
+@section('title', 'CDDS & PRMS')
 
 @section('content')
 <section class="content login-page">

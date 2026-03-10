@@ -1,5 +1,7 @@
 @extends('layouts.admin')
 
+@section('title', 'Waiting for Confirmation')
+
 @section('loaderAutoRedirect', true)
 
 @section('navbar-right')

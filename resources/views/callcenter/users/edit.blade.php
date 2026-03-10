@@ -1,5 +1,7 @@
 @extends('layouts.cc')
 
+@section('title', 'Edit User')
+
 @section('navbar-right')
 <a href="{{ route('cc.users.index') }}" class="btn btn-outline-secondary">Back to Users</a>
 

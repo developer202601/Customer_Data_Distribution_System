@@ -1,5 +1,7 @@
 @extends('layouts.admin')
 
+@section('title', 'Filtered Data')
+
 @section('navbar-right')
 <div class="process-stepper d-flex align-items-center gap-2">
     <span class="process-step completed"></span>

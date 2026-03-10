@@ -2,6 +2,8 @@
 
 @extends('layouts.cc')
 
+@section('title', 'Reports')
+
 @section('navbar-right')
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf

@@ -1,5 +1,7 @@
 @extends('layouts.cc')
 
+@section('title', 'Region Dashboard')
+
 @section('navbar-right')
 <form action="{{ route('logout') }}" method="post" class="d-inline">
     @csrf

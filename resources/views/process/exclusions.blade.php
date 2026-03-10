@@ -1,4 +1,7 @@
 @extends('layouts.admin')
+
+@section('title', 'Exclusions')
+
 @section('loaderAutoRedirect', true)
 
 @section('navbar-right')

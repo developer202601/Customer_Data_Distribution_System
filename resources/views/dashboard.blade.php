@@ -1,5 +1,7 @@
 @extends('layouts.admin')
 
+@section('title', 'Dashboard')
+
 @section('navbar-right')
 @if(session('user.is_admin'))
 <a href="{{ route('admin.config') }}" class="btn btn-outline-secondary mr-2">Configurations</a>

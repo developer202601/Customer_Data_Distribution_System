@@ -190,7 +190,7 @@
 <style nonce="{{ $cspNonce ?? '' }}">
 
     .bill-upper .bill-lower label{
-        color: black;
+        color: var(--text-primary);
     }
 
     .admin-config-save-btn{
@@ -200,18 +200,19 @@
     }
 
     .admin_config_staff{
-        color: black;
+        color: var(--text-primary);
     }
 
     :root {
-        --config-border: rgba(0, 0, 0, 0.08);
+        --config-border: var(--surface-border);
     }
 
     .config-card {
-        border: 1px solid var(--config-border);
-        border-radius: 12px;
-        padding: 18px 20px;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
         background: transparent;
+        box-shadow: none;
     }
 
     .config-card h5 {
@@ -224,12 +225,11 @@
 
 
     .config-bill-areas{
-        font-family: Arial, Helvetica, sans-serif;
+        color: var(--text-primary);
     }
 
     .bill-upper, .bill-lower{  
-        font-family: Arial, Helvetica, sans-serif;
-        color: black;
+        color: var(--text-primary);
     }
 
     .config-admin-btn .button{
@@ -309,28 +309,28 @@
     .admin-config-btn-col .admin-config-btn {
         padding: 12px 16px;
         font-size: 16px;
-        border: 1px solid var(--bs-border-color, #dee2e6);
-        background: var(--bs-body-bg, #fff);
-        color: var(--bs-body-color, #212529);
+        border: 1px solid var(--surface-border);
+        background: var(--surface-card);
+        color: var(--text-primary);
         border-radius: 12px;
         cursor: pointer;
         transition: 0.2s ease;
         font-weight: 600;
         text-align: left;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+        box-shadow: var(--shadow-soft);
     }
 
     .admin-config-btn-col .admin-config-btn:hover {
-        background-color: var(--bs-primary-bg-subtle, #e7f1ff);
-        color: var(--bs-primary, #0d6efd);
-        border-color: var(--bs-primary, #0d6efd);
+        background-color: var(--surface-muted);
+        color: var(--accent-primary);
+        border-color: rgba(0, 86, 162, 0.35);
     }
 
     .admin-config-btn.is-active {
-        background: var(--bs-primary, #0d6efd);
+        background: var(--accent-primary);
         color: #fff;
-        border-color: var(--bs-primary, #0d6efd);
-        box-shadow: 0 10px 28px rgba(13, 110, 253, 0.25);
+        border-color: var(--accent-primary);
+        box-shadow: var(--shadow-soft);
     }
 
     .admin-config-right {
@@ -358,7 +358,7 @@
         display: flex;
         background: var(--surface-card);
         border-color: var(--surface-border);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+        box-shadow: var(--shadow-soft);
     }
 
     .admin-config-visual-panel {
@@ -395,8 +395,10 @@
     .admin-config-field input {
         flex: 1;
         padding: 8px 25px;
-        border: 1px solid var(--bs-border-color, #dee2e6);
+        border: 1px solid var(--surface-border);
         border-radius: 10px;
+        background: var(--surface-card);
+        color: var(--text-primary);
     }
 
     /* Hide number input spinner controls (keep numeric type) */
@@ -419,14 +421,14 @@
 
     .admin-config-hint {
         margin: 0 0 16px 0;
-        color: var(--bs-body-color, #212529);
+        color: var(--text-muted);
         font-size: 15px;
         font-weight: 600;
-        text-align: center;
-        background: var(--bs-secondary-bg-subtle, #f8f9fa);
+        text-align: left;
+        background: var(--surface-muted);
         padding: 10px 14px;
         border-radius: 8px;
-        border: 1px solid var(--bs-border-color, #dee2e6);
+        border: 1px solid var(--surface-border);
     }
 
     /* User account list styles (matches attachment) */
@@ -445,16 +447,19 @@
 
     .user-account-add input {
         padding: 8px 10px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--surface-border);
         border-radius: 6px;
         min-width: 220px;
+        background: var(--surface-card);
+        color: var(--text-primary);
     }
 
     .user-account-add-btn {
         padding: 8px 12px;
         border-radius: 6px;
-        border: 1px solid var(--surface-border);
-        background: white;
+        border: 1px solid var(--accent-primary);
+        background: var(--accent-primary);
+        color: #fff;
         cursor: pointer;
     }
 
@@ -463,17 +468,18 @@
         padding: 12px;
         border-radius: 6px;
         min-height: 72px;
-        background: rgba(0, 0, 0, 0.02);
+        background: var(--surface-muted);
     }
 
     .user-account-item {
-        background: rgba(0, 0, 0, 0.03);
+        background: var(--surface-card);
         padding: 10px 12px;
         margin-bottom: 10px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         border-radius: 6px;
+        border: 1px solid var(--surface-border);
     }
 
     .user-account-item-controls {
@@ -487,7 +493,7 @@
 
     .user-account-item.blocked {
         opacity: 0.6;
-        background: rgba(0, 0, 0, 0.02);
+        background: var(--surface-muted);
         text-decoration: line-through;
     }
 
@@ -532,7 +538,7 @@
 
     .config-btn-range {
         padding: 10px 40px;
-        background: var(--bs-primary, #0d6efd);
+        background: var(--accent-primary);
         color: #fff;
         border: none;
         border-radius: 50px;
@@ -543,7 +549,7 @@
     }
 
     .config-btn-range:hover {
-        background: rgba(var(--bs-primary-rgb, 13, 110, 253), 0.9);
+        background: var(--btn-primary-hover-bg);
     }
 
     /* ============================
@@ -634,14 +640,15 @@
     }
 
     .modal-content {
-        background-color: #fefefe;
+        background-color: var(--surface-card);
         margin: 15% auto;
         padding: 20px;
-        border: 1px solid #888;
+        border: 1px solid var(--surface-border);
         width: 80%;
         max-width: 400px;
         border-radius: 8px;
         text-align: center;
+        color: var(--text-primary);
     }
 
     .close {

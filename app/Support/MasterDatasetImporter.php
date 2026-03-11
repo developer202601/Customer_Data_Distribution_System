@@ -380,6 +380,20 @@ class MasterDatasetImporter
             'first_run_date_raw' => null,
         ];
 
+        $paymentsLetter = $this->findHeaderColumnByPrefix($headerMap, 'PAYMENTS');
+        $paymentsColumnName = $paymentsLetter ? ($headers[$paymentsLetter]['normalised'] ?? 'PAYMENTS_VALUE') : null;
+
+        $secondaryArrearsLetter = null;
+        foreach ($this->findHeaderColumnsByPrefix($headerMap, self::NEW_ARREARS_PREFIX) as $candidateLetter) {
+            if ($candidateLetter !== $arrearsLetter) {
+                $secondaryArrearsLetter = $candidateLetter;
+                break;
+            }
+        }
+        $secondaryArrearsColumnName = $secondaryArrearsLetter
+            ? ($headers[$secondaryArrearsLetter]['normalised'] ?? 'NEW_ARREARS_SECONDARY')
+            : null;
+
         foreach ($dataRows as $columns) {
             if (! $this->rowHasData($columns)) {
                 continue;
@@ -387,7 +401,16 @@ class MasterDatasetImporter
 
             $statistics['row_count']++;
 
-            $parsed = $this->mapRow($columns, $headerMap, $arrearsLetter, $arrearsColumnName);
+            $parsed = $this->mapRow(
+                $columns,
+                $headerMap,
+                $arrearsLetter,
+                $arrearsColumnName,
+                $paymentsLetter,
+                $paymentsColumnName,
+                $secondaryArrearsLetter,
+                $secondaryArrearsColumnName
+            );
 
             if (! $statistics['first_run_date'] && $parsed['run_date'] instanceof Carbon) {
                 $statistics['first_run_date'] = $parsed['run_date'];
@@ -438,7 +461,16 @@ class MasterDatasetImporter
         ];
     }
 
-    private function mapRow(array $columns, array $headerMap, string $arrearsLetter, string $arrearsColumnName): array
+    private function mapRow(
+        array $columns,
+        array $headerMap,
+        string $arrearsLetter,
+        string $arrearsColumnName,
+        ?string $paymentsLetter,
+        ?string $paymentsColumnName,
+        ?string $secondaryArrearsLetter,
+        ?string $secondaryArrearsColumnName
+    ): array
     {
         $runDateRaw = $this->getColumnValue($columns, $headerMap, 'RUN_DATE');
         $runDate = $this->parseRunDate($runDateRaw);
@@ -450,6 +482,10 @@ class MasterDatasetImporter
             'rtom' => $this->getColumnValue($columns, $headerMap, 'RTOM'),
             'customer_ref' => $this->getColumnValue($columns, $headerMap, 'CUSTOMER_REF'),
             'account_num' => $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM'),
+            'installment' => $this->getColumnValue($columns, $headerMap, 'INSTALLMENT'),
+            'account_status' => $this->getColumnValue($columns, $headerMap, 'ACCOUNT_STATUS'),
+            'acct_effect_dtm' => $this->parseDate($this->getColumnValue($columns, $headerMap, 'ACCT_EFFECT_DTM')),
+            'bill_seq' => $this->getColumnValue($columns, $headerMap, 'BILL_SEQ'),
             'product_label' => $this->getColumnValue($columns, $headerMap, 'PRODUCT_LABEL'),
             'medium' => $this->getColumnValue($columns, $headerMap, 'MEDIUM'),
             'customer_segment' => $this->getColumnValue($columns, $headerMap, 'CUSTOMER_SEGMENT'),
@@ -458,9 +494,14 @@ class MasterDatasetImporter
             'latest_bill_mny' => $this->parseMoney($this->getColumnValue($columns, $headerMap, 'LATEST_BILL_MNY')),
             'new_arrears_value' => $this->parseMoney($columns[$arrearsLetter] ?? ''),
             'new_arrears_column' => $arrearsColumnName,
+            'payments_value' => $paymentsLetter ? $this->parseMoney($columns[$paymentsLetter] ?? '') : null,
+            'payments_column' => $paymentsColumnName,
+            'new_arrears_secondary_value' => $secondaryArrearsLetter ? $this->parseMoney($columns[$secondaryArrearsLetter] ?? '') : null,
+            'new_arrears_secondary_column' => $secondaryArrearsColumnName,
             'mobile_contact_tel' => $this->getColumnValue($columns, $headerMap, 'MOBILE_CONTACT_TEL'),
             'email_address' => $this->getColumnValue($columns, $headerMap, 'EMAIL_ADDRESS'),
             'credit_score' => $this->parseDecimal($this->getColumnValue($columns, $headerMap, 'CREDIT_SCORE')),
+            'credit_class_id' => $this->getColumnValue($columns, $headerMap, 'CREDIT_CLASS_ID'),
             'credit_class_name' => $this->getColumnValue($columns, $headerMap, 'CREDIT_CLASS_NAME'),
             'bill_handling_code_name' => $this->getColumnValue($columns, $headerMap, 'BILL_HANDLING_CODE_NAME'),
             'age_months' => $this->parseInteger($this->getColumnValue($columns, $headerMap, 'AGE_MONTHS')),
@@ -470,14 +511,20 @@ class MasterDatasetImporter
             'billing_centre' => $this->getColumnValue($columns, $headerMap, 'BILLING_CENTRE'),
             'province' => $this->getColumnValue($columns, $headerMap, 'PROVINCE'),
             'next_bill_dtm' => $this->parseDate($this->getColumnValue($columns, $headerMap, 'NEXT_BILL_DTM')),
+            'payment_due_dat' => $this->parseDate($this->getColumnValue($columns, $headerMap, 'PAYMENT_DUE_DAT')),
             'bill_month' => $this->getColumnValue($columns, $headerMap, 'BILL_MONTH'),
             'latest_bill_dtm' => $this->parseDate($this->getColumnValue($columns, $headerMap, 'LATEST_BILL_DTM')),
             'invoicing_co_id' => $this->getColumnValue($columns, $headerMap, 'INVOICING_CO_ID'),
             'invoicing_co_name' => $this->getColumnValue($columns, $headerMap, 'INVOICING_CO_NAME'),
             'product_seq' => $this->getColumnValue($columns, $headerMap, 'PRODUCT_SEQ'),
             'product_id' => $this->getColumnValue($columns, $headerMap, 'PRODUCT_ID'),
+            'product_name' => $this->getColumnValue($columns, $headerMap, 'PRODUCT_NAME'),
+            'start_dat' => $this->parseDate($this->getColumnValue($columns, $headerMap, 'START_DAT')),
+            'end_dat' => $this->parseDate($this->getColumnValue($columns, $headerMap, 'END_DAT')),
             'latest_product_status' => $this->getColumnValue($columns, $headerMap, 'LATEST_PRODUCT_STATUS'),
+            'latest_effective_dtm' => $this->parseDate($this->getColumnValue($columns, $headerMap, 'LATEST_EFFECTIVE_DTM')),
             'bill_handling_code' => $this->getColumnValue($columns, $headerMap, 'BILL_HANDLING_CODE'),
+            'phone_number' => $this->getColumnValue($columns, $headerMap, 'PHONE_NUMBER'),
             'slt_business_line_value' => $this->getColumnValue($columns, $headerMap, 'SLT_BUSINESS_LINE_VALUE'),
             'sales_channel' => $this->getColumnValue($columns, $headerMap, 'SALES_CHANNEL'),
             'excluded' => false,
@@ -485,6 +532,19 @@ class MasterDatasetImporter
             'assigned_to' => null,
             'exclusion_priority' => 0,
         ];
+    }
+
+    private function findHeaderColumnsByPrefix(array $headerMap, string $prefix): array
+    {
+        $letters = [];
+
+        foreach ($headerMap as $normalised => $letter) {
+            if (str_starts_with($normalised, $prefix)) {
+                $letters[] = $letter;
+            }
+        }
+
+        return $letters;
     }
 
     private function evaluateAutoExclusion(array $row): ?string

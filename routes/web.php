@@ -20,6 +20,12 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/master/upload', [MasterDatasetUploadController::class, 'create'])->name('master.upload.create');
     Route::get('/master/upload/config', [MasterDatasetUploadController::class, 'assignmentConfig'])->name('master.upload.assignment.config');
+    Route::post('/master/upload/chunks/start', [MasterDatasetUploadController::class, 'startChunkUpload'])->name('master.upload.chunks.start');
+    Route::post('/master/upload/chunks/part', [MasterDatasetUploadController::class, 'uploadChunk'])->name('master.upload.chunks.part');
+    Route::post('/master/upload/chunks/finish', [MasterDatasetUploadController::class, 'finishChunkUpload'])->name('master.upload.chunks.finish');
+    Route::post('/master/upload/chunks/submit', [MasterDatasetUploadController::class, 'submitChunkUpload'])->name('master.upload.chunks.submit');
+    Route::delete('/master/upload/chunks/upload/{token}', [MasterDatasetUploadController::class, 'cancelChunkUpload'])->name('master.upload.chunks.cancel');
+    Route::delete('/master/upload/chunks/staged/{token}', [MasterDatasetUploadController::class, 'destroyStagedUpload'])->name('master.upload.chunks.staged.destroy');
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
@@ -31,6 +37,10 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/upload/rows', [ProcessFileController::class, 'rows'])->name('process.upload.rows');
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
     Route::get('/process/exclusions', [ExclusionUploadController::class, 'create'])->name('process.exclusions.create');
+    Route::post('/process/exclusions/chunks/start', [ExclusionUploadController::class, 'startChunkUpload'])->name('process.exclusions.chunks.start');
+    Route::post('/process/exclusions/chunks/part', [ExclusionUploadController::class, 'uploadChunk'])->name('process.exclusions.chunks.part');
+    Route::post('/process/exclusions/chunks/finish', [ExclusionUploadController::class, 'finishChunkUpload'])->name('process.exclusions.chunks.finish');
+    Route::delete('/process/exclusions/staged/{token}', [ExclusionUploadController::class, 'destroyStagedUpload'])->name('process.exclusions.staged.destroy');
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
     
     Route::get('/process/confirm', [App\Http\Controllers\ProcessConfirmController::class, 'create'])->name('process.confirm.create');
@@ -41,6 +51,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
     Route::get('/process/assignments/reports', [AssignmentController::class, 'reports'])->name('process.assignments.reports');
     Route::get('/process/assignments/report/{process}', [AssignmentController::class, 'report'])->name('process.assignments.report');
+    Route::delete('/process/assignments/reports/bulk', [AssignmentController::class, 'destroyBulk'])->name('process.assignments.destroyBulk');
     Route::delete('/process/assignments/reports/{process}', [AssignmentController::class, 'destroy'])->name('process.assignments.destroy');
     // Consolidated into overview; group-specific pages removed
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');

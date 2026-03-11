@@ -36,8 +36,7 @@
                         </div>
                         <div class="d-flex gap-2">
                             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Back</a>
-                            <button type="button" class="btn btn-outline-secondary px-4" id="master-upload-clear">Remove file</button>
-                            <button type="submit" class="btn btn-dark px-4" id="master-upload-submit" disabled>Submit</button>
+                            <button type="submit" class="btn btn-dark px-4 d-none" id="master-upload-submit" disabled>Submit</button>
                         </div>
                     </div>
 
@@ -52,6 +51,33 @@
                             </ul>
                         </div>
                         @endif
+                    </div>
+
+                    <div class="mt-4 d-none border rounded-4 p-3 bg-white" id="master-upload-progress-block">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                            <div>
+                                <strong id="master-upload-progress-label">Waiting to upload</strong>
+                                <p class="text-muted small mb-0" id="master-upload-progress-file"></p>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted small" id="master-upload-progress-meta"></span>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm d-none"
+                                    id="master-upload-clear"
+                                    aria-label="Remove uploaded file"
+                                    title="Remove uploaded file"
+                                >Remove uploaded file</button>
+                            </div>
+                        </div>
+                        <div class="progress" id="master-upload-progress-track" style="height: 0.9rem;">
+                            <div
+                                id="master-upload-progress-bar"
+                                class="progress-bar progress-bar-striped progress-bar-animated"
+                                role="progressbar"
+                                style="width: 0%; --bs-progress-bar-bg: var(--btn-success-bg);"
+                            >0%</div>
+                        </div>
                     </div>
 
                     <div class="process-dropzone mt-4" id="master-dropzone">
@@ -128,12 +154,91 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearButton = document.getElementById('master-upload-clear');
     const helper = document.getElementById('master-dropzone-helper');
     const errorsContainer = document.getElementById('master-upload-errors');
+    const progressBlock = document.getElementById('master-upload-progress-block');
+    const progressTrack = document.getElementById('master-upload-progress-track');
+    const progressBar = document.getElementById('master-upload-progress-bar');
+    const progressLabel = document.getElementById('master-upload-progress-label');
+    const progressFile = document.getElementById('master-upload-progress-file');
+    const progressMeta = document.getElementById('master-upload-progress-meta');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const startRoute = @json(route('master.upload.chunks.start'));
+    const partRoute = @json(route('master.upload.chunks.part'));
+    const finishRoute = @json(route('master.upload.chunks.finish'));
+    const submitRoute = @json(route('master.upload.chunks.submit'));
+    const cancelRouteTemplate = @json(route('master.upload.chunks.cancel', ['token' => '__TOKEN__']));
+    const stagedDestroyRouteTemplate = @json(route('master.upload.chunks.staged.destroy', ['token' => '__TOKEN__']));
+    let isUploading = false;
+    let isUploaded = false;
+    let activeUploadToken = null;
+    let stagedUploadToken = null;
+    let activeAbortController = null;
+
+    const formatBytes = (bytes) => {
+        if (!Number.isFinite(bytes) || bytes <= 0) {
+            return '0 B';
+        }
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let index = 0;
+        let value = bytes;
+        while (value >= 1024 && index < units.length - 1) {
+            value /= 1024;
+            index += 1;
+        }
+        return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+    };
+
+    const formatSpeed = (bytesPerSecond) => {
+        if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+            return '0 B/s';
+        }
+
+        return `${formatBytes(bytesPerSecond)}/s`;
+    };
+
+    const setProgress = (percentage, label, meta, options = {}) => {
+        if (!progressBlock || !progressBar) {
+            return;
+        }
+
+        const hideBar = options?.hideBar === true;
+
+        progressBlock.classList.remove('d-none');
+        progressTrack?.classList.toggle('d-none', hideBar);
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${percentage}%`;
+        progressBar.setAttribute('aria-valuenow', String(percentage));
+        if (progressLabel) {
+            progressLabel.textContent = label;
+        }
+        if (progressMeta) {
+            progressMeta.textContent = meta;
+        }
+    };
+
+    const hideProgress = () => {
+        progressBlock?.classList.add('d-none');
+        progressTrack?.classList.remove('d-none');
+        if (progressBar) {
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            progressBar.classList.remove('bg-danger');
+        }
+        updateProgressFile(null);
+    };
 
     const updateHelper = (file) => {
         if (!helper) {
             return;
         }
-        helper.textContent = file ? file.name : 'Upload a .zip that contains your master Excel workbook.';
+        helper.textContent = file ? `${file.name} (${formatBytes(file.size)})` : 'Upload a .zip that contains your master Excel workbook.';
+    };
+
+    const updateProgressFile = (file) => {
+        if (!progressFile) {
+            return;
+        }
+
+        progressFile.textContent = file ? `${file.name} (${formatBytes(file.size)})` : '';
     };
 
     const renderError = (message) => {
@@ -155,18 +260,103 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        submitButton.disabled = !(fileInput?.files?.length);
+        submitButton.disabled = isUploading || !isUploaded || !stagedUploadToken;
+        submitButton.classList.toggle('d-none', !(isUploaded && stagedUploadToken));
     };
 
-    const clearSelection = () => {
-        if (fileInput) {
-            fileInput.value = '';
-        }
-        updateHelper(null);
+    const clearError = () => {
         if (errorsContainer) {
             errorsContainer.innerHTML = '';
         }
+    };
+
+    const updateClearButtonLabel = () => {
+        if (!clearButton) {
+            return;
+        }
+
+        clearButton.classList.toggle('d-none', !(isUploading || isUploaded || Boolean(fileInput?.files?.length)));
+        const label = isUploading ? 'Cancel upload' : 'Remove uploaded file';
+        clearButton.textContent = label;
+        clearButton.setAttribute('title', label);
+        clearButton.setAttribute('aria-label', label);
+    };
+
+    const updateDropzoneState = () => {
+        if (!dropzone) {
+            return;
+        }
+
+        dropzone.classList.toggle('d-none', isUploading || isUploaded);
+    };
+
+    const resetState = (preserveInput = false) => {
+        if (fileInput) {
+            fileInput.value = preserveInput ? fileInput.value : '';
+        }
+        isUploading = false;
+        isUploaded = false;
+        activeUploadToken = null;
+        stagedUploadToken = null;
+        activeAbortController = null;
+        if (submitButton) {
+            submitButton.textContent = 'Submit';
+            submitButton.disabled = true;
+        }
+        if (clearButton) {
+            clearButton.disabled = false;
+        }
+        updateHelper(null);
+        hideProgress();
+        updateClearButtonLabel();
+        updateDropzoneState();
         updateSubmitState();
+    };
+
+    const deleteStagedUpload = async () => {
+        if (!stagedUploadToken) {
+            return;
+        }
+
+        const route = stagedDestroyRouteTemplate.replace('__TOKEN__', encodeURIComponent(stagedUploadToken));
+        try {
+            await fetch(route, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                credentials: 'same-origin',
+            });
+        } catch (_error) {
+            // Ignore cleanup errors; stale files can be handled by retention jobs.
+        }
+        stagedUploadToken = null;
+        isUploaded = false;
+        updateSubmitState();
+    };
+
+    const cancelActiveUpload = async () => {
+        if (!activeUploadToken) {
+            return;
+        }
+
+        const route = cancelRouteTemplate.replace('__TOKEN__', encodeURIComponent(activeUploadToken));
+        try {
+            await fetch(route, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                credentials: 'same-origin',
+            });
+        } catch (_error) {
+            // Ignore cleanup errors; user can re-upload immediately.
+        }
+        activeUploadToken = null;
     };
 
     if (dropzone) {
@@ -197,42 +387,234 @@ document.addEventListener('DOMContentLoaded', () => {
             if (file && file.name.toLowerCase().endsWith('.zip')) {
                 fileInput.files = event.dataTransfer.files;
                 updateHelper(file);
+                fileInput.dispatchEvent(new Event('change', { bubbles: true }));
             } else {
                 updateHelper(null);
                 renderError('Please upload a ZIP file that contains your master Excel workbook.');
             }
-            updateSubmitState();
         });
     }
 
-    fileInput?.addEventListener('change', () => {
+    const uploadSelectedFile = async (file) => {
+        const requestHeaders = {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+        };
+
+        isUploading = true;
+        isUploaded = false;
+        updateClearButtonLabel();
+        updateDropzoneState();
+        updateSubmitState();
+        updateProgressFile(file);
+        setProgress(0, 'Preparing upload', formatBytes(file.size));
+        clearError();
+
+        try {
+            await deleteStagedUpload();
+
+            const startPayload = new FormData();
+            startPayload.append('file_name', file.name);
+            startPayload.append('file_size', String(file.size));
+            startPayload.append('mime_type', file.type || 'application/zip');
+
+            activeAbortController = new AbortController();
+
+            const startResponse = await fetch(startRoute, {
+                method: 'POST',
+                body: startPayload,
+                headers: requestHeaders,
+                credentials: 'same-origin',
+                signal: activeAbortController.signal,
+            });
+            const startJson = await startResponse.json().catch(() => null);
+            if (!startResponse.ok || !startJson?.upload_token) {
+                throw new Error(startJson?.message || startJson?.errors?.upload?.[0] || 'Unable to start the upload.');
+            }
+
+            activeUploadToken = startJson.upload_token;
+            const chunkSize = Number(startJson.chunk_size || (2 * 1024 * 1024));
+            const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+            let averageBytesPerSecond = 0;
+            let previousUploadedBytes = 0;
+            let previousTickAt = performance.now();
+
+            for (let index = 0; index < totalChunks; index += 1) {
+                const start = index * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunk = file.slice(start, end);
+                const chunkPayload = new FormData();
+                chunkPayload.append('upload_token', activeUploadToken);
+                chunkPayload.append('chunk_index', String(index));
+                chunkPayload.append('chunk', chunk, `${file.name}.part${index}`);
+
+                const chunkResponse = await fetch(partRoute, {
+                    method: 'POST',
+                    body: chunkPayload,
+                    headers: requestHeaders,
+                    credentials: 'same-origin',
+                    signal: activeAbortController.signal,
+                });
+                const chunkJson = await chunkResponse.json().catch(() => null);
+                if (!chunkResponse.ok) {
+                    throw new Error(chunkJson?.message || 'Unable to upload a file chunk.');
+                }
+
+                const uploadedBytes = Math.min((index + 1) * chunkSize, file.size);
+                const tickAt = performance.now();
+                const elapsedSeconds = Math.max((tickAt - previousTickAt) / 1000, 0.001);
+                const deltaBytes = Math.max(uploadedBytes - previousUploadedBytes, 0);
+                const instantBytesPerSecond = deltaBytes / elapsedSeconds;
+                averageBytesPerSecond = averageBytesPerSecond > 0
+                    ? ((averageBytesPerSecond * 0.7) + (instantBytesPerSecond * 0.3))
+                    : instantBytesPerSecond;
+                previousUploadedBytes = uploadedBytes;
+                previousTickAt = tickAt;
+                const percentage = Math.min(99, Math.round((uploadedBytes / file.size) * 100));
+                setProgress(
+                    percentage,
+                    'Uploading master dataset',
+                    `${formatBytes(uploadedBytes)} / ${formatBytes(file.size)} at ${formatSpeed(averageBytesPerSecond)}`
+                );
+            }
+
+            const finishPayload = new FormData();
+            finishPayload.append('upload_token', activeUploadToken);
+            finishPayload.append('total_chunks', String(totalChunks));
+
+            const finishResponse = await fetch(finishRoute, {
+                method: 'POST',
+                body: finishPayload,
+                headers: requestHeaders,
+                credentials: 'same-origin',
+                signal: activeAbortController.signal,
+            });
+            const finishJson = await finishResponse.json().catch(() => null);
+            if (!finishResponse.ok || !finishJson?.staged_upload_token) {
+                throw new Error(finishJson?.message || finishJson?.errors?.upload?.[0] || 'Unable to finalize the uploaded file.');
+            }
+
+            activeUploadToken = null;
+            stagedUploadToken = finishJson.staged_upload_token;
+            isUploading = false;
+            isUploaded = true;
+            activeAbortController = null;
+            setProgress(
+                100,
+                'Upload complete',
+                `${formatBytes(file.size)} uploaded at ${formatSpeed(averageBytesPerSecond)}. Click Submit to continue.`,
+                { hideBar: true }
+            );
+            updateClearButtonLabel();
+            updateDropzoneState();
+            updateSubmitState();
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+                setProgress(0, 'Upload canceled', 'You can select a file again.');
+                progressBar?.classList.add('bg-danger');
+            } else {
+                renderError(error instanceof Error ? error.message : 'Unable to upload the selected file.');
+                setProgress(0, 'Upload failed', 'Please try again.');
+                progressBar?.classList.add('bg-danger');
+            }
+
+            await cancelActiveUpload();
+            isUploading = false;
+            isUploaded = false;
+            activeAbortController = null;
+            stagedUploadToken = null;
+            updateClearButtonLabel();
+            updateDropzoneState();
+            updateSubmitState();
+        }
+    };
+
+    fileInput?.addEventListener('change', async () => {
         const file = fileInput.files[0];
-        if (file && file.name.toLowerCase().endsWith('.zip')) {
-            updateHelper(file);
-        } else {
+
+        if (!file) {
+            resetState();
+            return;
+        }
+
+        if (!file.name.toLowerCase().endsWith('.zip')) {
             fileInput.value = '';
             updateHelper(null);
-            if (file) {
-                renderError('Please upload a ZIP file that contains your master Excel workbook.');
-            }
+            renderError('Please upload a ZIP file that contains your master Excel workbook.');
+            updateSubmitState();
+            return;
         }
 
-        updateSubmitState();
+        if (isUploading) {
+            return;
+        }
+
+        updateHelper(file);
+        await uploadSelectedFile(file);
     });
 
-    clearButton?.addEventListener('click', (event) => {
+    clearButton?.addEventListener('click', async (event) => {
         event.preventDefault();
-        clearSelection();
+
+        if (isUploading) {
+            activeAbortController?.abort();
+            await cancelActiveUpload();
+            resetState();
+            return;
+        }
+
+        await deleteStagedUpload();
+        resetState();
     });
 
-    form?.addEventListener('submit', (event) => {
-        if (!fileInput?.files?.length) {
-            event.preventDefault();
-            renderError('Please choose a ZIP file before submitting.');
+    form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        if (isUploading) {
+            return;
+        }
+
+        if (!stagedUploadToken) {
+            renderError('Please wait until upload finishes before submitting.');
+            return;
+        }
+
+        clearError();
+        submitButton.disabled = true;
+        submitButton.textContent = 'Submitting...';
+        clearButton.disabled = true;
+
+        try {
+            const payload = new FormData();
+            payload.append('staged_upload_token', stagedUploadToken);
+
+            const response = await fetch(submitRoute, {
+                method: 'POST',
+                body: payload,
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                credentials: 'same-origin',
+            });
+
+            const json = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(json?.message || json?.errors?.upload?.[0] || 'Unable to submit uploaded file.');
+            }
+
+            window.location.href = json?.redirect_url || @json(route('process.exclusions.create'));
+        } catch (error) {
+            renderError(error instanceof Error ? error.message : 'Unable to submit uploaded file.');
+            submitButton.disabled = false;
+            submitButton.textContent = 'Submit';
+            clearButton.disabled = false;
         }
     });
 
-    clearSelection();
+    resetState();
     updateSubmitState();
 });
 </script>

@@ -39,9 +39,6 @@
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
                                 <p class="text-muted mb-0">Upload up to {{ $maxFiles }} ZIP archives (each with a single Excel workbook) that list the identifiers you want to remove from the master list.</p>
-                                @if(isset($process) && ! session('hide_dataset_info'))
-                                <p class="text-muted mb-0 mt-2">Active dataset token: <strong>{{ $process->token }}</strong> ({{ number_format((int) $process->row_count) }} rows)</p>
-                                @endif
                             </div>
                         </div>
                         <div class="text-end">
@@ -84,6 +81,23 @@
 
                     <div class="mt-4">
                         <h2 class="process-guidelines-title h5">Selected files</h2>
+                        <div class="mb-3 d-none border rounded-4 p-3 bg-white" id="exclusion-upload-progress-block">
+                            <div class="d-flex justify-content-between align-items-center gap-3 mb-2">
+                                <div>
+                                    <strong id="exclusion-upload-progress-label">Waiting to upload</strong>
+                                    <p class="text-muted small mb-0" id="exclusion-upload-progress-details"></p>
+                                </div>
+                                <span class="text-muted small" id="exclusion-upload-progress-meta"></span>
+                            </div>
+                            <div class="progress" id="exclusion-upload-progress-track" style="height: 0.9rem;">
+                                <div
+                                    id="exclusion-upload-progress-bar"
+                                    class="progress-bar progress-bar-striped progress-bar-animated"
+                                    role="progressbar"
+                                    style="width: 0%; --bs-progress-bar-bg: var(--btn-success-bg);"
+                                >0%</div>
+                            </div>
+                        </div>
                         <div id="exclusion-file-list" class="process-selected-files">
                             <p class="mb-0">No files selected yet.</p>
                         </div>
@@ -130,6 +144,7 @@
 <script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', () => {
         const maxFiles = <?php echo (int) $maxFiles; ?>;
+        const maxWorkbooks = maxFiles;
         const dropzone = document.getElementById('exclusion-dropzone');
         const fileInput = document.getElementById('exclusion-files');
         const helper = document.getElementById('exclusion-dropzone-helper');
@@ -138,17 +153,118 @@
         const errorContainer = document.getElementById('exclusion-errors');
         const form = document.getElementById('exclusion-upload-form');
         const clearButton = document.getElementById('exclusion-clear');
+        const progressBlock = document.getElementById('exclusion-upload-progress-block');
+        const progressTrack = document.getElementById('exclusion-upload-progress-track');
+        const progressBar = document.getElementById('exclusion-upload-progress-bar');
+        const progressLabel = document.getElementById('exclusion-upload-progress-label');
+        const progressDetails = document.getElementById('exclusion-upload-progress-details');
+        const progressMeta = document.getElementById('exclusion-upload-progress-meta');
         const selectedFiles = [];
         let loaderActive = false;
+        let uploadQueueActive = false;
         const submitButton = form.querySelector('button[type="submit"]');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const stagedUploads = @json($stagedUploads ?? []);
+        const startRoute = @json(route('process.exclusions.chunks.start'));
+        const partRoute = @json(route('process.exclusions.chunks.part'));
+        const finishRoute = @json(route('process.exclusions.chunks.finish'));
+        const destroyRouteTemplate = @json(route('process.exclusions.staged.destroy', ['token' => '__TOKEN__']));
+
+        const formatBytes = (bytes) => {
+            if (!Number.isFinite(bytes) || bytes <= 0) {
+                return '0 B';
+            }
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let index = 0;
+            let value = bytes;
+            while (value >= 1024 && index < units.length - 1) {
+                value /= 1024;
+                index += 1;
+            }
+            return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+        };
+
+        const setProgress = (percentage, label, meta, options = {}) => {
+            if (!progressBlock || !progressBar) {
+                return;
+            }
+            const hideBar = options?.hideBar === true;
+            progressBlock.classList.remove('d-none');
+            progressTrack?.classList.toggle('d-none', hideBar);
+            progressBar.style.width = `${percentage}%`;
+            progressBar.textContent = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', String(percentage));
+            if (progressLabel) {
+                progressLabel.textContent = label;
+            }
+            if (progressMeta) {
+                progressMeta.textContent = meta;
+            }
+        };
+
+        const getUploadedWorkbookCount = () => {
+            return selectedFiles
+                .filter((entry) => entry.status === 'uploaded')
+                .reduce((sum, entry) => sum + Math.max(Number(entry.excelCount || 0), 0), 0);
+        };
+
+        const updateProgressDetails = () => {
+            if (!progressDetails) {
+                return;
+            }
+
+            const uploadedFiles = selectedFiles.filter((entry) => entry.status === 'uploaded').length;
+            const workbookCount = getUploadedWorkbookCount();
+            progressDetails.textContent = `${uploadedFiles} ZIP uploaded, ${workbookCount}/${maxWorkbooks} Excel workbook(s) received.`;
+        };
+
+        const updateDropzoneState = () => {
+            if (!dropzone || !fileInput) {
+                return;
+            }
+
+            const workbookLimitReached = getUploadedWorkbookCount() >= maxWorkbooks;
+            const fileLimitReached = selectedFiles.length >= maxFiles;
+            const shouldHide = workbookLimitReached || fileLimitReached;
+
+            dropzone.classList.toggle('d-none', shouldHide);
+            fileInput.disabled = shouldHide;
+        };
+
+        const updateOverallProgress = () => {
+            const uploadable = selectedFiles.filter((entry) => entry.size > 0);
+            if (!uploadable.length) {
+                progressBlock?.classList.add('d-none');
+                progressTrack?.classList.remove('d-none');
+                if (progressDetails) {
+                    progressDetails.textContent = '';
+                }
+                return;
+            }
+
+            const totalBytes = uploadable.reduce((sum, entry) => sum + entry.size, 0);
+            const completedBytes = uploadable.reduce((sum, entry) => sum + Math.round((entry.progress / 100) * entry.size), 0);
+            const percentage = totalBytes > 0 ? Math.round((completedBytes / totalBytes) * 100) : 0;
+            const activeEntry = selectedFiles.find((entry) => entry.status === 'uploading');
+            const hasPending = selectedFiles.some((entry) => entry.status === 'uploading' || entry.status === 'queued');
+            const label = activeEntry ? `Uploading ${activeEntry.name}` : 'Uploaded exclusion files';
+            setProgress(
+                percentage,
+                label,
+                `${formatBytes(completedBytes)} / ${formatBytes(totalBytes)}`,
+                { hideBar: !hasPending && percentage >= 100 }
+            );
+            updateProgressDetails();
+        };
 
         const toggleSubmitState = () => {
             if (!submitButton) {
                 return;
             }
 
-            submitButton.disabled = selectedFiles.length === 0;
+            const hasUploaded = selectedFiles.some((entry) => entry.status === 'uploaded');
+            const hasPending = selectedFiles.some((entry) => entry.status === 'uploading' || entry.status === 'queued');
+            submitButton.disabled = loaderActive || uploadQueueActive || !hasUploaded || hasPending;
         };
 
         if (!dropzone || !fileInput || !form) {
@@ -174,7 +290,10 @@
 
             selectedFiles.forEach((file, index) => {
                 const item = document.createElement('li');
-                item.className = 'd-flex justify-content-between align-items-center gap-2 py-1 border-bottom';
+                item.className = 'py-2 border-bottom';
+
+                const row = document.createElement('div');
+                row.className = 'd-flex justify-content-between align-items-center gap-2';
 
                 const details = document.createElement('span');
                 const name = document.createElement('strong');
@@ -187,20 +306,52 @@
                 details.appendChild(name);
                 details.appendChild(size);
 
-                item.appendChild(details);
+                const state = document.createElement('small');
+                state.className = 'd-block text-muted';
+                if (file.status === 'uploaded') {
+                    const workbookCount = Number(file.excelCount || 0);
+                    state.textContent = workbookCount > 0
+                        ? `Uploaded • ${workbookCount} Excel workbook(s) in this ZIP`
+                        : 'Uploaded';
+                } else if (file.status === 'uploading') {
+                    state.textContent = `Uploading ${file.progress}%`;
+                } else if (file.status === 'failed') {
+                    state.textContent = file.error || 'Upload failed';
+                } else {
+                    state.textContent = 'Queued for upload';
+                }
+                details.appendChild(state);
+
+                row.appendChild(details);
 
                 const remove = document.createElement('button');
                 remove.type = 'button';
                 remove.className = 'btn btn-sm btn-outline-danger';
                 remove.textContent = 'Remove';
+                remove.disabled = file.status === 'uploading';
                 remove.addEventListener('click', () => removeFile(index));
-                item.appendChild(remove);
+                row.appendChild(remove);
+
+                item.appendChild(row);
+
+                if (file.status === 'uploading') {
+                    const progress = document.createElement('div');
+                    progress.className = 'progress mt-2';
+                    progress.style.height = '0.65rem';
+                    const bar = document.createElement('div');
+                    bar.className = 'progress-bar';
+                    bar.style.width = `${file.progress}%`;
+                    progress.appendChild(bar);
+                    item.appendChild(progress);
+                }
 
                 list.appendChild(item);
             });
 
             fileList.innerHTML = '';
             fileList.appendChild(list);
+            updateOverallProgress();
+            updateDropzoneState();
         };
 
         const createTransfer = () => {
@@ -242,10 +393,11 @@
 
             const names = selectedFiles.map((file) => file.name).join(', ');
             const remaining = Math.max(maxFiles - selectedFiles.length, 0);
+            const workbookCount = getUploadedWorkbookCount();
             const status = selectedFiles.length + '/' + maxFiles + ' file(s) selected';
             helper.textContent = remaining > 0 ?
-                status + ': ' + names + '. You can add ' + remaining + ' more.' :
-                status + ': ' + names + '.';
+                status + ': ' + names + `. ${workbookCount}/${maxWorkbooks} Excel workbook(s) received. You can add ` + remaining + ' more.' :
+                status + ': ' + names + `. ${workbookCount}/${maxWorkbooks} Excel workbook(s) received.`;
         };
 
         const showError = (messages) => {
@@ -288,6 +440,12 @@
 
             clearErrors();
 
+            if (getUploadedWorkbookCount() >= maxWorkbooks) {
+                showError([`${maxWorkbooks} Excel workbooks already received. Remove one before adding another file.`]);
+                updateHelperText(`${maxWorkbooks} Excel workbooks already received.`);
+                return;
+            }
+
             for (const file of files) {
                 if (selectedFiles.length >= maxFiles) {
                     updateHelperText('You have reached the limit of ' + maxFiles + ' files.');
@@ -304,26 +462,160 @@
                     continue;
                 }
 
-                selectedFiles.push(file);
+                selectedFiles.push({
+                    localId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+                    file,
+                    name: file.name,
+                    size: file.size,
+                    progress: 0,
+                    status: 'queued',
+                    stagedId: null,
+                    excelCount: 0,
+                    error: null,
+                });
             }
 
             updateHelperText();
 
-            syncInputFiles();
             renderList();
             toggleSubmitState();
+            processQueue();
         };
 
-        const removeFile = (index) => {
+        const removeFile = async (index) => {
             if (index < 0 || index >= selectedFiles.length) {
                 return;
             }
 
-            selectedFiles.splice(index, 1);
+            const [entry] = selectedFiles.splice(index, 1);
+
+            if (entry?.stagedId) {
+                const destroyRoute = destroyRouteTemplate.replace('__TOKEN__', encodeURIComponent(entry.stagedId));
+                await fetch(destroyRoute, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                    },
+                    credentials: 'same-origin',
+                }).catch(() => null);
+            }
+
             updateHelperText();
-            syncInputFiles();
             renderList();
             toggleSubmitState();
+        };
+
+        const uploadEntry = async (entry) => {
+            entry.status = 'uploading';
+            entry.error = null;
+            entry.progress = 0;
+            renderList();
+            toggleSubmitState();
+
+            const requestHeaders = {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+            };
+
+            const startPayload = new FormData();
+            startPayload.append('file_name', entry.name);
+            startPayload.append('file_size', String(entry.size));
+            startPayload.append('mime_type', entry.file?.type || 'application/zip');
+
+            const startResponse = await fetch(startRoute, {
+                method: 'POST',
+                body: startPayload,
+                headers: requestHeaders,
+                credentials: 'same-origin',
+            });
+            const startJson = await startResponse.json().catch(() => null);
+            if (!startResponse.ok || !startJson?.upload_token) {
+                throw new Error(startJson?.message || 'Unable to start exclusion upload.');
+            }
+
+            const uploadToken = startJson.upload_token;
+            const chunkSize = Number(startJson.chunk_size || (2 * 1024 * 1024));
+            const totalChunks = Math.max(1, Math.ceil(entry.size / chunkSize));
+
+            for (let index = 0; index < totalChunks; index += 1) {
+                const start = index * chunkSize;
+                const end = Math.min(start + chunkSize, entry.size);
+                const chunk = entry.file.slice(start, end);
+                const payload = new FormData();
+                payload.append('upload_token', uploadToken);
+                payload.append('chunk_index', String(index));
+                payload.append('chunk', chunk, `${entry.name}.part${index}`);
+
+                const chunkResponse = await fetch(partRoute, {
+                    method: 'POST',
+                    body: payload,
+                    headers: requestHeaders,
+                    credentials: 'same-origin',
+                });
+                const chunkJson = await chunkResponse.json().catch(() => null);
+                if (!chunkResponse.ok) {
+                    throw new Error(chunkJson?.message || 'Unable to upload a chunk.');
+                }
+
+                entry.progress = Math.min(99, Math.round(((index + 1) / totalChunks) * 100));
+                renderList();
+            }
+
+            const finishPayload = new FormData();
+            finishPayload.append('upload_token', uploadToken);
+            finishPayload.append('total_chunks', String(totalChunks));
+
+            const finishResponse = await fetch(finishRoute, {
+                method: 'POST',
+                body: finishPayload,
+                headers: requestHeaders,
+                credentials: 'same-origin',
+            });
+            const finishJson = await finishResponse.json().catch(() => null);
+            if (!finishResponse.ok || !finishJson?.file?.id) {
+                throw new Error(finishJson?.message || 'Unable to finalize exclusion upload.');
+            }
+
+            entry.status = 'uploaded';
+            entry.progress = 100;
+            entry.stagedId = finishJson.file.id;
+            entry.excelCount = Number(finishJson?.file?.excel_count || 0);
+            entry.file = null;
+            renderList();
+        };
+
+        const processQueue = async () => {
+            if (uploadQueueActive) {
+                return;
+            }
+
+            uploadQueueActive = true;
+            toggleSubmitState();
+
+            try {
+                while (true) {
+                    const next = selectedFiles.find((entry) => entry.status === 'queued');
+                    if (!next) {
+                        break;
+                    }
+
+                    try {
+                        await uploadEntry(next);
+                    } catch (error) {
+                        next.status = 'failed';
+                        next.error = error instanceof Error ? error.message : 'Upload failed';
+                        renderList();
+                        showError([next.error]);
+                    }
+                }
+            } finally {
+                uploadQueueActive = false;
+                toggleSubmitState();
+                updateOverallProgress();
+            }
         };
 
         dropzone.addEventListener('click', (event) => {
@@ -356,13 +648,37 @@
             addFiles(fileInput.files);
         });
 
-        const clearAll = () => {
+        const clearLocalState = () => {
             selectedFiles.length = 0;
-            syncInputFiles();
             renderList();
             updateHelperText();
             toggleSubmitState();
             clearErrors();
+            progressBlock?.classList.add('d-none');
+            updateDropzoneState();
+        };
+
+        const clearAll = (deleteRemote = true) => {
+            if (!deleteRemote) {
+                clearLocalState();
+                return;
+            }
+
+            const uploadedEntries = selectedFiles.filter((entry) => entry.stagedId);
+            Promise.all(uploadedEntries.map((entry) => {
+                const destroyRoute = destroyRouteTemplate.replace('__TOKEN__', encodeURIComponent(entry.stagedId));
+                return fetch(destroyRoute, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                    },
+                    credentials: 'same-origin',
+                }).catch(() => null);
+            })).finally(() => {
+                clearLocalState();
+            });
         };
 
         clearButton?.addEventListener('click', (event) => {
@@ -401,6 +717,11 @@
                 return;
             }
 
+            if (uploadQueueActive) {
+                showError(['Please wait until all exclusion files finish uploading.']);
+                return;
+            }
+
             loaderActive = true;
             clearErrors();
 
@@ -411,7 +732,18 @@
                 submitButton.disabled = true;
             }
 
-            const formData = new FormData(form);
+            const uploadedEntries = selectedFiles.filter((entry) => entry.status === 'uploaded' && entry.stagedId);
+            if (!uploadedEntries.length) {
+                loaderActive = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
+                showError(['Please upload at least one exclusion file before applying exclusions.']);
+                return;
+            }
+
+            const formData = new FormData();
+            uploadedEntries.forEach((entry) => formData.append('staged_upload_ids[]', entry.stagedId));
 
             try {
                 const response = await fetch(form.action, {
@@ -467,7 +799,7 @@
                     submitButton.disabled = false;
                 }
 
-                clearAll();
+                clearAll(false);
             } catch (error) {
                     window.CDDSLoader?.hide?.();
                 loaderActive = false;
@@ -478,7 +810,28 @@
             }
         });
 
-        clearAll();
+        stagedUploads.forEach((entry) => {
+            selectedFiles.push({
+                localId: entry.id,
+                file: null,
+                name: entry.name,
+                size: Number(entry.size || 0),
+                progress: 100,
+                status: 'uploaded',
+                stagedId: entry.id,
+                excelCount: Number(entry.excel_count || 1),
+                error: null,
+            });
+        });
+
+        if (selectedFiles.length === 0) {
+            clearAll();
+        } else {
+            renderList();
+            updateHelperText();
+            toggleSubmitState();
+            updateDropzoneState();
+        }
     });
 </script>
 @endpush

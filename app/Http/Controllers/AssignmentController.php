@@ -16,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Carbon;
@@ -261,6 +262,7 @@ class AssignmentController extends Controller
                 }
 
                 Storage::disk($disk)->deleteDirectory('exports/' . $token);
+                Storage::disk($disk)->deleteDirectory('exclusions/' . $process->id);
 
                 if ($process->master_archive_path) {
                     Storage::disk($disk)->delete($process->master_archive_path);
@@ -284,9 +286,83 @@ class AssignmentController extends Controller
         return redirect()->route('process.assignments.reports')->with('status', 'Dataset and exports deleted.');
     }
 
+    public function destroyBulk(Request $request): RedirectResponse
+    {
+        $isAdmin = session('user.is_admin') ?? false;
+
+        if (! $isAdmin) {
+            return redirect()->route('process.assignments.reports')->withErrors([
+                'reports' => 'Only administrators can remove datasets.',
+            ]);
+        }
+
+        $data = $request->validate([
+            'process_ids' => ['required', 'array', 'min:1'],
+            'process_ids.*' => ['integer', 'exists:master_dataset_processes,id'],
+        ]);
+
+        $processIds = collect($data['process_ids'])->map(static fn ($id) => (int) $id)->unique()->values();
+
+        if ($processIds->isEmpty()) {
+            throw ValidationException::withMessages([
+                'reports' => 'Select at least one dataset to delete.',
+            ]);
+        }
+
+        $deletedCount = 0;
+
+        try {
+            DB::transaction(function () use ($processIds, &$deletedCount) {
+                $processes = MasterDatasetProcess::query()
+                    ->whereIn('id', $processIds)
+                    ->with('exports')
+                    ->get();
+
+                /** @var MasterDatasetProcess $process */
+                foreach ($processes as $process) {
+                    $disk = $process->storage_disk ?: config('filesystems.default', 'local');
+                    $token = $process->token;
+
+                    foreach ($process->exports as $export) {
+                        if ($export->file_disk && $export->file_path) {
+                            Storage::disk($export->file_disk)->delete($export->file_path);
+                        }
+                    }
+
+                    Storage::disk($disk)->deleteDirectory('exports/' . $token);
+                    Storage::disk($disk)->deleteDirectory('exclusions/' . $process->id);
+
+                    if ($process->master_archive_path) {
+                        Storage::disk($disk)->delete($process->master_archive_path);
+                    }
+
+                    if ($process->master_workbook_path) {
+                        Storage::disk($disk)->delete($process->master_workbook_path);
+                    }
+
+                    $process->exports()->delete();
+                    $process->delete();
+                    $deletedCount++;
+                }
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('process.assignments.reports')->withErrors([
+                'reports' => 'Unable to delete one or more selected datasets. Please try again.',
+            ]);
+        }
+
+        return redirect()->route('process.assignments.reports')->with('status', sprintf('%d dataset(s) deleted.', $deletedCount));
+    }
+
     public function report(MasterDatasetProcess $process): RedirectResponse
     {
         session(['master.dataset.process_id' => $process->id]);
+
+        if ($process->status === MasterDatasetProcessStatus::AWAITING_EXCLUSIONS) {
+            return redirect()->route('process.exclusions.create');
+        }
 
         return redirect()->route('process.assignments.index');
     }

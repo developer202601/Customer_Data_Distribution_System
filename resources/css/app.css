@@ -1460,9 +1460,9 @@ body.guest-layout .content-wrapper {
 .dashboard-card:focus-within {
     /* smaller lift and scale for a gentler release */
     transform: translateY(-3px) scale(1.015);
-    box-shadow: var(--shadow-hard);
-    border-color: rgba(15, 27, 61, 0.08);
-    background-color: #1bb80f33 !important;
+    box-shadow: var(--shadow-soft);
+    border-color: var(--surface-border);
+    background-color: var(--surface-muted) !important;
 }
 
 .dashboard-card:hover .dashboard-card-title,

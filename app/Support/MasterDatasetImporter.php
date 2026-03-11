@@ -308,6 +308,9 @@ class MasterDatasetImporter
             $python->run($process);
             $process = MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::PYTHON_COMPLETE);
 
+            // Allow safe re-processing of the same process by clearing stale rows first.
+            MasterDatasetRow::query()->where('process_id', $process->id)->delete();
+
             $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::RECORDS_INSERTING);
             $promoted = app(MasterDatasetStagingPromoter::class)->promote($process);
 

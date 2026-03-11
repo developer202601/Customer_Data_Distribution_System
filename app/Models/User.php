@@ -29,6 +29,8 @@ class User extends Model
         'name',
         'assignment',
         'supervisor',
+        'enable_regional_review',
+        'enable_regional_review_enabled_at',
     ];
 
     /**
@@ -42,6 +44,8 @@ class User extends Model
         'status' => 'boolean',
         'created_at' => 'datetime',
         'supervisor' => 'integer',
+        'enable_regional_review' => 'boolean',
+        'enable_regional_review_enabled_at' => 'datetime',
     ];
 
     public function supervisedUsers()

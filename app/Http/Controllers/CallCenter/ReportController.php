@@ -13,6 +13,7 @@ use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -130,10 +131,20 @@ class ReportController extends Controller
                 }
             }
         }
+        $hiddenRowIds = [];
+        if ($selectedReport) {
+            $hiddenRowIds = DB::table('call_center_report_hidden_rows')
+                ->where('call_center_report_id', $selectedReport->id)
+                ->pluck('master_dataset_row_id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+        }
+
         // Compute assigned / distributable counts. Supervisors should only be able to distribute rows
         // that match their RTOM (and by extension the region(s) where that RTOM appears).
         $assignedCount = 0;
         $allowedRowIds = [];
+        $effectiveRowCount = $selectedReport ? max(0, (int) $selectedReport->row_count - count($hiddenRowIds)) : 0;
         if ($selectedReport) {
             $allAssignedForReport = CallCenterAssignment::where('call_center_report_id', $selectedReport->id)->whereNotNull('assigned_user_id');
             // Default behavior: everything
@@ -145,10 +156,10 @@ class ReportController extends Controller
                 $rtomPart = preg_replace('/^supervisor_/', '', $assignStr);
                 // strip leading rtom_ if present
                 $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-                // find row ids that match this rtom (case-insensitive) within the report's row list
-                $rowIds = $selectedReport->row_ids ?? [];
+                // find row ids that match this rtom (case-insensitive) within the report's visible row list
+                $rowIds = array_values(array_diff($selectedReport->row_ids ?? [], $hiddenRowIds));
                 $allowedRowIds = collect($rowIds)->chunk(1000)->flatMap(function($chunk) use ($rtomVal) {
-                    return \Illuminate\Support\Facades\DB::table('master_dataset_rows')
+                    return DB::table('master_dataset_rows')
                         ->whereIn('id', $chunk->toArray())
                         ->whereRaw('LOWER(rtom) = ?', [strtolower($rtomVal)])
                         ->pluck('id');
@@ -158,12 +169,22 @@ class ReportController extends Controller
                     ->whereIn('master_dataset_row_id', $allowedRowIds)
                     ->whereNotNull('assigned_user_id')
                     ->count();
+
+                $effectiveRowCount = count($allowedRowIds);
             }
         }
 
         $anyAssigned = $assignedCount > 0;
-        $allAssigned = $selectedReport ? ($selectedReport->row_count > 0 && $assignedCount >= $selectedReport->row_count) : false;
-        $distributableRows = $selectedReport ? max(0, (isset($allowedRowIds) ? count($allowedRowIds) : $selectedReport->row_count) - $assignedCount) : 0;
+        $allAssigned = $selectedReport ? ($effectiveRowCount > 0 && $assignedCount >= $effectiveRowCount) : false;
+        $distributableRows = $selectedReport ? max(0, $effectiveRowCount - $assignedCount) : 0;
+
+        $regionalReviewStatus = [
+            'hidden_count' => count($hiddenRowIds),
+            'pending_regions' => [],
+        ];
+        if ($selectedReport) {
+            $regionalReviewStatus['pending_regions'] = $this->pendingRegionalReviews($selectedReport);
+        }
 
         $hasInteractions = false;
         if ($selectedReport) {
@@ -202,6 +223,7 @@ class ReportController extends Controller
             'anyAssigned' => $anyAssigned,
             'allAssigned' => $allAssigned,
             'distributableRows' => $distributableRows,
+            'regionalReviewStatus' => $regionalReviewStatus,
             'hasInteractions' => $hasInteractions,
             'rejectedSummary' => $rejectedSummary,
             'reassignPendingUserIds' => $pendingUserIds,
@@ -320,6 +342,45 @@ class ReportController extends Controller
             ->where('call_center_report_id', $report->id)
             ->get();
 
+        $hiddenRows = DB::table('call_center_report_hidden_rows as h')
+            ->leftJoin('master_dataset_rows as r', 'h.master_dataset_row_id', '=', 'r.id')
+            ->leftJoin('users as u', 'h.hidden_by_user_id', '=', 'u.id')
+            ->where('h.call_center_report_id', $report->id)
+            ->orderByDesc('h.hidden_at')
+            ->get([
+                'h.master_dataset_row_id',
+                'h.hidden_at',
+                'u.name as hidden_by_name',
+                'u.username as hidden_by_username',
+                'r.account_num',
+                'r.customer_ref',
+                'r.mobile_contact_tel',
+                'r.region',
+                'r.rtom',
+            ])
+            ->map(function ($item) {
+                $actor = trim((string) ($item->hidden_by_name ?? ''));
+                if ($actor === '') {
+                    $actor = trim((string) ($item->hidden_by_username ?? ''));
+                }
+                if ($actor === '') {
+                    $actor = 'Unknown';
+                }
+
+                return [
+                    'row_id' => (int) $item->master_dataset_row_id,
+                    'account_num' => $item->account_num,
+                    'customer_ref' => $item->customer_ref,
+                    'phone' => $item->mobile_contact_tel,
+                    'region' => $item->region,
+                    'rtom' => $item->rtom,
+                    'hidden_by' => $actor,
+                    'hidden_at' => $item->hidden_at ? Carbon::parse($item->hidden_at) : null,
+                ];
+            })
+            ->values();
+
+
         $assignedCount = $assignments->whereNotNull('assigned_user_id')->count();
         $acceptedCount = $assignments->where('accepted', true)->count();
         $acceptanceRate = $assignedCount ? round(($acceptedCount / $assignedCount) * 100, 1) : 0;
@@ -395,6 +456,7 @@ class ReportController extends Controller
             'report' => $report,
             'label' => $label,
             'assigner' => optional($report->process)->user_name ?? optional(optional($report->process)->user)->username ?? 'System',
+            'hiddenRows' => $hiddenRows,
             'assignedCount' => $assignedCount,
             'acceptedCount' => $acceptedCount,
             'acceptanceRate' => $acceptanceRate,
@@ -537,6 +599,82 @@ class ReportController extends Controller
         return $total;
     }
 
+    private function pendingRegionalReviews(CallCenterReport $report): array
+    {
+        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values();
+        if ($rowIds->isEmpty()) {
+            return [];
+        }
+
+        $regionsInReport = DB::table('master_dataset_rows')
+            ->whereIn('id', $rowIds->all())
+            ->whereNotNull('region')
+            ->selectRaw('LOWER(TRIM(region)) as region_key')
+            ->distinct()
+            ->pluck('region_key')
+            ->filter()
+            ->values()
+            ->all();
+
+        if (empty($regionsInReport)) {
+            return [];
+        }
+
+        $enabledRegions = DB::table('users')
+            ->where('system', 'cc')
+            ->where('admin_prev', 1)
+            ->where('status', 1)
+            ->where('enable_regional_review', 1)
+            ->whereNotNull('enable_regional_review_enabled_at')
+            ->where('enable_regional_review_enabled_at', '<=', $report->created_at)
+            ->whereNotNull('assignment')
+            ->where('assignment', '<>', 'super')
+            ->where('assignment', 'not like', 'rtom_%')
+            ->where('assignment', 'not like', 'supervisor_%')
+            ->where('assignment', 'not like', 'caller_%')
+            ->select('assignment')
+            ->distinct()
+            ->get();
+
+        $regionLabelByKey = [];
+        foreach ($enabledRegions as $regionRow) {
+            $label = trim((string) ($regionRow->assignment ?? ''));
+            if ($label === '') {
+                continue;
+            }
+
+            $key = strtolower($label);
+            $regionLabelByKey[$key] = $label;
+        }
+        $enabledRegionKeys = array_keys($regionLabelByKey);
+
+        $required = array_values(array_unique(array_intersect($regionsInReport, $enabledRegionKeys)));
+        if (empty($required)) {
+            return [];
+        }
+
+        $reviewed = DB::table('call_center_report_region_reviews')
+            ->where('call_center_report_id', $report->id)
+            ->whereNotNull('reviewed_at')
+            ->selectRaw('LOWER(TRIM(region_name)) as region_key')
+            ->pluck('region_key')
+            ->filter()
+            ->values()
+            ->all();
+
+        $pendingKeys = array_values(array_diff($required, $reviewed));
+        if (empty($pendingKeys)) {
+            return [];
+        }
+
+        $pendingLabels = [];
+        foreach ($pendingKeys as $key) {
+            $pendingLabels[] = $regionLabelByKey[$key] ?? $key;
+        }
+
+        return array_values(array_unique($pendingLabels));
+    }
+
     /**
      * Supervisor-specific distribution: only allow assigning rows that match
      * the supervisor's RTOM and only to callers they created.
@@ -549,6 +687,12 @@ class ReportController extends Controller
         }
 
         $report = CallCenterReport::findOrFail($reportId);
+
+        $pendingRegions = $this->pendingRegionalReviews($report);
+        if (! empty($pendingRegions)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])
+                ->withErrors(['reassign' => 'Distribution is blocked. Pending regional review: ' . implode(', ', $pendingRegions)]);
+        }
 
         $userIds = array_values(array_filter((array) $request->input('user_ids', []), fn($v) => is_numeric($v) && (int)$v > 0));
         if (empty($userIds)) {
@@ -574,7 +718,13 @@ class ReportController extends Controller
             return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No valid users selected.']);
         }
 
-        $rowIds = $report->row_ids ?? [];
+        $hiddenIds = DB::table('call_center_report_hidden_rows')
+            ->where('call_center_report_id', $report->id)
+            ->pluck('master_dataset_row_id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        $rowIds = array_values(array_diff($report->row_ids ?? [], $hiddenIds));
         if (empty($rowIds)) {
             return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No rows available for this report.']);
         }

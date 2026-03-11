@@ -81,6 +81,67 @@
                 </div>
 
         <div class="row g-3 mt-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        @php $hiddenRowsCount = $hiddenRows->count(); @endphp
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="h6 mb-0">Currently hidden rows</h5>
+                            <button
+                                class="btn btn-outline-secondary btn-sm"
+                                type="button"
+                                aria-expanded="false"
+                                aria-controls="hiddenRowsCollapse"
+                                id="hiddenRowsCollapseBtn"
+                            >
+                                <span class="me-2 small text-muted">{{ number_format($hiddenRowsCount) }} hidden</span>
+                                <span id="hiddenRowsToggleText">Expand</span>
+                            </button>
+                        </div>
+
+                        <div id="hiddenRowsCollapse" class="cc-collapsible" aria-hidden="true">
+                            @if($hiddenRows->isEmpty())
+                            <p class="small text-muted mb-0">No rows are currently hidden for this report.</p>
+                            @else
+                            <div class="mb-3">
+                                <label for="hiddenRowsSearch" class="form-label small text-muted mb-1">Search hidden rows</label>
+                                <input type="search" id="hiddenRowsSearch" class="form-control form-control-sm" placeholder="Account / who / when">
+                            </div>
+                            <div class="table-responsive {{ $hiddenRowsCount > 4 ? 'cc-hidden-rows-scroll' : '' }}">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Account</th>
+                                            <th>Who</th>
+                                            <th>When</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="hidden-rows-table-body">
+                                        @foreach($hiddenRows as $hidden)
+                                        @php
+                                        $whenLabel = optional($hidden['hidden_at'])->format('Y-m-d H:i') ?? '—';
+                                        $searchBlob = strtolower(trim(($hidden['account_num'] ?? '') . ' ' . ($hidden['hidden_by'] ?? '') . ' ' . $whenLabel));
+                                        @endphp
+                                        <tr class="hidden-row-item" data-search="{{ $searchBlob }}">
+                                            <td>{{ $hidden['account_num'] ?? '—' }}</td>
+                                            <td>{{ $hidden['hidden_by'] }}</td>
+                                            <td>{{ $whenLabel }}</td>
+                                        </tr>
+                                        @endforeach
+                                        <tr id="hiddenRowsNoMatch" class="d-none">
+                                            <td colspan="3" class="small text-muted">No matching hidden rows.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-4">
             <div class="col-lg-8">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-body">
@@ -422,6 +483,25 @@
         margin-bottom: 0;
     }
 
+    .cc-collapsible {
+        overflow: hidden;
+        max-height: 0;
+        opacity: 0;
+        margin-top: 0;
+        transition: max-height 280ms ease, opacity 220ms ease, margin-top 220ms ease;
+        will-change: max-height, opacity;
+    }
+
+    .cc-collapsible.is-open {
+        opacity: 1;
+        margin-top: 1rem;
+    }
+
+    .cc-hidden-rows-scroll {
+        max-height: 245px;
+        overflow-y: auto;
+    }
+
     .cc-daily-calendar {
         border-radius: 0.85rem;
         background: #f8f9fa;
@@ -536,14 +616,85 @@
         const modal = new bootstrap.Modal(document.getElementById('agentDetailsModal'));
         const tableBody = document.getElementById('agent-table-body');
         const sortButtons = document.querySelectorAll('.sort-btn');
+        const hiddenRowsSearch = document.getElementById('hiddenRowsSearch');
+        const hiddenRowsItems = Array.from(document.querySelectorAll('.hidden-row-item'));
+        const hiddenRowsNoMatch = document.getElementById('hiddenRowsNoMatch');
+        const hiddenRowsCollapse = document.getElementById('hiddenRowsCollapse');
+        const hiddenRowsCollapseBtn = document.getElementById('hiddenRowsCollapseBtn');
+        const hiddenRowsToggleText = document.getElementById('hiddenRowsToggleText');
         let currentSort = { column: 'payment_amount', direction: 'desc' };
 
-        // Initial sort by payments desc
-        sortTable('payment_amount', 'desc');
-        updateSortIcons();
+        // Initial sort by payments desc (only when caller table exists)
+        if (tableBody) {
+            sortTable('payment_amount', 'desc');
+            updateSortIcons();
+        }
+
+        if (hiddenRowsCollapse && hiddenRowsToggleText && hiddenRowsCollapseBtn) {
+            const isExpanded = function() {
+                return hiddenRowsCollapse.classList.contains('is-open');
+            };
+
+            const syncHiddenRowsToggle = function() {
+                const expanded = isExpanded();
+                hiddenRowsToggleText.textContent = expanded ? 'Collapse' : 'Expand';
+                hiddenRowsCollapseBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            };
+
+            const openHiddenRows = function() {
+                hiddenRowsCollapse.classList.add('is-open');
+                hiddenRowsCollapse.setAttribute('aria-hidden', 'false');
+                hiddenRowsCollapse.style.maxHeight = hiddenRowsCollapse.scrollHeight + 'px';
+            };
+
+            const closeHiddenRows = function() {
+                hiddenRowsCollapse.style.maxHeight = hiddenRowsCollapse.scrollHeight + 'px';
+                requestAnimationFrame(function() {
+                    hiddenRowsCollapse.style.maxHeight = '0px';
+                    hiddenRowsCollapse.classList.remove('is-open');
+                    hiddenRowsCollapse.setAttribute('aria-hidden', 'true');
+                });
+            };
+
+            syncHiddenRowsToggle();
+
+            hiddenRowsCollapseBtn.addEventListener('click', function() {
+                if (isExpanded()) {
+                    closeHiddenRows();
+                } else {
+                    openHiddenRows();
+                }
+                syncHiddenRowsToggle();
+            });
+
+            window.addEventListener('resize', function() {
+                if (isExpanded()) {
+                    hiddenRowsCollapse.style.maxHeight = hiddenRowsCollapse.scrollHeight + 'px';
+                }
+            });
+        }
+
+        if (hiddenRowsSearch && hiddenRowsItems.length > 0) {
+            hiddenRowsSearch.addEventListener('input', function() {
+                const q = (hiddenRowsSearch.value || '').trim().toLowerCase();
+                let visibleCount = 0;
+
+                hiddenRowsItems.forEach(function(row) {
+                    const hay = (row.getAttribute('data-search') || '').toLowerCase();
+                    const match = q === '' || hay.includes(q);
+                    row.classList.toggle('d-none', !match);
+                    if (match) visibleCount += 1;
+                });
+
+                if (hiddenRowsNoMatch) {
+                    hiddenRowsNoMatch.classList.toggle('d-none', visibleCount > 0);
+                }
+            });
+        }
 
         sortButtons.forEach(button => {
             button.addEventListener('click', function() {
+                if (!tableBody) return;
                 const column = this.getAttribute('data-sort');
                 let direction = 'desc';
                 if (currentSort.column === column && currentSort.direction === 'desc') {
@@ -556,6 +707,7 @@
         });
 
         function sortTable(column, direction) {
+            if (!tableBody) return;
             const rows = Array.from(tableBody.querySelectorAll('tr'));
             rows.sort((a, b) => {
                 let aVal, bVal;
@@ -589,6 +741,7 @@
         }
 
         function updateSortIcons() {
+            if (!tableBody) return;
             sortButtons.forEach(button => {
                 const indicator = button.querySelector('.sort-indicator');
                 const column = button.getAttribute('data-sort');

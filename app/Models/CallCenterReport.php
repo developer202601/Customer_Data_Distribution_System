@@ -35,6 +35,16 @@ class CallCenterReport extends Model
         return $this->hasMany(CallCenterAssignment::class, 'call_center_report_id');
     }
 
+    public function hiddenRows(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CallCenterReportHiddenRow::class, 'call_center_report_id');
+    }
+
+    public function regionReviews(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CallCenterReportRegionReview::class, 'call_center_report_id');
+    }
+
     public function interactions(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
     {
         return $this->hasManyThrough(

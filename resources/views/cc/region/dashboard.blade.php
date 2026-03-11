@@ -27,9 +27,6 @@
                             <button type="button" class="btn btn-outline-secondary active" data-mode="latest">Latest report</button>
                             <button type="button" class="btn btn-outline-secondary" data-mode="all-time">All reports</button>
                         </div>
-                        <div class="d-flex gap-2">
-                            <a href="{{ route('cc.region.index') }}" class="btn btn-outline-success rounded-pill px-4">RTOs & Admins</a>
-                        </div>
                     </div>
                 </div>
 

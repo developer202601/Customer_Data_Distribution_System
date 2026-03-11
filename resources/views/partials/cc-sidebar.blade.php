@@ -23,6 +23,7 @@
                         <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">Manage Callers</a>
                     @else
                         <a class="nav-link{{ $ccRouteName === 'cc.region.dashboard' ? ' active' : '' }}" href="{{ route('cc.region.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.region.dashboard' ? 'page' : '' }}">Region Dashboard</a>
+                        <a class="nav-link{{ $ccRouteName === 'cc.region.review' ? ' active' : '' }}" href="{{ route('cc.region.review') }}" aria-current="{{ $ccRouteName === 'cc.region.review' ? 'page' : '' }}">Review Report Rows</a>
                         <a class="nav-link{{ $ccRouteName === 'cc.region.index' ? ' active' : '' }}" href="{{ route('cc.region.index') }}" aria-current="{{ $ccRouteName === 'cc.region.index' ? 'page' : '' }}">RTO Admins</a>
                     @endif
                 @endif

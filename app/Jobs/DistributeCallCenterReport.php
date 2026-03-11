@@ -68,6 +68,25 @@ class DistributeCallCenterReport implements ShouldQueue
             return;
         }
 
+        // Remove rows hidden by regional review before supervisor/caller distribution.
+        try {
+            $hiddenIds = DB::table('call_center_report_hidden_rows')
+                ->where('call_center_report_id', $report->id)
+                ->pluck('master_dataset_row_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if (! empty($hiddenIds)) {
+                $rowIds = array_values(array_diff(array_map('intval', $rowIds), $hiddenIds));
+            }
+        } catch (\Exception $e) {
+            // If the review tables are not available yet, proceed with original rows.
+        }
+
+        if (empty($rowIds)) {
+            return;
+        }
+
         // Ensure we only attempt to assign master rows that actually exist
         try {
             $existing = DB::table('master_dataset_rows')->whereIn('id', $rowIds)->pluck('id')->toArray();

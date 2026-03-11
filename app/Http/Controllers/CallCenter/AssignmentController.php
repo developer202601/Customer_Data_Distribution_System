@@ -7,6 +7,7 @@ use App\Jobs\DistributeCallCenterReport;
 use App\Jobs\ReassignCallCenterRows;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterInteraction;
+use App\Models\CallCenterReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -820,11 +821,19 @@ class AssignmentController extends Controller
     // Admin helper to dispatch distribution job
     public function distribute(Request $request, $reportId)
     {
+        $report = CallCenterReport::findOrFail((int) $reportId);
         $userIds = $request->input('user_ids', []);
         $perUser = $request->input('per_user', null);
         $user = Auth::user();
         // sanitize user ids
         $userIds = array_values(array_filter($userIds, fn($id) => is_numeric($id) && (int)$id > 0));
+
+        $pendingRegions = $this->pendingRegionalReviews($report);
+        if (! empty($pendingRegions)) {
+            $label = implode(', ', $pendingRegions);
+            return Redirect::route('cc.reports', ['report' => $reportId])
+                ->withErrors(['reassign' => 'Distribution is blocked. Pending regional review: ' . $label]);
+        }
 
         // Mark selected users as fixed in the users table
         if (!empty($userIds)) {
@@ -867,6 +876,82 @@ class AssignmentController extends Controller
         }
 
         return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'Distribution queued.');
+    }
+
+    private function pendingRegionalReviews(CallCenterReport $report): array
+    {
+        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values();
+        if ($rowIds->isEmpty()) {
+            return [];
+        }
+
+        $regionsInReport = DB::table('master_dataset_rows')
+            ->whereIn('id', $rowIds->all())
+            ->whereNotNull('region')
+            ->selectRaw('LOWER(TRIM(region)) as region_key')
+            ->distinct()
+            ->pluck('region_key')
+            ->filter()
+            ->values()
+            ->all();
+
+        if (empty($regionsInReport)) {
+            return [];
+        }
+
+        $enabledRegions = DB::table('users')
+            ->where('system', 'cc')
+            ->where('admin_prev', 1)
+            ->where('status', 1)
+            ->where('enable_regional_review', 1)
+            ->whereNotNull('enable_regional_review_enabled_at')
+            ->where('enable_regional_review_enabled_at', '<=', $report->created_at)
+            ->whereNotNull('assignment')
+            ->where('assignment', '<>', 'super')
+            ->where('assignment', 'not like', 'rtom_%')
+            ->where('assignment', 'not like', 'supervisor_%')
+            ->where('assignment', 'not like', 'caller_%')
+            ->select('assignment')
+            ->distinct()
+            ->get();
+
+        $regionLabelByKey = [];
+        foreach ($enabledRegions as $regionRow) {
+            $label = trim((string) ($regionRow->assignment ?? ''));
+            if ($label === '') {
+                continue;
+            }
+
+            $key = strtolower($label);
+            $regionLabelByKey[$key] = $label;
+        }
+        $enabledRegionKeys = array_keys($regionLabelByKey);
+
+        $required = array_values(array_unique(array_intersect($regionsInReport, $enabledRegionKeys)));
+        if (empty($required)) {
+            return [];
+        }
+
+        $reviewed = DB::table('call_center_report_region_reviews')
+            ->where('call_center_report_id', $report->id)
+            ->whereNotNull('reviewed_at')
+            ->selectRaw('LOWER(TRIM(region_name)) as region_key')
+            ->pluck('region_key')
+            ->filter()
+            ->values()
+            ->all();
+
+        $pendingKeys = array_values(array_diff($required, $reviewed));
+        if (empty($pendingKeys)) {
+            return [];
+        }
+
+        $pendingLabels = [];
+        foreach ($pendingKeys as $key) {
+            $pendingLabels[] = $regionLabelByKey[$key] ?? $key;
+        }
+
+        return array_values(array_unique($pendingLabels));
     }
 
     public function recall(Request $request, $reportId)

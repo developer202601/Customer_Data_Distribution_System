@@ -135,7 +135,7 @@
                     <div class="text-muted small">{{ $reportLabel ?? 'Current report' }}</div>
                 </div>
 
-                @if(false && ($latestReportPending ?? 0) > 0)
+                @if(($latestReportPending ?? 0) > 0)
                     <div class="mb-4">
                         <div class="card border-0 rounded-4 bg-white shadow-sm">
                             <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">

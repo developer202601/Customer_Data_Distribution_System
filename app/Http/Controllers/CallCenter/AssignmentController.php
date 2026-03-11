@@ -53,14 +53,28 @@ class AssignmentController extends Controller
 
         $currentUserId = auth()->id() ?? session('user.id') ?? null;
 
-        // If no specific report is requested, find the latest report for this user and only show that
-        if (!$reportId && $currentUserId) {
-            $latestReportId = CallCenterAssignment::where('assigned_user_id', $currentUserId)
+        $latestReportId = null;
+        $latestAcceptedReportId = null;
+        $allUserAssignments = collect();
+        if ($currentUserId) {
+            // Keep two report markers:
+            // - latestReportId: newest report assigned to the user (including pending)
+            // - latestAcceptedReportId: newest report with at least one accepted row
+            // Default view should use accepted rows so existing work does not disappear.
+            $allUserAssignments = CallCenterAssignment::where('assigned_user_id', $currentUserId)
                 ->whereNotNull('call_center_report_id')
+                ->get(['id', 'call_center_report_id', 'accepted', 'rejected', 'reassignment_origin_id']);
+
+            $latestReportId = $allUserAssignments->max('call_center_report_id');
+            $latestAcceptedReportId = $allUserAssignments
+                ->where('accepted', true)
                 ->max('call_center_report_id');
-            if ($latestReportId) {
-                $reportId = $latestReportId;
-            }
+        }
+
+        // If no specific report is requested, prefer latest report with accepted rows.
+        // Fall back to newest assigned report when there are no accepted rows yet.
+        if (! $reportId) {
+            $reportId = $latestAcceptedReportId ?: $latestReportId;
         }
 
         $q = CallCenterAssignment::with(['row', 'agent', 'report'])
@@ -185,15 +199,17 @@ class AssignmentController extends Controller
             }
         }
 
-        // Determine if the current user has assignments from multiple reports
-        $userReportIds = $assignments->pluck('call_center_report_id')->filter()->unique()->values();
-        $latestReportId = $userReportIds->isNotEmpty() ? $userReportIds->max() : null;
-        $latestReportCount = $latestReportId ? $assignments->where('call_center_report_id', $latestReportId)->count() : 0;
+        // Determine report-level metadata using all assignments (accepted + pending + rejected),
+        // not only the currently displayed accepted subset.
+        $userReportIds = $allUserAssignments->pluck('call_center_report_id')->filter()->unique()->values();
+        $latestReportCount = $latestReportId ? $allUserAssignments->where('call_center_report_id', $latestReportId)->count() : 0;
         // count only unaccepted (pending) rows from the latest report for the banner
-        $latestReportPending = $latestReportId ? $assignments->where('call_center_report_id', $latestReportId)->where('accepted', false)->where('rejected', false)->count() : 0;
+        $latestReportPending = $latestReportId
+            ? $allUserAssignments->where('call_center_report_id', $latestReportId)->where('accepted', false)->where('rejected', false)->count()
+            : 0;
         $latestReportAllReassigned = false;
         if ($latestReportId && $latestReportPending > 0) {
-            $latestPendingItems = $assignments->where('call_center_report_id', $latestReportId)
+            $latestPendingItems = $allUserAssignments->where('call_center_report_id', $latestReportId)
                 ->where('accepted', false)
                 ->where('rejected', false);
             if ($latestPendingItems->count() > 0) {

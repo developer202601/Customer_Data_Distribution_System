@@ -104,13 +104,25 @@
 
     @if($rows instanceof \Illuminate\Pagination\LengthAwarePaginator)
         <div class="mt-3" id="reviewRowsPagination">
-            <div class="small text-muted mb-2">
-                Showing {{ number_format((int) ($rows->firstItem() ?? 0)) }}
-                to {{ number_format((int) ($rows->lastItem() ?? 0)) }}
-                of {{ number_format((int) $rows->total()) }} rows
-                ({{ number_format((int) $rows->perPage()) }} per page)
-            </div>
-            {{ $rows->links() }}
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 small text-muted">
+
+        <div>
+            @if ($rows->count())
+                Showing {{ number_format($rows->firstItem()) }}
+                to {{ number_format($rows->lastItem()) }}
+                of {{ number_format($rows->total()) }} rows
+                ({{ number_format($rows->perPage()) }} per page)
+            @else
+                No records found
+            @endif
         </div>
+
+        <div>
+            {{ $rows->links('pagination::bootstrap-5') }}
+        </div>
+
+    </div>
+</div>
     @endif
 @endif
+

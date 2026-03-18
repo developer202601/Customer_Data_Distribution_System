@@ -168,6 +168,30 @@
         box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
     }
 
+    .bulk-action-btn {
+        position: relative;
+        padding-left: 1.1rem;
+    }
+
+    .bulk-action-btn::before {
+        content: '';
+        position: absolute;
+        left: 0.4rem;
+        top: 0.4rem;
+        bottom: 0.4rem;
+        width: 0.22rem;
+        border-radius: 0.25rem;
+        background-color: var(--bulk-action-accent, rgba(13, 110, 253, 0.85));
+    }
+
+    .bulk-action-btn[data-action="hide"] {
+        --bulk-action-accent: rgba(220, 53, 69, 0.85);
+    }
+
+    .bulk-action-btn[data-action="unhide"] {
+        --bulk-action-accent: rgba(25, 135, 84, 0.85);
+    }
+
     @media (max-width: 768px) {
         .floating-bulk-actions {
             bottom: 0.75rem;

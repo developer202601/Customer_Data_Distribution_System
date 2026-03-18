@@ -13,6 +13,9 @@
                         <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn" data-action="unhide">Unhide Selected Rows</button>
                     @endif
                 </div>
+                <style>
+                    
+                </style>
             @endif
             <div class="form-check ms-2">
                 <input class="form-check-input" type="checkbox" id="selectAllRows">

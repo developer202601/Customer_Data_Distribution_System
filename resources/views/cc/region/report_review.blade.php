@@ -138,6 +138,44 @@
         user-select: none;
         filter: grayscale(35%);
     }
+
+    /* Compact pagination / summary styling for the review table */
+    #reviewRowsPagination {
+        font-size: 0.85rem;
+    }
+
+    #reviewRowsPagination .pagination {
+        margin-bottom: 0;
+        margin-top: 0;
+    }
+
+    #reviewRowsPagination .pagination .page-link {
+        padding: 0.25rem 0.5rem;
+    }
+
+    /* Floating bulk action buttons */
+    .floating-bulk-actions {
+        position: fixed;
+        bottom: 1rem;
+        right: 1rem;
+        z-index: 1200;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 0.5rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+    }
+
+    @media (max-width: 768px) {
+        .floating-bulk-actions {
+            bottom: 0.75rem;
+            right: 0.75rem;
+            left: 0.75rem;
+            justify-content: center;
+        }
+    }
 </style>
 @endpush
 
@@ -150,7 +188,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const countTotal = document.getElementById('countTotalRows');
     const countVisible = document.getElementById('countVisibleRows');
     const countHidden = document.getElementById('countHiddenRows');
+    const hideRowsUrl = '{{ route('cc.region.review.hide_rows', $selectedReport->id) }}';
     let searchTimer = null;
+    let currentPage = 1;
 
     function applyRowBindings() {
         const selectAll = document.getElementById('selectAllRows');
@@ -235,8 +275,38 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    const tableLoadingOverlayId = 'reviewTableLoadingOverlay';
+
+    function setTableLoading(isLoading) {
+        if (!tableContainer) return;
+        let overlay = document.getElementById(tableLoadingOverlayId);
+        if (!overlay && isLoading) {
+            overlay = document.createElement('div');
+            overlay.id = tableLoadingOverlayId;
+            overlay.style.position = 'absolute';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.background = 'rgba(255,255,255,0.8)';
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.zIndex = '10';
+            overlay.innerHTML = '<div class="text-muted small">Loading rows...</div>';
+            tableContainer.style.position = 'relative';
+            tableContainer.appendChild(overlay);
+            return;
+        }
+
+        if (!isLoading && overlay) {
+            overlay.remove();
+        }
+    }
+
     async function fetchTable(page) {
         if (!filterForm || !tableContainer) return;
+        currentPage = page || 1;
 
         const fd = new FormData(filterForm);
         const searchEl = document.getElementById('tableSearch');
@@ -250,7 +320,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (typeof value === 'string') params.append(key, value);
         });
 
-        tableContainer.innerHTML = '<div class="text-muted small">Loading rows...</div>';
+        setTableLoading(true);
 
         try {
             const url = '{{ route('cc.region.review') }}?' + params.toString();
@@ -260,6 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             if (!res.ok) throw new Error('Failed to load rows');
             const data = await res.json();
+
             tableContainer.innerHTML = data.table_html || '<div class="text-muted small">No data.</div>';
 
             if (countTotal && data.counts) countTotal.textContent = Number(data.counts.total || 0).toLocaleString();
@@ -268,7 +339,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             applyRowBindings();
         } catch (err) {
-            tableContainer.innerHTML = '<div class="text-danger small">Unable to load rows.</div>';
+            showTopToast('Unable to load rows.', true);
+        } finally {
+            setTableLoading(false);
         }
     }
 
@@ -303,18 +376,97 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function showTopToast(message, isError = false) {
+        const existing = document.getElementById('topToast');
+        if (existing) existing.closest('[aria-live]')?.remove();
+
+        const wrapper = document.createElement('div');
+        wrapper.setAttribute('aria-live', 'polite');
+        wrapper.setAttribute('aria-atomic', 'true');
+        wrapper.style.zIndex = '2100';
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = '50%';
+        wrapper.style.transform = 'translateX(-50%)';
+        wrapper.style.top = '0.75rem';
+
+        const toast = document.createElement('div');
+        toast.id = 'topToast';
+        toast.className = 'toast align-items-center text-bg-light border shadow-sm' + (isError ? ' border-danger' : '');
+        toast.role = 'alert';
+        toast.ariaLive = 'assertive';
+        toast.ariaAtomic = 'true';
+        toast.style.minWidth = '360px';
+        toast.style.maxWidth = '720px';
+
+        const inner = document.createElement('div');
+        inner.className = 'd-flex';
+
+        const body = document.createElement('div');
+        body.className = 'toast-body text-center w-100';
+        body.textContent = message;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-close me-2 m-auto';
+        btn.dataset.bsDismiss = 'toast';
+        btn.ariaLabel = 'Close';
+        btn.addEventListener('click', function () {
+            wrapper.remove();
+        });
+
+        inner.appendChild(body);
+        inner.appendChild(btn);
+        toast.appendChild(inner);
+        wrapper.appendChild(toast);
+        document.body.appendChild(wrapper);
+
+        try {
+            new bootstrap.Toast(toast, { delay: 4000 }).show();
+        } catch (e) {
+            // ignore
+        }
+    }
+
     if (bulkForm) {
-        bulkForm.addEventListener('submit', function () {
+        bulkForm.addEventListener('click', async function (ev) {
+            const btn = ev.target.closest('.bulk-action-btn');
+            if (!btn) return;
+            ev.preventDefault();
+
+            const action = btn.getAttribute('data-action');
+            const actionInput = bulkForm.querySelector('input[name="action"]');
+            if (actionInput) actionInput.value = action || 'hide';
+
+            const submitButtons = Array.from(bulkForm.querySelectorAll('button, input[type="submit"]'));
+            submitButtons.forEach(function (b) { b.disabled = true; });
+
+            const formData = new FormData(bulkForm);
             const searchEl = document.getElementById('tableSearch');
-            const existing = bulkForm.querySelector('input[name="q"]');
-            if (!existing) {
-                const hidden = document.createElement('input');
-                hidden.type = 'hidden';
-                hidden.name = 'q';
-                hidden.value = searchEl ? (searchEl.value || '') : '';
-                bulkForm.appendChild(hidden);
-            } else {
-                existing.value = searchEl ? (searchEl.value || '') : '';
+            if (searchEl) formData.set('q', searchEl.value || '');
+
+            try {
+                const res = await fetch(hideRowsUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    body: formData,
+                });
+
+                const json = await res.json().catch(function () { return null; });
+
+                if (!res.ok) {
+                    const msg = (json?.errors ? Object.values(json.errors).flat().join(' ') : (json?.message || 'Unable to update rows.'));
+                    showTopToast(msg, true);
+                } else {
+                    if (json?.message) {
+                        showTopToast(json.message);
+                    }
+                    await fetchTable(currentPage);
+                }
+            } catch (err) {
+                showTopToast('Unable to update rows.', true);
+            } finally {
+                submitButtons.forEach(function (b) { b.disabled = false; });
             }
         });
     }

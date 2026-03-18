@@ -599,7 +599,7 @@ class RegionAdminController extends Controller
                     });
                 }
 
-                $reportRows = $query->orderBy('id')->paginate(50)->withQueryString();
+                $reportRows = $query->orderBy('id')->paginate(10)->withQueryString();
                 $reportRows->getCollection()->transform(function ($row) use ($hiddenRowIds) {
                     $row->is_hidden_for_distribution = in_array((int) $row->id, $hiddenRowIds, true);
                     return $row;
@@ -646,15 +646,22 @@ class RegionAdminController extends Controller
         $normalizedRegion = $this->normalizeRegionName($region);
         $report = CallCenterReport::findOrFail((int) $reportId);
 
+        $respondError = function (string $message, int $status = 422) use ($request) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['errors' => ['rows' => [$message]]], $status);
+            }
+            return back()->withErrors(['rows' => $message]);
+        };
+
         $gate = $this->currentRegionAdminReviewGate();
         $reviewOptIn = (bool) ($gate['opt_in'] ?? false);
         /** @var Carbon|null $reviewEnabledAt */
         $reviewEnabledAt = $gate['enabled_at'] ?? null;
         if (! $reviewOptIn) {
-            return back()->withErrors(['rows' => 'Regional Review Gate is disabled.']);
+            return $respondError('Regional Review Gate is disabled.');
         }
         if (! $this->isReportEligibleForCurrentGate($report, $reviewEnabledAt)) {
-            return back()->withErrors(['rows' => 'This report was generated before Regional Review Gate was enabled and cannot be reviewed.']);
+            return $respondError('This report was generated before Regional Review Gate was enabled and cannot be reviewed.');
         }
 
         $data = $request->validate([

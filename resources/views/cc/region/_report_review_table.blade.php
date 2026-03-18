@@ -4,11 +4,15 @@
             @if(!empty($isLocked))
                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Review Locked</button>
             @else
-                @if(!empty($showHiddenOnly))
-                    <button type="submit" name="action" value="unhide" class="btn btn-outline-secondary btn-sm">Unhide Selected Rows</button>
-                @else
-                    <button type="submit" name="action" value="hide" class="btn btn-outline-danger btn-sm">Hide Selected Rows</button>
-                @endif
+                <input type="hidden" name="action" id="bulkAction" value="{{ !empty($showHiddenOnly) ? 'unhide' : 'hide' }}">
+                <div class="floating-bulk-actions">
+                    @if(!empty($showHiddenOnly))
+                        <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn" data-action="unhide">Unhide Selected Rows</button>
+                    @else
+                        <button type="button" class="btn btn-outline-danger btn-sm bulk-action-btn" data-action="hide">Hide Selected Rows</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn" data-action="unhide">Unhide Selected Rows</button>
+                    @endif
+                </div>
             @endif
             <div class="form-check ms-2">
                 <input class="form-check-input" type="checkbox" id="selectAllRows">

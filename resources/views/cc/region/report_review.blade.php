@@ -118,7 +118,7 @@
                             <div class="d-flex flex-wrap align-items-center gap-2">
                                 <button type="button" class="btn btn-outline-danger btn-sm bulk-action-btn d-none" data-action="hide" id="bulkHideBtn">Hide Selected Rows</button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn d-none" data-action="unhide" id="bulkUnhideBtn">Unhide Selected Rows</button>
-                                <button type="button" class="btn btn-outline-dark btn-sm d-none" id="bulkClearSelectionBtn">Clear selection</button>
+                                <button type="button" class="btn btn-outline-primary btn-sm d-none" id="bulkClearSelectionBtn">Clear selection</button>
                                 <span class="small text-muted d-none" id="bulkActionsCountBadge"></span>
                             </div>
                         </div>

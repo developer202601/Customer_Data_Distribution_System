@@ -28,14 +28,22 @@ jobs:
           node-version: '20'
           cache: npm
 
+      - name: Prepare CI database path
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+
       - name: Install PHP dependencies
+        env:
+          APP_ENV: testing
+          SESSION_DRIVER: file
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Prepare environment
         run: |
           cp .env.example .env
-          mkdir -p database
-          touch database/database.sqlite
           php artisan key:generate
 
       - name: Install JS dependencies

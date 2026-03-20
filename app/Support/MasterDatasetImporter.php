@@ -24,6 +24,8 @@ class MasterDatasetImporter
 {
     use ProcessesExcelRows;
 
+    private const MAX_ROW_ERRORS = 20;
+
     private const EXPORT_BASE_DIRECTORY = 'exports';
     private const MASTER_SOURCE_SUBDIRECTORY = 'source';
     private const TEMP_DIRECTORY = 'tmp/master';
@@ -49,6 +51,18 @@ class MasterDatasetImporter
     public function __construct()
     {
         $this->disk = Storage::disk(config('filesystems.default', 'local'));
+    }
+
+    private function formatFailureReason(Throwable $exception): string
+    {
+        if ($exception instanceof ValidationException) {
+            $messages = collect($exception->errors())->flatten()->filter()->values()->all();
+            if (! empty($messages)) {
+                return implode(' | ', array_slice($messages, 0, self::MAX_ROW_ERRORS));
+            }
+        }
+
+        return $exception->getMessage();
     }
 
     private function buildManifestPayload(
@@ -209,7 +223,7 @@ class MasterDatasetImporter
         } catch (Throwable $exception) {
             $process->update([
                 'status' => 'failed',
-                'failure_reason' => $exception->getMessage(),
+                'failure_reason' => $this->formatFailureReason($exception),
             ]);
 
             if ($exception instanceof ValidationException) {
@@ -361,8 +375,12 @@ class MasterDatasetImporter
             if ($process) {
                 MasterDatasetProcessStatus::set($process, 'failed');
                 $process->update([
-                    'failure_reason' => $exception->getMessage(),
+                    'failure_reason' => $this->formatFailureReason($exception),
                 ]);
+            }
+
+            if ($exception instanceof ValidationException) {
+                throw $exception;
             }
 
             throw ValidationException::withMessages([
@@ -373,6 +391,8 @@ class MasterDatasetImporter
 
     private function importRows(MasterDatasetProcess $process, array $dataRows, array $headers, array $headerMap, string $arrearsLetter, string $arrearsColumnName): array
     {
+        $this->assertRowIntegrity($dataRows, $headerMap, $arrearsLetter);
+
         $statistics = [
             'row_count' => 0,
             'excluded_count' => 0,
@@ -441,6 +461,78 @@ class MasterDatasetImporter
         }
 
         return $statistics;
+    }
+
+    private function assertRowIntegrity(array $dataRows, array $headerMap, string $arrearsLetter): void
+    {
+        $errors = [];
+        $seenCompositeKey = [];
+        $maxReached = false;
+
+        foreach ($dataRows as $excelRow => $columns) {
+            if (! is_array($columns) || ! $this->rowHasData($columns)) {
+                continue;
+            }
+
+            foreach (self::REQUIRED_COLUMNS as $requiredColumn) {
+                $value = trim($this->getColumnValue($columns, $headerMap, $requiredColumn));
+                if ($value === '') {
+                    $errors[] = sprintf('Row %d, column %s: value is required.', (int) $excelRow, $requiredColumn);
+                    if (count($errors) >= self::MAX_ROW_ERRORS) {
+                        $maxReached = true;
+                        break 2;
+                    }
+                }
+            }
+
+            $arrearsRaw = trim((string) ($columns[$arrearsLetter] ?? ''));
+            if ($arrearsRaw !== '' && $arrearsRaw !== '-') {
+                $normalized = str_replace([',', ' '], '', $arrearsRaw);
+                if (! is_numeric($normalized)) {
+                    $errors[] = sprintf('Row %d, column %s: expected numeric value or "-".', (int) $excelRow, self::NEW_ARREARS_PREFIX . '*');
+                    if (count($errors) >= self::MAX_ROW_ERRORS) {
+                        $maxReached = true;
+                        break;
+                    }
+                }
+            }
+
+            $runDateRaw = trim($this->getColumnValue($columns, $headerMap, 'RUN_DATE'));
+            $productLabel = trim($this->getColumnValue($columns, $headerMap, 'PRODUCT_LABEL'));
+            $accountNum = trim($this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM'));
+
+            if ($runDateRaw !== '' && $productLabel !== '' && $accountNum !== '') {
+                $composite = strtolower($runDateRaw) . '|' . strtolower($productLabel) . '|' . strtolower($accountNum);
+                if (isset($seenCompositeKey[$composite])) {
+                    $errors[] = sprintf(
+                        'Row %d, columns RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM: duplicate combination already found at row %d.',
+                        (int) $excelRow,
+                        (int) $seenCompositeKey[$composite]
+                    );
+
+                    if (count($errors) >= self::MAX_ROW_ERRORS) {
+                        $maxReached = true;
+                        break;
+                    }
+                } else {
+                    $seenCompositeKey[$composite] = (int) $excelRow;
+                }
+            }
+
+            if ($maxReached) {
+                break;
+            }
+        }
+
+        if (! empty($errors)) {
+            if ($maxReached) {
+                $errors[] = sprintf('Showing first %d validation errors only.', self::MAX_ROW_ERRORS);
+            }
+
+            throw ValidationException::withMessages([
+                'upload' => $errors,
+            ]);
+        }
     }
 
     private function databaseStatistics(MasterDatasetProcess $process): array

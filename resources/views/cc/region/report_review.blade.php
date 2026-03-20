@@ -190,7 +190,7 @@
 
     .bulk-actions-dock {
         position: relative;
-        z-index: 1100;
+        z-index: 1020;
     }
 
     .bulk-actions-dock.bulk-actions-floating {
@@ -198,9 +198,14 @@
         left: 50%;
         bottom: 1rem;
         transform: translateX(-50%);
-        z-index: 1300;
+        z-index: 1030;
         width: min(92vw, 720px);
         margin-bottom: 0;
+    }
+
+    body.modal-open .bulk-actions-dock {
+        opacity: 0;
+        pointer-events: none;
     }
 
     .bulk-actions-card {

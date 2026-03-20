@@ -4,21 +4,24 @@ namespace App\Jobs;
 
 use App\Models\MasterDatasetProcess;
 use App\Support\MasterDatasetExportCoordinator;
-use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetWorkflowService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile as IlluminateUploadedFile;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class ProcessExclusionUpload implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    private const FAILURE_CACHE_TTL_SECONDS = 7200;
 
     /**
      * @param array<int, array{name: string, path: string, mime: string|null}> $files
@@ -77,10 +80,86 @@ class ProcessExclusionUpload implements ShouldQueue
                 'process_id' => $this->processId,
                 'exception' => $exception,
             ]);
+
+            if ($process) {
+                $failurePayload = $this->buildFailurePayload($process, $exception);
+                $this->cacheFailurePayloadForUser($process, $failurePayload);
+                $this->purgeFailedProcess($process);
+            }
+
             throw $exception;
         } finally {
             $this->cleanup();
         }
+    }
+
+    private function buildFailurePayload(MasterDatasetProcess $process, Throwable $exception): array
+    {
+        $masterErrors = [];
+        $exclusionErrors = [];
+        $generalErrors = [];
+
+        if ($exception instanceof ValidationException) {
+            $validationErrors = $exception->errors();
+            $masterErrors = collect($validationErrors['upload'] ?? [])->filter()->values()->all();
+            $exclusionErrors = collect($validationErrors['exclusions'] ?? [])->filter()->values()->all();
+
+            $remaining = collect($validationErrors)
+                ->except(['upload', 'exclusions'])
+                ->flatten()
+                ->filter()
+                ->values()
+                ->all();
+
+            $generalErrors = $remaining;
+        }
+
+        if (empty($masterErrors) && empty($exclusionErrors) && empty($generalErrors)) {
+            $generalErrors = [trim((string) $exception->getMessage()) ?: 'Processing failed.'];
+        }
+
+        return [
+            'master_file' => basename((string) ($process->master_archive_path ?: 'master archive')),
+            'master_errors' => array_slice($masterErrors, 0, 20),
+            'exclusion_errors' => array_slice($exclusionErrors, 0, 20),
+            'general_errors' => array_slice($generalErrors, 0, 20),
+            'created_at' => now()->toIso8601String(),
+        ];
+    }
+
+    private function cacheFailurePayloadForUser(MasterDatasetProcess $process, array $payload): void
+    {
+        $userId = (int) ($process->user_id ?? ($this->userContext['id'] ?? 0));
+        if ($userId <= 0) {
+            return;
+        }
+
+        Cache::put(
+            'master.dataset.failure.user.' . $userId,
+            $payload,
+            now()->addSeconds(self::FAILURE_CACHE_TTL_SECONDS)
+        );
+    }
+
+    private function purgeFailedProcess(MasterDatasetProcess $process): void
+    {
+        $diskName = $process->storage_disk ?: config('filesystems.default', 'local');
+        $disk = Storage::disk($diskName);
+        $token = (string) ($process->token ?? '');
+
+        if ($process->master_archive_path) {
+            $disk->delete($process->master_archive_path);
+        }
+
+        if ($process->master_workbook_path) {
+            $disk->delete($process->master_workbook_path);
+        }
+
+        if ($token !== '') {
+            $disk->deleteDirectory('exports/' . $token);
+        }
+
+        $process->delete();
     }
 
     private function cleanup(): void

@@ -450,7 +450,9 @@ class AssignmentController extends Controller
 
     private function reportGroups(): Collection
     {
-        $items = MasterDatasetProcess::with(['exports', 'user'])->get();
+        $items = MasterDatasetProcess::with(['exports', 'user'])
+            ->where('status', MasterDatasetProcessStatus::READY)
+            ->get();
 
         // Sort each process by its run date (or created_at) descending so newest appear first
         $sorted = $items->sortByDesc(function (MasterDatasetProcess $item) {

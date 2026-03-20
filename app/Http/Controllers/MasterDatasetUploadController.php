@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile as IlluminateUploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -22,19 +23,31 @@ class MasterDatasetUploadController extends Controller
     private const MASTER_MAX_BYTES = 52428800;
     private const CHUNK_BYTES = 2097152;
     private const STAGED_UPLOAD_SESSION_KEY = 'master.dataset.staged_upload';
+    private const FAILURE_CACHE_PREFIX = 'master.dataset.failure.user.';
 
     public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View
     {
         $process = null;
+        $failurePayload = null;
         $processId = $request->session()->get('master.dataset.process_id');
 
         if ($processId) {
             $process = MasterDatasetProcess::find($processId);
+            if (! $process) {
+                $request->session()->forget('master.dataset.process_id');
+                $request->session()->forget('master.dataset.staged_exclusions');
+            }
+        }
+
+        $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+        if ($userId > 0) {
+            $failurePayload = Cache::pull(self::FAILURE_CACHE_PREFIX . $userId);
         }
 
         return view('process.master-upload', [
             'process' => $process,
             'assignmentConfig' => $configuration->toArray(),
+            'processFailurePayload' => $failurePayload,
         ]);
     }
 

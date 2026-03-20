@@ -23,3 +23,9 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 
+# Local training/report notes
+NAITA_*.md
+
+# Local CI/CD setup notes (do not commit)
+CICD_SETUP.md
+

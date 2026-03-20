@@ -41,6 +41,39 @@
                     </div>
 
                     <div id="master-upload-errors" class="mt-4 mb-0">
+                        @if(!empty($processFailurePayload) && is_array($processFailurePayload))
+                        <div class="alert alert-danger" role="alert">
+                            <p class="mb-2 fw-semibold">Previous processing failed. Please fix and re-upload.</p>
+
+                            @if(!empty($processFailurePayload['master_errors']))
+                            <p class="mb-1 fw-semibold">Master file errors ({{ $processFailurePayload['master_file'] ?? 'master archive' }})</p>
+                            <ul class="mb-2">
+                                @foreach($processFailurePayload['master_errors'] as $error)
+                                <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                            @endif
+
+                            @if(!empty($processFailurePayload['exclusion_errors']))
+                            <p class="mb-1 fw-semibold">Exclusion file errors</p>
+                            <ul class="mb-2">
+                                @foreach($processFailurePayload['exclusion_errors'] as $error)
+                                <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                            @endif
+
+                            @if(!empty($processFailurePayload['general_errors']))
+                            <p class="mb-1 fw-semibold">Other errors</p>
+                            <ul class="mb-0">
+                                @foreach($processFailurePayload['general_errors'] as $error)
+                                <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                            @endif
+                        </div>
+                        @endif
+
                         @if($errors->any())
                         <div class="alert alert-danger" role="alert">
                             <p class="mb-2 fw-semibold">Please resolve the following issues before continuing:</p>
@@ -246,10 +279,34 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const messages = (Array.isArray(message) ? message : [message])
+            .filter((entry) => typeof entry === 'string' && entry.trim() !== '');
+
         const alert = document.createElement('div');
         alert.className = 'alert alert-danger';
         alert.setAttribute('role', 'alert');
-        alert.innerHTML = `<p class="mb-2 fw-semibold">Please resolve the following issues before continuing:</p><ul class="mb-0"><li>${message}</li></ul>`;
+
+        const heading = document.createElement('p');
+        heading.className = 'mb-2 fw-semibold';
+        heading.textContent = 'Please resolve the following issues before continuing:';
+
+        const list = document.createElement('ul');
+        list.className = 'mb-0';
+
+        if (messages.length === 0) {
+            const fallback = document.createElement('li');
+            fallback.textContent = 'Unable to continue.';
+            list.appendChild(fallback);
+        } else {
+            messages.forEach((entry) => {
+                const item = document.createElement('li');
+                item.textContent = entry;
+                list.appendChild(item);
+            });
+        }
+
+        alert.appendChild(heading);
+        alert.appendChild(list);
         errorsContainer.innerHTML = '';
         errorsContainer.appendChild(alert);
         alert.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -602,12 +659,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const json = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(json?.message || json?.errors?.upload?.[0] || 'Unable to submit uploaded file.');
+                const validationMessages = json?.errors ? Object.values(json.errors).flat() : [];
+                throw validationMessages.length
+                    ? validationMessages
+                    : [json?.message || 'Unable to submit uploaded file.'];
             }
 
             window.location.href = json?.redirect_url || @json(route('process.exclusions.create'));
         } catch (error) {
-            renderError(error instanceof Error ? error.message : 'Unable to submit uploaded file.');
+            if (Array.isArray(error)) {
+                renderError(error);
+            } else {
+                renderError(error instanceof Error ? error.message : 'Unable to submit uploaded file.');
+            }
             submitButton.disabled = false;
             submitButton.textContent = 'Submit';
             clearButton.disabled = false;

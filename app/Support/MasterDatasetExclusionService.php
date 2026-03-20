@@ -22,6 +22,7 @@ class MasterDatasetExclusionService
     use ProcessesExcelRows;
 
     private const ASSIGNMENT_EXCLUDED = 'Excluded';
+    private const MAX_ROW_ERRORS = 20;
 
     private Filesystem $disk;
 
@@ -49,6 +50,8 @@ class MasterDatasetExclusionService
         $archiveDirectory = $this->archiveDirectory($token);
         $savedArchives = [];
         $accountMap = [];
+        $rowErrors = [];
+        $rowErrorCount = 0;
 
         try {
             foreach ($uploads as $upload) {
@@ -69,13 +72,21 @@ class MasterDatasetExclusionService
                     [$headers, $dataRows] = $this->separateHeaderAndRows($worksheetRows);
                     $headerMap = $this->buildHeaderMap($headers);
 
-                    foreach ($dataRows as $columns) {
+                    foreach ($dataRows as $excelRow => $columns) {
                         if (! $this->rowHasData($columns)) {
                             continue;
                         }
 
                         $account = $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM');
                         if ($account === '') {
+                            $rowErrorCount++;
+                            if (count($rowErrors) < self::MAX_ROW_ERRORS) {
+                                $rowErrors[] = sprintf(
+                                    'File %s, row %d, column ACCOUNT_NUM: value is required.',
+                                    $stored['original_name'],
+                                    (int) $excelRow
+                                );
+                            }
                             continue;
                         }
 
@@ -90,6 +101,16 @@ class MasterDatasetExclusionService
                         ];
                     }
                 }
+            }
+
+            if (! empty($rowErrors)) {
+                if ($rowErrorCount > self::MAX_ROW_ERRORS) {
+                    $rowErrors[] = sprintf('Showing first %d validation errors only.', self::MAX_ROW_ERRORS);
+                }
+
+                throw ValidationException::withMessages([
+                    'exclusions' => $rowErrors,
+                ]);
             }
         } catch (Throwable $exception) {
             $this->cleanupSavedArchives($savedArchives);

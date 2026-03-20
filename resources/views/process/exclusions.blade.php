@@ -2,7 +2,7 @@
 
 @section('title', 'Exclusions')
 
-@section('loaderAutoRedirect', true)
+@section('loaderPollStatus', true)
 
 @section('navbar-right')
 <div class="process-stepper d-flex align-items-center gap-2">
@@ -785,8 +785,29 @@
 
                 if (payload?.redirect_url) {
                     // Defer redirect until final status (ready/failed) is reported
-                    const onFinal = () => {
+                    const onFinal = (event) => {
                         document.removeEventListener('cdds:loader-final', onFinal);
+                        const finalStatus = event?.detail?.status;
+                        const finalMessage = event?.detail?.message;
+                        const finalRedirectUrl = event?.detail?.redirect_url;
+
+                        if (finalStatus === 'failed') {
+                            if (finalRedirectUrl) {
+                                return;
+                            }
+
+                            window.CDDSLoader?.hide?.();
+                            loaderActive = false;
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                            }
+                            const messages = typeof finalMessage === 'string'
+                                ? finalMessage.split(' | ').map((item) => item.trim()).filter((item) => item !== '')
+                                : ['Processing failed. Please review the uploaded files.'];
+                            showError(messages);
+                            return;
+                        }
+
                         window.setTimeout(() => {
                             window.location.href = payload.redirect_url;
                         }, 400);

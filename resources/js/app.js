@@ -81,11 +81,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (data.status === 'ready' || data.status === 'failed' || data.redirect_url) {
       clearInterval(pollTimer);
+      try {
+        document.dispatchEvent(new CustomEvent('cdds:loader-final', { detail: data }));
+      } catch (_) {}
       // Slight delay to allow final UI update before redirect/hide
       setTimeout(() => {
         if (data.redirect_url) {
-            window.location.href = data.redirect_url;
-            return;
+            const parser = document.createElement('a');
+            parser.href = data.redirect_url;
+            const isSamePath = parser.pathname === window.location.pathname;
+            const isSameSearch = (parser.search || '') === (window.location.search || '');
+            if (!(isSamePath && isSameSearch)) {
+              window.location.href = data.redirect_url;
+              return;
+            }
         }
         if (data.status === 'ready' && readyRedirect) {
           // Avoid redirect loop if already on target

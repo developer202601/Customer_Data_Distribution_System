@@ -1,5 +1,8 @@
 name: CI/CD
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     branches: ["main"]
@@ -88,6 +91,9 @@ jobs:
           [ -n "$DEPLOY_SSH_KEY" ] || { echo "Missing secret: DEPLOY_SSH_KEY"; exit 1; }
 
       - name: Deploy via SSH
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -97,6 +103,7 @@ jobs:
           debug: true
           script_stop: true
           command_timeout: 30m
+          envs: GH_REPO,GH_TOKEN
           script: |
             set -e
             cd "${{ secrets.DEPLOY_PATH }}"
@@ -107,6 +114,7 @@ jobs:
               exit 1
             fi
 
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
             git fetch origin main
             git reset --hard origin/main
             composer install --no-interaction --prefer-dist --optimize-autoloader

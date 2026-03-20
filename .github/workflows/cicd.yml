@@ -122,7 +122,9 @@ jobs:
             npm run build
             php artisan migrate --force
             php artisan optimize:clear
-            sudo -n systemctl restart php-fpm
-            sudo -n systemctl restart nginx
-            sudo -n systemctl restart cdds-queue-exports.service
-            sudo -n systemctl is-active php-fpm nginx cdds-queue-exports.service
+            sudo -n /usr/bin/systemctl restart php-fpm
+            sudo -n /usr/bin/systemctl restart nginx
+            sudo -n /usr/bin/systemctl restart cdds-queue-exports.service
+            sudo -n /usr/bin/systemctl is-active php-fpm
+            sudo -n /usr/bin/systemctl is-active nginx
+            sudo -n /usr/bin/systemctl is-active cdds-queue-exports.service

@@ -4,10 +4,14 @@ namespace App\Support;
 
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class MasterDatasetStagingPromoter
 {
+    private const DUPLICATE_ROW_CONSTRAINT = 'mdr_process_run_product_unique';
+
     /**
      * Promote rows from the staging table into the main dataset rows table.
      */
@@ -46,7 +50,20 @@ class MasterDatasetStagingPromoter
                     }
 
                     if (! empty($payload)) {
-                        MasterDatasetRow::insert($payload);
+                        try {
+                            MasterDatasetRow::insert($payload);
+                        } catch (QueryException $exception) {
+                            if ($this->isDuplicateCompositeKeyViolation($exception)) {
+                                throw ValidationException::withMessages([
+                                    'upload' => [
+                                        'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. '
+                                        . 'Please remove duplicates and re-upload the master file.',
+                                    ],
+                                ]);
+                            }
+
+                            throw $exception;
+                        }
                     }
 
                     DB::table('master_dataset_rows_staging')->whereIn('id', $ids)->delete();
@@ -54,6 +71,19 @@ class MasterDatasetStagingPromoter
         });
 
         return ['promoted' => $rowCount];
+    }
+
+    private function isDuplicateCompositeKeyViolation(QueryException $exception): bool
+    {
+        $errorInfo = $exception->errorInfo;
+        $driverCode = (int) ($errorInfo[1] ?? 0);
+        $message = strtolower((string) ($errorInfo[2] ?? $exception->getMessage()));
+
+        if ($driverCode !== 1062) {
+            return false;
+        }
+
+        return str_contains($message, strtolower(self::DUPLICATE_ROW_CONSTRAINT));
     }
 
     private function columnList(): array

@@ -10,6 +10,7 @@ use App\Support\MasterDatasetStagingPromoter;
 use App\Support\PythonIngestionService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -45,6 +46,7 @@ class MasterDatasetImporter
         'LATEST_PRODUCT_STATUS',
         'SLT_BUSINESS_LINE_VALUE',
     ];
+    private const DUPLICATE_ROW_CONSTRAINT = 'mdr_process_run_product_unique';
 
     private Filesystem $disk;
 
@@ -62,7 +64,37 @@ class MasterDatasetImporter
             }
         }
 
+        if ($this->isDuplicateCompositeKeyViolation($exception)) {
+            return 'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. Please remove duplicates and re-upload the master file.';
+        }
+
         return $exception->getMessage();
+    }
+
+    private function uploadErrorMessage(Throwable $exception): string
+    {
+        if ($this->isDuplicateCompositeKeyViolation($exception)) {
+            return 'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. Please remove duplicates and re-upload the master file.';
+        }
+
+        return $exception->getMessage();
+    }
+
+    private function isDuplicateCompositeKeyViolation(Throwable $exception): bool
+    {
+        if (! $exception instanceof QueryException) {
+            return str_contains(strtolower($exception->getMessage()), strtolower(self::DUPLICATE_ROW_CONSTRAINT));
+        }
+
+        $errorInfo = $exception->errorInfo;
+        $driverCode = (int) ($errorInfo[1] ?? 0);
+        $message = strtolower((string) ($errorInfo[2] ?? $exception->getMessage()));
+
+        if ($driverCode !== 1062) {
+            return false;
+        }
+
+        return str_contains($message, strtolower(self::DUPLICATE_ROW_CONSTRAINT));
     }
 
     private function buildManifestPayload(
@@ -384,7 +416,7 @@ class MasterDatasetImporter
             }
 
             throw ValidationException::withMessages([
-                'upload' => $exception->getMessage(),
+                'upload' => $this->uploadErrorMessage($exception),
             ]);
         }
     }

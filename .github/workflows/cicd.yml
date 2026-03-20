@@ -28,15 +28,15 @@ jobs:
           node-version: '20'
           cache: npm
 
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
       - name: Prepare environment
         run: |
           cp .env.example .env
-          php artisan key:generate
           mkdir -p database
           touch database/database.sqlite
-
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+          php artisan key:generate
 
       - name: Install JS dependencies
         run: npm ci
@@ -52,7 +52,9 @@ jobs:
           CACHE_STORE: array
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
-        run: php artisan test --no-interaction
+        run: |
+          php artisan migrate --force
+          php artisan test --no-interaction
 
   deploy:
     name: Deploy to Production
@@ -74,6 +76,13 @@ jobs:
           script: |
             set -e
             cd "${{ secrets.DEPLOY_PATH }}"
+
+            if ! sudo -n true 2>/dev/null; then
+              echo "ERROR: Passwordless sudo is required for DEPLOY_USER in GitHub Actions deploy session."
+              echo "Please configure sudoers for systemctl restart/is-active commands."
+              exit 1
+            fi
+
             git fetch origin main
             git reset --hard origin/main
             composer install --no-interaction --prefer-dist --optimize-autoloader
@@ -81,7 +90,7 @@ jobs:
             npm run build
             php artisan migrate --force
             php artisan optimize:clear
-            sudo systemctl restart php-fpm
-            sudo systemctl restart nginx
-            sudo systemctl restart cdds-queue-exports.service
-            systemctl is-active php-fpm nginx cdds-queue-exports.service
+            sudo -n systemctl restart php-fpm
+            sudo -n systemctl restart nginx
+            sudo -n systemctl restart cdds-queue-exports.service
+            sudo -n systemctl is-active php-fpm nginx cdds-queue-exports.service

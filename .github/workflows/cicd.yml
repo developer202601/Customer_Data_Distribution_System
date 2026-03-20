@@ -101,7 +101,7 @@ jobs:
             set -e
             cd "${{ secrets.DEPLOY_PATH }}"
 
-            if ! sudo -n true 2>/dev/null; then
+            if ! sudo -n /usr/bin/systemctl is-active php-fpm >/dev/null 2>&1; then
               echo "ERROR: Passwordless sudo is required for DEPLOY_USER in GitHub Actions deploy session."
               echo "Please configure sudoers for systemctl restart/is-active commands."
               exit 1

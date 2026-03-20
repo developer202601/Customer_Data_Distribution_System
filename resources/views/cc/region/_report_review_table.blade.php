@@ -3,12 +3,6 @@
         <div class="d-flex flex-wrap align-items-center gap-2">
             @if(!empty($isLocked))
                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Review Locked</button>
-            @else
-                @if(!empty($showHiddenOnly))
-                    <button type="submit" name="action" value="unhide" class="btn btn-outline-secondary btn-sm">Unhide Selected Rows</button>
-                @else
-                    <button type="submit" name="action" value="hide" class="btn btn-outline-danger btn-sm">Hide Selected Rows</button>
-                @endif
             @endif
             <div class="form-check ms-2">
                 <input class="form-check-input" type="checkbox" id="selectAllRows">
@@ -47,7 +41,12 @@
             </thead>
             <tbody>
                 @forelse($rows as $row)
-                    <tr class="review-row" data-row-id="{{ $row->id }}">
+                    <tr
+                        class="review-row"
+                        data-row-id="{{ $row->id }}"
+                        data-row-visibility="{{ !empty($row->is_hidden_for_distribution) ? 'hidden' : 'visible' }}"
+                        data-row-label="{{ trim(($row->account_num ? ('Account ' . $row->account_num) : ('Row #' . $row->id)) . ($row->customer_ref ? (' | Ref ' . $row->customer_ref) : '') . ($row->mobile_contact_tel ? (' | Tel ' . $row->mobile_contact_tel) : '')) }}"
+                    >
                         <td>
                             <input class="form-check-input row-check" type="checkbox" name="row_ids[]" value="{{ $row->id }}">
                         </td>
@@ -97,13 +96,25 @@
 
     @if($rows instanceof \Illuminate\Pagination\LengthAwarePaginator)
         <div class="mt-3" id="reviewRowsPagination">
-            <div class="small text-muted mb-2">
-                Showing {{ number_format((int) ($rows->firstItem() ?? 0)) }}
-                to {{ number_format((int) ($rows->lastItem() ?? 0)) }}
-                of {{ number_format((int) $rows->total()) }} rows
-                ({{ number_format((int) $rows->perPage()) }} per page)
-            </div>
-            {{ $rows->links() }}
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 small text-muted">
+
+        <div>
+            @if ($rows->count())
+                Showing {{ number_format($rows->firstItem()) }}
+                to {{ number_format($rows->lastItem()) }}
+                of {{ number_format($rows->total()) }} rows
+                ({{ number_format($rows->perPage()) }} per page)
+            @else
+                No records found
+            @endif
         </div>
+
+        <div>
+            {{ $rows->links('pagination::bootstrap-5') }}
+        </div>
+
+    </div>
+</div>
     @endif
 @endif
+

@@ -62,7 +62,7 @@ jobs:
           MAIL_MAILER: log
         run: |
           php artisan migrate --force
-          php artisan test --no-interaction
+          php artisan test
 
   deploy:
     name: Deploy to Production

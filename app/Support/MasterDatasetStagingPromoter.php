@@ -4,10 +4,14 @@ namespace App\Support;
 
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class MasterDatasetStagingPromoter
 {
+    private const DUPLICATE_ROW_CONSTRAINT = 'mdr_process_run_product_unique';
+
     /**
      * Promote rows from the staging table into the main dataset rows table.
      */
@@ -20,6 +24,8 @@ class MasterDatasetStagingPromoter
         if ($rowCount === 0) {
             return ['promoted' => 0];
         }
+
+        $this->assertNoDuplicateCompositeRows($process);
 
         $columns = $this->columnList();
 
@@ -46,7 +52,20 @@ class MasterDatasetStagingPromoter
                     }
 
                     if (! empty($payload)) {
-                        MasterDatasetRow::insert($payload);
+                        try {
+                            MasterDatasetRow::insert($payload);
+                        } catch (QueryException $exception) {
+                            if ($this->isDuplicateCompositeKeyViolation($exception)) {
+                                throw ValidationException::withMessages([
+                                    'upload' => [
+                                        'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. '
+                                        . 'Please remove duplicates and re-upload the master file.',
+                                    ],
+                                ]);
+                            }
+
+                            throw $exception;
+                        }
                     }
 
                     DB::table('master_dataset_rows_staging')->whereIn('id', $ids)->delete();
@@ -54,6 +73,111 @@ class MasterDatasetStagingPromoter
         });
 
         return ['promoted' => $rowCount];
+    }
+
+    private function assertNoDuplicateCompositeRows(MasterDatasetProcess $process): void
+    {
+        $seen = [];
+        $firstConflict = null;
+
+        DB::table('master_dataset_rows_staging')
+            ->where('process_id', $process->id)
+            ->orderBy('id')
+            ->select(['id', 'run_date_raw', 'product_label', 'account_num', 'payload'])
+            ->chunkById(1000, function ($rows) use (&$seen, &$firstConflict) {
+                foreach ($rows as $row) {
+                    $runDateRaw = trim((string) ($row->run_date_raw ?? ''));
+                    $productLabel = trim((string) ($row->product_label ?? ''));
+                    $accountNum = trim((string) ($row->account_num ?? ''));
+
+                    if ($runDateRaw === '' || $productLabel === '' || $accountNum === '') {
+                        continue;
+                    }
+
+                    $composite = strtolower($runDateRaw) . '|' . strtolower($productLabel) . '|' . strtolower($accountNum);
+                    $rowNumber = $this->sourceRowNumber($row);
+
+                    if (! isset($seen[$composite])) {
+                        $seen[$composite] = [
+                            'row_number' => $rowNumber,
+                            'staging_id' => (int) $row->id,
+                        ];
+                        continue;
+                    }
+
+                    $firstConflict = [
+                        'existing' => $seen[$composite],
+                        'duplicate' => [
+                            'row_number' => $rowNumber,
+                            'staging_id' => (int) $row->id,
+                        ],
+                    ];
+
+                    return false;
+                }
+
+                return true;
+            });
+
+        if ($firstConflict !== null) {
+            $existingLabel = $this->formatRowLabel($firstConflict['existing']);
+            $duplicateLabel = $this->formatRowLabel($firstConflict['duplicate']);
+
+            throw ValidationException::withMessages([
+                'upload' => [
+                    sprintf(
+                        'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM at %s; repeated at %s.',
+                        $existingLabel,
+                        $duplicateLabel
+                    ),
+                ],
+            ]);
+        }
+    }
+
+    private function sourceRowNumber(object $row): ?int
+    {
+        $payload = $row->payload ?? null;
+        if (! is_string($payload) || trim($payload) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($payload, true);
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        foreach (['excel_row', 'source_row', 'row_number', 'row'] as $key) {
+            $value = $decoded[$key] ?? null;
+            if (is_numeric($value) && (int) $value > 0) {
+                return (int) $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function formatRowLabel(array $entry): string
+    {
+        $rowNumber = $entry['row_number'] ?? null;
+        if (is_int($rowNumber) && $rowNumber > 0) {
+            return 'row ' . $rowNumber;
+        }
+
+        return 'staging record #' . (int) ($entry['staging_id'] ?? 0);
+    }
+
+    private function isDuplicateCompositeKeyViolation(QueryException $exception): bool
+    {
+        $errorInfo = $exception->errorInfo;
+        $driverCode = (int) ($errorInfo[1] ?? 0);
+        $message = strtolower((string) ($errorInfo[2] ?? $exception->getMessage()));
+
+        if ($driverCode !== 1062) {
+            return false;
+        }
+
+        return str_contains($message, strtolower(self::DUPLICATE_ROW_CONSTRAINT));
     }
 
     private function columnList(): array

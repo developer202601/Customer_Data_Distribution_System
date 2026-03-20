@@ -17,6 +17,16 @@
 @section('content')
 <div class="process-upload py-4">
     <div class="container-fluid">
+        @if(!empty($process))
+        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert">
+            <div>
+                <strong>Master file already uploaded.</strong>
+                <div class="small mb-0">Process #{{ $process->id }} is currently in status: {{ ucfirst(str_replace('_', ' ', (string) $process->status)) }}.</div>
+            </div>
+            <a href="{{ route('process.exclusions.create') }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">Continue to exclusions</a>
+        </div>
+        @endif
+
         @if(session('status'))
         <div class="alert alert-success" role="alert">
             {{ session('status') }}
@@ -676,6 +686,20 @@ document.addEventListener('DOMContentLoaded', () => {
             submitButton.textContent = 'Submit';
             clearButton.disabled = false;
         }
+    });
+
+    window.addEventListener('pageshow', (event) => {
+        const navType = window.performance && window.performance.navigation
+            ? window.performance.navigation.type
+            : null;
+        const restoredFromHistory = event.persisted || navType === 2;
+
+        if (!restoredFromHistory) {
+            return;
+        }
+
+        clearError();
+        resetState();
     });
 
     resetState();

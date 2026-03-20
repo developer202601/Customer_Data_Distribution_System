@@ -43,7 +43,7 @@
                         </div>
                         <div class="text-end">
                             <div class="d-flex justify-content-end align-items-center gap-2">
-                                <a href="#" class="btn btn-outline-secondary" data-loader-off="true" onclick="history.back(); return false;">Back</a>
+                                <a href="{{ route('master.upload.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
                                 <button type="button" class="btn btn-outline-secondary" id="exclusion-clear">Clear selected</button>
                                 <button type="submit" class="btn btn-dark px-4" disabled>Apply exclusions</button>
                             </div>

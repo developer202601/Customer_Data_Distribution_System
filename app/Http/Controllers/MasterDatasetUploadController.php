@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MasterDatasetProcess;
 use App\Support\ChunkedUploadManager;
 use App\Support\MasterDatasetAssignmentConfiguration;
+use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetWorkflowService;
 use App\Support\SessionUserResolver;
 use Illuminate\Http\JsonResponse;
@@ -24,6 +25,42 @@ class MasterDatasetUploadController extends Controller
     private const CHUNK_BYTES = 2097152;
     private const STAGED_UPLOAD_SESSION_KEY = 'master.dataset.staged_upload';
     private const FAILURE_CACHE_PREFIX = 'master.dataset.failure.user.';
+
+    private function replaceCurrentSessionProcess(Request $request): void
+    {
+        $existingProcessId = (int) $request->session()->get('master.dataset.process_id', 0);
+        if ($existingProcessId <= 0) {
+            return;
+        }
+
+        $existing = MasterDatasetProcess::find($existingProcessId);
+        if (! $existing) {
+            $request->session()->forget('master.dataset.process_id');
+            $request->session()->forget('master.dataset.staged_exclusions');
+            return;
+        }
+
+        // Keep completed datasets for archive/reports, but clean up unfinished runs.
+        if (($existing->status ?? null) !== MasterDatasetProcessStatus::READY) {
+            $diskName = $existing->storage_disk ?: config('filesystems.default', 'local');
+            $disk = Storage::disk($diskName);
+
+            if ($existing->master_archive_path) {
+                $disk->delete($existing->master_archive_path);
+            }
+            if ($existing->master_workbook_path) {
+                $disk->delete($existing->master_workbook_path);
+            }
+            if ($existing->token) {
+                $disk->deleteDirectory('exports/' . $existing->token);
+            }
+
+            $existing->delete();
+        }
+
+        $request->session()->forget('master.dataset.process_id');
+        $request->session()->forget('master.dataset.staged_exclusions');
+    }
 
     public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View
     {
@@ -181,6 +218,7 @@ class MasterDatasetUploadController extends Controller
         }
 
         try {
+            $this->replaceCurrentSessionProcess($request);
             $userContext = $resolver->resolve($request);
 
             $uploadedFile = new IlluminateUploadedFile(
@@ -247,6 +285,7 @@ class MasterDatasetUploadController extends Controller
         ]);
 
         try {
+            $this->replaceCurrentSessionProcess($request);
             $userContext = $resolver->resolve($request);
 
             $process = $workflow->queueMasterArchive($request->file('upload'), $userContext);

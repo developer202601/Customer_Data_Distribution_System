@@ -17,7 +17,7 @@
 @section('content')
 <div class="process-upload py-4">
     <div class="container-fluid">
-        @if(!empty($process))
+        @if(!empty($process) && !empty($showProcessBanner))
         <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert">
             <div>
                 <strong>Master file already uploaded.</strong>

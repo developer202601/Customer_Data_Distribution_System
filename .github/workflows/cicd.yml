@@ -114,8 +114,7 @@ jobs:
               exit 1
             fi
 
-            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
-            git fetch origin main
+            git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" fetch origin main
             git reset --hard origin/main
             composer install --no-interaction --prefer-dist --optimize-autoloader
             npm ci

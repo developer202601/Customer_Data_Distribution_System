@@ -3,19 +3,6 @@
         <div class="d-flex flex-wrap align-items-center gap-2">
             @if(!empty($isLocked))
                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Review Locked</button>
-            @else
-                <input type="hidden" name="action" id="bulkAction" value="{{ !empty($showHiddenOnly) ? 'unhide' : 'hide' }}">
-                <div class="floating-bulk-actions">
-                    @if(!empty($showHiddenOnly))
-                        <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn" data-action="unhide">Unhide Selected Rows</button>
-                    @else
-                        <button type="button" class="btn btn-outline-danger btn-sm bulk-action-btn" data-action="hide">Hide Selected Rows</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn" data-action="unhide">Unhide Selected Rows</button>
-                    @endif
-                </div>
-                <style>
-                    
-                </style>
             @endif
             <div class="form-check ms-2">
                 <input class="form-check-input" type="checkbox" id="selectAllRows">
@@ -54,7 +41,12 @@
             </thead>
             <tbody>
                 @forelse($rows as $row)
-                    <tr class="review-row" data-row-id="{{ $row->id }}">
+                    <tr
+                        class="review-row"
+                        data-row-id="{{ $row->id }}"
+                        data-row-visibility="{{ !empty($row->is_hidden_for_distribution) ? 'hidden' : 'visible' }}"
+                        data-row-label="{{ trim(($row->account_num ? ('Account ' . $row->account_num) : ('Row #' . $row->id)) . ($row->customer_ref ? (' | Ref ' . $row->customer_ref) : '') . ($row->mobile_contact_tel ? (' | Tel ' . $row->mobile_contact_tel) : '')) }}"
+                    >
                         <td>
                             <input class="form-check-input row-check" type="checkbox" name="row_ids[]" value="{{ $row->id }}">
                         </td>

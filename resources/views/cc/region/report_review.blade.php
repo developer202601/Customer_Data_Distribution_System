@@ -50,7 +50,7 @@
                         </div>
                     @endif
 
-                <form method="get" id="reviewFiltersForm" class="row g-2 align-items-end mb-3">
+                <form method="get" id="reviewFiltersForm" class="row g-2 align-items-end mb-3" data-loader-off="1">
                     <div class="col-md-3">
                         <label class="form-label small text-muted">Report</label>
                         <select class="form-select form-select-sm" name="report">
@@ -111,12 +111,47 @@
                         @endif
                     </div>
 
+                    <div id="bulkActionsDock" class="bulk-actions-dock mb-3" data-locked="{{ !empty($reviewRecord?->reviewed_at) ? '1' : '0' }}">
+                        <div class="bulk-actions-card" id="bulkActionsCard">
+                            <div class="small text-muted mb-1" id="bulkActionsSelectionHint">Select rows to manage visibility.</div>
+                            <div class="small text-warning-emphasis mb-2 d-none" id="bulkActionsMixedHint">Both visible and hidden rows are selected. Choose the correct action below.</div>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <button type="button" class="btn btn-outline-danger btn-sm bulk-action-btn d-none" data-action="hide" id="bulkHideBtn">Hide Selected Rows</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn d-none" data-action="unhide" id="bulkUnhideBtn">Unhide Selected Rows</button>
+                                <button type="button" class="btn btn-outline-dark btn-sm d-none" id="bulkClearSelectionBtn">Clear selection</button>
+                                <span class="small text-muted d-none" id="bulkActionsCountBadge"></span>
+                            </div>
+                        </div>
+                    </div>
+
                     <form id="bulkRowsForm" method="post" action="{{ route('cc.region.review.hide_rows', $selectedReport->id) }}">
                         @csrf
-                        <div id="reviewTableContainer">
+                        <input type="hidden" name="action" id="bulkAction" value="hide">
+                        <div id="reviewTableContainer" data-loader-off="1">
                             @include('cc.region._report_review_table', ['selectedReport' => $selectedReport, 'rows' => $rows, 'showHidden' => $showHidden, 'showHiddenOnly' => $showHiddenOnly, 'isLocked' => !empty($reviewRecord?->reviewed_at)])
                         </div>
                     </form>
+
+                    <div class="modal fade" id="bulkActionConfirmModal" tabindex="-1" aria-labelledby="bulkActionConfirmTitle" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-scrollable align-content-center">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="bulkActionConfirmTitle">Confirm row visibility update</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="small text-muted mb-2" id="bulkActionConfirmDescription"></p>
+                                    <div class="border rounded p-2 bg-light" style="max-height: 220px; overflow-y: auto;">
+                                        <ol class="small mb-0 ps-3" id="bulkActionConfirmList"></ol>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary btn-sm" id="bulkActionConfirmSubmit">Confirm</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 @else
                     @if(!empty($reviewOptIn) && !empty($reviewEnabledAt))
                         <div class="alert alert-info mb-0">No reviewable reports found for your region after {{ $reviewEnabledAt->format('Y-m-d H:i') }}.</div>
@@ -153,19 +188,27 @@
         padding: 0.25rem 0.5rem;
     }
 
-    /* Floating bulk action buttons */
-    .floating-bulk-actions {
+    .bulk-actions-dock {
+        position: relative;
+        z-index: 1100;
+    }
+
+    .bulk-actions-dock.bulk-actions-floating {
         position: fixed;
+        left: 50%;
         bottom: 1rem;
-        right: 1rem;
-        z-index: 1200;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        background: rgba(255, 255, 255, 0.95);
-        padding: 0.5rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+        transform: translateX(-50%);
+        z-index: 1300;
+        width: min(92vw, 720px);
+        margin-bottom: 0;
+    }
+
+    .bulk-actions-card {
+        background: rgba(255, 255, 255, 0.98);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 0.85rem;
+        box-shadow: 0 0.35rem 0.85rem rgba(0, 0, 0, 0.08);
+        padding: 0.65rem 0.75rem;
     }
 
     .bulk-action-btn {
@@ -193,11 +236,13 @@
     }
 
     @media (max-width: 768px) {
-        .floating-bulk-actions {
+        .bulk-actions-dock.bulk-actions-floating {
             bottom: 0.75rem;
-            right: 0.75rem;
-            left: 0.75rem;
-            justify-content: center;
+            width: calc(100vw - 1.5rem);
+        }
+
+        .bulk-actions-card {
+            padding: 0.6rem;
         }
     }
 </style>
@@ -212,9 +257,233 @@ document.addEventListener('DOMContentLoaded', function () {
     const countTotal = document.getElementById('countTotalRows');
     const countVisible = document.getElementById('countVisibleRows');
     const countHidden = document.getElementById('countHiddenRows');
+    const bulkActionsDock = document.getElementById('bulkActionsDock');
+    const bulkActionsCard = document.getElementById('bulkActionsCard');
+    const bulkHideBtn = document.getElementById('bulkHideBtn');
+    const bulkUnhideBtn = document.getElementById('bulkUnhideBtn');
+    const bulkClearSelectionBtn = document.getElementById('bulkClearSelectionBtn');
+    const bulkActionsSelectionHint = document.getElementById('bulkActionsSelectionHint');
+    const bulkActionsMixedHint = document.getElementById('bulkActionsMixedHint');
+    const bulkActionsCountBadge = document.getElementById('bulkActionsCountBadge');
+    const bulkActionConfirmModalEl = document.getElementById('bulkActionConfirmModal');
+    const bulkActionConfirmDescription = document.getElementById('bulkActionConfirmDescription');
+    const bulkActionConfirmList = document.getElementById('bulkActionConfirmList');
+    const bulkActionConfirmSubmit = document.getElementById('bulkActionConfirmSubmit');
     const hideRowsUrl = '{{ route('cc.region.review.hide_rows', $selectedReport->id) }}';
     let searchTimer = null;
     let currentPage = 1;
+    let bulkConfirmModal = null;
+    let pendingBulkAction = null;
+    let pendingRowIds = [];
+    let bulkDockAnchorTop = null;
+    const selectedRows = new Map();
+    let lastSearchCaret = null;
+
+    function getRowInfoFromElement(rowEl) {
+        if (!rowEl) return null;
+        const check = rowEl.querySelector('input.row-check');
+        if (!check) return null;
+        return {
+            id: String(check.value || rowEl.getAttribute('data-row-id') || '').trim(),
+            checked: !!check.checked,
+            visibility: rowEl.getAttribute('data-row-visibility') === 'hidden' ? 'hidden' : 'visible',
+            label: (rowEl.getAttribute('data-row-label') || ('Row #' + (check.value || ''))).trim(),
+        };
+    }
+
+    function getSelectedRowsByType() {
+        const selected = Array.from(selectedRows.values());
+        return {
+            all: selected,
+            visible: selected.filter(function (row) { return row.visibility === 'visible'; }),
+            hidden: selected.filter(function (row) { return row.visibility === 'hidden'; }),
+        };
+    }
+
+    function syncCurrentPageSelectionFromMap() {
+        const rows = Array.from(document.querySelectorAll('#reviewRowsTable .review-row'));
+        const checks = Array.from(document.querySelectorAll('#reviewRowsTable .row-check'));
+
+        rows.forEach(function (row) {
+            const rowInfo = getRowInfoFromElement(row);
+            if (!rowInfo || !rowInfo.id) return;
+            if (selectedRows.has(rowInfo.id)) {
+                selectedRows.set(rowInfo.id, {
+                    id: rowInfo.id,
+                    visibility: rowInfo.visibility,
+                    label: rowInfo.label,
+                });
+            }
+        });
+
+        checks.forEach(function (cb) {
+            const rowId = String(cb.value || '').trim();
+            cb.checked = rowId !== '' && selectedRows.has(rowId);
+        });
+
+        const selectAll = document.getElementById('selectAllRows');
+        if (selectAll) {
+            const selectedCount = checks.filter(function (cb) { return cb.checked; }).length;
+            const allSelected = checks.length > 0 && selectedCount === checks.length;
+            selectAll.checked = allSelected;
+            selectAll.indeterminate = selectedCount > 0 && !allSelected;
+        }
+    }
+
+    function removeRowsFromSelection(rowIds) {
+        rowIds.forEach(function (id) {
+            selectedRows.delete(String(id));
+        });
+    }
+
+    function updateBulkActionsUI() {
+        if (!bulkActionsDock || !bulkActionsCard) return;
+
+        const isLocked = bulkActionsDock.getAttribute('data-locked') === '1';
+        const groups = getSelectedRowsByType();
+        const visibleCount = groups.visible.length;
+        const hiddenCount = groups.hidden.length;
+        const totalCount = groups.all.length;
+
+        if (isLocked) {
+            bulkActionsSelectionHint.textContent = 'Review is locked. Row visibility cannot be changed.';
+            bulkActionsMixedHint.classList.add('d-none');
+            bulkHideBtn.classList.add('d-none');
+            bulkUnhideBtn.classList.add('d-none');
+            bulkClearSelectionBtn.classList.add('d-none');
+            bulkActionsCountBadge.classList.add('d-none');
+            return;
+        }
+
+        if (totalCount === 0) {
+            bulkActionsSelectionHint.textContent = 'Select rows to manage visibility.';
+            bulkActionsMixedHint.classList.add('d-none');
+            bulkHideBtn.classList.add('d-none');
+            bulkUnhideBtn.classList.add('d-none');
+            bulkClearSelectionBtn.classList.add('d-none');
+            bulkActionsCountBadge.classList.add('d-none');
+            return;
+        }
+
+        bulkActionsSelectionHint.textContent = 'Selected rows: ' + totalCount.toLocaleString() + '.';
+        bulkHideBtn.classList.toggle('d-none', visibleCount === 0);
+        bulkUnhideBtn.classList.toggle('d-none', hiddenCount === 0);
+        bulkClearSelectionBtn.classList.remove('d-none');
+
+        const mixed = visibleCount > 0 && hiddenCount > 0;
+        bulkActionsMixedHint.classList.toggle('d-none', !mixed);
+
+        bulkActionsCountBadge.classList.remove('d-none');
+        bulkActionsCountBadge.textContent = 'Visible: ' + visibleCount.toLocaleString() + ' | Hidden: ' + hiddenCount.toLocaleString();
+    }
+
+    function measureBulkDockAnchorTop() {
+        if (!bulkActionsDock) return;
+        const hadFloatingClass = bulkActionsDock.classList.contains('bulk-actions-floating');
+        if (hadFloatingClass) {
+            bulkActionsDock.classList.remove('bulk-actions-floating');
+        }
+
+        bulkDockAnchorTop = bulkActionsDock.getBoundingClientRect().top + window.scrollY;
+
+        if (hadFloatingClass) {
+            bulkActionsDock.classList.add('bulk-actions-floating');
+        }
+    }
+
+    function updateBulkDockPosition() {
+        if (!bulkActionsDock) return;
+        if (bulkDockAnchorTop === null) {
+            measureBulkDockAnchorTop();
+        }
+
+        const nav = document.querySelector('.navbar.fixed-top, .navbar.sticky-top, .navbar');
+        const navBottom = nav ? nav.getBoundingClientRect().bottom : 0;
+        const triggerY = window.scrollY + navBottom + 8;
+        const shouldFloat = triggerY >= bulkDockAnchorTop;
+        bulkActionsDock.classList.toggle('bulk-actions-floating', shouldFloat);
+    }
+
+    function initConfirmModal() {
+        if (!bulkActionConfirmModalEl || typeof bootstrap === 'undefined') return;
+        bulkConfirmModal = new bootstrap.Modal(bulkActionConfirmModalEl, {
+            backdrop: 'static',
+            keyboard: false,
+        });
+    }
+
+    function openBulkConfirm(action, targetRows) {
+        if (!bulkConfirmModal || !bulkActionConfirmDescription || !bulkActionConfirmList || !bulkActionConfirmSubmit) return false;
+
+        pendingBulkAction = action;
+        pendingRowIds = targetRows.map(function (row) { return row.id; });
+
+        const actionLabel = action === 'unhide' ? 'unhide' : 'hide';
+        bulkActionConfirmDescription.textContent = 'You are about to ' + actionLabel + ' ' + targetRows.length + ' row(s):';
+        bulkActionConfirmSubmit.textContent = 'Confirm ' + (action === 'unhide' ? 'Unhide' : 'Hide');
+        bulkActionConfirmSubmit.classList.toggle('btn-success', action === 'unhide');
+        bulkActionConfirmSubmit.classList.toggle('btn-danger', action !== 'unhide');
+
+        bulkActionConfirmList.innerHTML = '';
+        targetRows.forEach(function (row) {
+            const li = document.createElement('li');
+            li.className = 'mb-1';
+            li.textContent = row.label;
+            bulkActionConfirmList.appendChild(li);
+        });
+
+        bulkConfirmModal.show();
+        return true;
+    }
+
+    function buildBulkActionFormData(action, rowIds) {
+        const formData = new FormData();
+        const tokenInput = bulkForm ? bulkForm.querySelector('input[name="_token"]') : null;
+        if (tokenInput && tokenInput.value) {
+            formData.append('_token', tokenInput.value);
+        }
+        formData.append('action', action === 'unhide' ? 'unhide' : 'hide');
+        rowIds.forEach(function (id) {
+            formData.append('row_ids[]', String(id));
+        });
+
+        const searchEl = document.getElementById('tableSearch');
+        if (searchEl) formData.append('q', searchEl.value || '');
+        return formData;
+    }
+
+    async function submitBulkAction(action, rowIds) {
+        const submitButtons = Array.from(document.querySelectorAll('.bulk-action-btn, #bulkActionConfirmSubmit, #bulkActionConfirmModal button[data-bs-dismiss="modal"]'));
+        submitButtons.forEach(function (b) { b.disabled = true; });
+
+        const formData = buildBulkActionFormData(action, rowIds);
+
+        try {
+            const res = await fetch(hideRowsUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                body: formData,
+            });
+
+            const json = await res.json().catch(function () { return null; });
+
+            if (!res.ok) {
+                const msg = (json?.errors ? Object.values(json.errors).flat().join(' ') : (json?.message || 'Unable to update rows.'));
+                showTopToast(msg, true);
+            } else {
+                if (json?.message) {
+                    showTopToast(json.message);
+                }
+                removeRowsFromSelection(rowIds);
+                await fetchTable(currentPage);
+            }
+        } catch (err) {
+            showTopToast('Unable to update rows.', true);
+        } finally {
+            submitButtons.forEach(function (b) { b.disabled = false; });
+        }
+    }
 
     function applyRowBindings() {
         const selectAll = document.getElementById('selectAllRows');
@@ -224,9 +493,53 @@ document.addEventListener('DOMContentLoaded', function () {
             selectAll.addEventListener('change', function () {
                 checks.forEach(function (cb) {
                     cb.checked = selectAll.checked;
+
+                    const row = cb.closest('.review-row');
+                    const rowInfo = getRowInfoFromElement(row);
+                    if (!rowInfo || !rowInfo.id) return;
+
+                    if (cb.checked) {
+                        selectedRows.set(rowInfo.id, {
+                            id: rowInfo.id,
+                            visibility: rowInfo.visibility,
+                            label: rowInfo.label,
+                        });
+                    } else {
+                        selectedRows.delete(rowInfo.id);
+                    }
                 });
+
+                selectAll.indeterminate = false;
+                updateBulkActionsUI();
             });
         }
+
+        checks.forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                const row = cb.closest('.review-row');
+                const rowInfo = getRowInfoFromElement(row);
+                if (rowInfo && rowInfo.id) {
+                    if (cb.checked) {
+                        selectedRows.set(rowInfo.id, {
+                            id: rowInfo.id,
+                            visibility: rowInfo.visibility,
+                            label: rowInfo.label,
+                        });
+                    } else {
+                        selectedRows.delete(rowInfo.id);
+                    }
+                }
+
+                if (selectAll) {
+                    const selectedCount = checks.filter(function (entry) { return entry.checked; }).length;
+                    const allSelected = checks.length > 0 && selectedCount === checks.length;
+                    selectAll.checked = allSelected;
+                    selectAll.indeterminate = selectedCount > 0 && !allSelected;
+                }
+
+                updateBulkActionsUI();
+            });
+        });
 
         document.querySelectorAll('#reviewRowsTable .review-row').forEach(function (row) {
             row.addEventListener('click', function (ev) {
@@ -235,6 +548,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const cb = row.querySelector('input.row-check');
                 if (!cb) return;
                 cb.checked = !cb.checked;
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
             });
         });
 
@@ -264,10 +578,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const searchEl = document.getElementById('tableSearch');
         if (searchEl) {
             searchEl.addEventListener('input', function () {
+                lastSearchCaret = {
+                    start: searchEl.selectionStart,
+                    end: searchEl.selectionEnd,
+                };
                 if (searchTimer) clearTimeout(searchTimer);
                 searchTimer = setTimeout(function () {
                     fetchTable(1);
-                }, 250);
+                }, 700);
             });
         }
 
@@ -297,6 +615,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 fetchTable(1);
             });
         }
+
+        syncCurrentPageSelectionFromMap();
+        updateBulkActionsUI();
+        updateBulkDockPosition();
     }
 
     const tableLoadingOverlayId = 'reviewTableLoadingOverlay';
@@ -332,6 +654,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!filterForm || !tableContainer) return;
         currentPage = page || 1;
 
+        const activeElement = document.activeElement;
+        const shouldRestoreSearchFocus = !!(activeElement && activeElement.id === 'tableSearch');
+
         const fd = new FormData(filterForm);
         const searchEl = document.getElementById('tableSearch');
         if (searchEl) {
@@ -362,6 +687,17 @@ document.addEventListener('DOMContentLoaded', function () {
             if (countHidden && data.counts) countHidden.textContent = Number(data.counts.hidden || 0).toLocaleString();
 
             applyRowBindings();
+
+            if (shouldRestoreSearchFocus) {
+                const refreshedSearchEl = document.getElementById('tableSearch');
+                if (refreshedSearchEl) {
+                    refreshedSearchEl.focus({ preventScroll: true });
+                    const valueLength = refreshedSearchEl.value.length;
+                    const start = Math.max(0, Math.min(lastSearchCaret?.start ?? valueLength, valueLength));
+                    const end = Math.max(start, Math.min(lastSearchCaret?.end ?? start, valueLength));
+                    refreshedSearchEl.setSelectionRange(start, end);
+                }
+            }
         } catch (err) {
             showTopToast('Unable to load rows.', true);
         } finally {
@@ -378,6 +714,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const reportEl = filterForm.querySelector('select[name="report"]');
         if (reportEl) {
             reportEl.addEventListener('change', function () {
+                selectedRows.clear();
                 fetchTable(1);
             });
         }
@@ -389,6 +726,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const pagerLink = ev.target.closest('.pagination a');
             if (pagerLink) {
                 ev.preventDefault();
+                window.CDDSLoaderIgnoreBeforeUnload = true;
+                if (window.CDDSLoader && typeof window.CDDSLoader.hide === 'function') {
+                    window.CDDSLoader.hide();
+                }
                 try {
                     const u = new URL(pagerLink.href);
                     const nextPage = Number(u.searchParams.get('page') || '1');
@@ -452,49 +793,57 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (bulkForm) {
-        bulkForm.addEventListener('click', async function (ev) {
+        document.addEventListener('click', function (ev) {
             const btn = ev.target.closest('.bulk-action-btn');
             if (!btn) return;
             ev.preventDefault();
 
-            const action = btn.getAttribute('data-action');
-            const actionInput = bulkForm.querySelector('input[name="action"]');
-            if (actionInput) actionInput.value = action || 'hide';
+            const action = btn.getAttribute('data-action') === 'unhide' ? 'unhide' : 'hide';
+            const groups = getSelectedRowsByType();
+            const targetRows = action === 'unhide' ? groups.hidden : groups.visible;
 
-            const submitButtons = Array.from(bulkForm.querySelectorAll('button, input[type="submit"]'));
-            submitButtons.forEach(function (b) { b.disabled = true; });
-
-            const formData = new FormData(bulkForm);
-            const searchEl = document.getElementById('tableSearch');
-            if (searchEl) formData.set('q', searchEl.value || '');
-
-            try {
-                const res = await fetch(hideRowsUrl, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
-                    body: formData,
-                });
-
-                const json = await res.json().catch(function () { return null; });
-
-                if (!res.ok) {
-                    const msg = (json?.errors ? Object.values(json.errors).flat().join(' ') : (json?.message || 'Unable to update rows.'));
-                    showTopToast(msg, true);
-                } else {
-                    if (json?.message) {
-                        showTopToast(json.message);
-                    }
-                    await fetchTable(currentPage);
-                }
-            } catch (err) {
-                showTopToast('Unable to update rows.', true);
-            } finally {
-                submitButtons.forEach(function (b) { b.disabled = false; });
+            if (!targetRows.length) {
+                showTopToast(action === 'unhide' ? 'Select hidden rows to unhide.' : 'Select visible rows to hide.', true);
+                return;
             }
+
+            openBulkConfirm(action, targetRows);
         });
     }
 
+    if (bulkActionConfirmSubmit) {
+        bulkActionConfirmSubmit.addEventListener('click', async function () {
+            if (!pendingBulkAction || !pendingRowIds.length) {
+                if (bulkConfirmModal) bulkConfirmModal.hide();
+                return;
+            }
+
+            const action = pendingBulkAction;
+            const rowIds = pendingRowIds.slice();
+            pendingBulkAction = null;
+            pendingRowIds = [];
+
+            if (bulkConfirmModal) bulkConfirmModal.hide();
+            await submitBulkAction(action, rowIds);
+        });
+    }
+
+    if (bulkClearSelectionBtn) {
+        bulkClearSelectionBtn.addEventListener('click', function () {
+            selectedRows.clear();
+            syncCurrentPageSelectionFromMap();
+            updateBulkActionsUI();
+        });
+    }
+
+    window.addEventListener('scroll', updateBulkDockPosition, { passive: true });
+    window.addEventListener('resize', function () {
+        measureBulkDockAnchorTop();
+        updateBulkDockPosition();
+    });
+
+    initConfirmModal();
+    measureBulkDockAnchorTop();
     applyRowBindings();
 });
 </script>

@@ -114,7 +114,9 @@ jobs:
               exit 1
             fi
 
-            git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" fetch origin main
+            ORIGINAL_REMOTE_URL="$(git remote get-url origin)"
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+            git fetch origin main
             git reset --hard origin/main
             composer install --no-interaction --prefer-dist --optimize-autoloader
             npm ci
@@ -127,3 +129,4 @@ jobs:
             sudo -n /usr/bin/systemctl is-active php-fpm
             sudo -n /usr/bin/systemctl is-active nginx
             sudo -n /usr/bin/systemctl is-active cdds-queue-exports.service
+            git remote set-url origin "$ORIGINAL_REMOTE_URL"

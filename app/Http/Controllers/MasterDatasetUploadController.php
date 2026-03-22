@@ -65,6 +65,7 @@ class MasterDatasetUploadController extends Controller
     public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View
     {
         $process = null;
+        $showProcessBanner = false;
         $failurePayload = null;
         $processId = $request->session()->get('master.dataset.process_id');
 
@@ -73,6 +74,17 @@ class MasterDatasetUploadController extends Controller
             if (! $process) {
                 $request->session()->forget('master.dataset.process_id');
                 $request->session()->forget('master.dataset.staged_exclusions');
+            } else {
+                $status = (string) ($process->status ?? '');
+
+                if (in_array($status, [MasterDatasetProcessStatus::READY, MasterDatasetProcessStatus::FAILED], true)) {
+                    // Completed/failed processes should not block a fresh upload flow.
+                    $request->session()->forget('master.dataset.process_id');
+                    $request->session()->forget('master.dataset.staged_exclusions');
+                    $process = null;
+                } else {
+                    $showProcessBanner = true;
+                }
             }
         }
 
@@ -83,6 +95,7 @@ class MasterDatasetUploadController extends Controller
 
         return view('process.master-upload', [
             'process' => $process,
+            'showProcessBanner' => $showProcessBanner,
             'assignmentConfig' => $configuration->toArray(),
             'processFailurePayload' => $failurePayload,
         ]);

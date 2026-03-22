@@ -65,7 +65,7 @@ class MasterDatasetImporter
         }
 
         if ($this->isDuplicateCompositeKeyViolation($exception)) {
-            return 'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. Please remove duplicates and re-upload the master file.';
+            return 'Duplicate PRODUCT_LABEL found. Please remove duplicates and re-upload the master file.';
         }
 
         return $exception->getMessage();
@@ -74,7 +74,7 @@ class MasterDatasetImporter
     private function uploadErrorMessage(Throwable $exception): string
     {
         if ($this->isDuplicateCompositeKeyViolation($exception)) {
-            return 'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. Please remove duplicates and re-upload the master file.';
+            return 'Duplicate PRODUCT_LABEL found. Please remove duplicates and re-upload the master file.';
         }
 
         return $exception->getMessage();
@@ -280,8 +280,20 @@ class MasterDatasetImporter
         bool $skipAssignment
     ): MasterDatasetProcess
     {
+        // Use PhpSpreadsheet disk cache for large workbook processing to reduce peak memory.
+        if (class_exists(\PhpOffice\PhpSpreadsheet\CachedObjectStorageFactory::class)) {
+            try {
+                \PhpOffice\PhpSpreadsheet\Settings::setCacheStorageMethod(
+                    \PhpOffice\PhpSpreadsheet\CachedObjectStorageFactory::cache_to_discISAM,
+                    ['dir' => storage_path('app/tmp')]
+                );
+            } catch (\Throwable $e) {
+                // ignore; fallback in-memory
+            }
+        }
+
         $reader = IOFactory::createReader('Xlsx');
-        $reader->setReadDataOnly(false);
+        $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($workbookAbsolutePath);
 
         $sheet = $spreadsheet->getActiveSheet();
@@ -529,17 +541,15 @@ class MasterDatasetImporter
                 }
             }
 
-            $runDateRaw = trim($this->getColumnValue($columns, $headerMap, 'RUN_DATE'));
             $productLabel = trim($this->getColumnValue($columns, $headerMap, 'PRODUCT_LABEL'));
-            $accountNum = trim($this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM'));
 
-            if ($runDateRaw !== '' && $productLabel !== '' && $accountNum !== '') {
-                $composite = strtolower($runDateRaw) . '|' . strtolower($productLabel) . '|' . strtolower($accountNum);
-                if (isset($seenCompositeKey[$composite])) {
+            if ($productLabel !== '') {
+                $key = strtolower($productLabel);
+                if (isset($seenCompositeKey[$key])) {
                     $errors[] = sprintf(
-                        'Row %d, columns RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM: duplicate combination already found at row %d.',
+                        'Row %d, column PRODUCT_LABEL: duplicate value already found at row %d.',
                         (int) $excelRow,
-                        (int) $seenCompositeKey[$composite]
+                        (int) $seenCompositeKey[$key]
                     );
 
                     if (count($errors) >= self::MAX_ROW_ERRORS) {
@@ -547,7 +557,7 @@ class MasterDatasetImporter
                         break;
                     }
                 } else {
-                    $seenCompositeKey[$composite] = (int) $excelRow;
+                    $seenCompositeKey[$key] = (int) $excelRow;
                 }
             }
 

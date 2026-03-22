@@ -284,12 +284,12 @@ document.addEventListener('DOMContentLoaded', () => {
         progressFile.textContent = file ? `${file.name} (${formatBytes(file.size)})` : '';
     };
 
-    const renderError = (message) => {
+    const renderError = (fileName, messages) => {
         if (!errorsContainer) {
             return;
         }
 
-        const messages = (Array.isArray(message) ? message : [message])
+        const filteredMessages = (Array.isArray(messages) ? messages : [messages])
             .filter((entry) => typeof entry === 'string' && entry.trim() !== '');
 
         const alert = document.createElement('div');
@@ -298,17 +298,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const heading = document.createElement('p');
         heading.className = 'mb-2 fw-semibold';
-        heading.textContent = 'Please resolve the following issues before continuing:';
+        heading.textContent = fileName ? `Please resolve the following issues for "${fileName}" before continuing:` : 'Please resolve the following issues before continuing:';
 
         const list = document.createElement('ul');
         list.className = 'mb-0';
 
-        if (messages.length === 0) {
+        if (filteredMessages.length === 0) {
             const fallback = document.createElement('li');
             fallback.textContent = 'Unable to continue.';
             list.appendChild(fallback);
         } else {
-            messages.forEach((entry) => {
+            filteredMessages.forEach((entry) => {
                 const item = document.createElement('li');
                 item.textContent = entry;
                 list.appendChild(item);
@@ -319,7 +319,8 @@ document.addEventListener('DOMContentLoaded', () => {
         alert.appendChild(list);
         errorsContainer.innerHTML = '';
         errorsContainer.appendChild(alert);
-        alert.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Avoid auto-scrolling while user may be reading/clicking around
+        // alert.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     const updateSubmitState = () => {
@@ -538,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     : instantBytesPerSecond;
                 previousUploadedBytes = uploadedBytes;
                 previousTickAt = tickAt;
-                const percentage = Math.min(99, Math.round((uploadedBytes / file.size) * 100));
+                const percentage = Math.min(50, Math.round((uploadedBytes / file.size) * 50)); // Upload: 0-50%
                 setProgress(
                     percentage,
                     'Uploading master dataset',
@@ -562,20 +563,88 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(finishJson?.message || finishJson?.errors?.upload?.[0] || 'Unable to finalize the uploaded file.');
             }
 
+            // --- Handle validation result ---
+            if (finishJson.status === 'failed' && finishJson.validation_errors) {
+                // Show validation errors
+                let errorList = [];
+                for (const key in finishJson.validation_errors) {
+                    if (Array.isArray(finishJson.validation_errors[key])) {
+                        errorList = errorList.concat(finishJson.validation_errors[key]);
+                    }
+                }
+                renderError(errorList.length ? errorList : 'Validation failed.');
+                setProgress(0, 'Validation failed', 'Please fix the errors and upload again.');
+                isUploading = false;
+                isUploaded = false;
+                activeUploadToken = null;
+                stagedUploadToken = null;
+                updateClearButtonLabel();
+                updateDropzoneState();
+                updateSubmitState();
+                return;
+            }
+
+
             activeUploadToken = null;
             stagedUploadToken = finishJson.staged_upload_token;
+            window.masterUploadToken = finishJson.staged_upload_token;
             isUploading = false;
             isUploaded = true;
             activeAbortController = null;
-            setProgress(
-                100,
-                'Upload complete',
-                `${formatBytes(file.size)} uploaded at ${formatSpeed(averageBytesPerSecond)}. Click Submit to continue.`,
-                { hideBar: true }
-            );
-            updateClearButtonLabel();
-            updateDropzoneState();
-            updateSubmitState();
+
+            // --- POLL FOR VALIDATION PROGRESS ---
+            const progressUrl = '/process/upload/progress/' + encodeURIComponent(stagedUploadToken);
+            let pollTimer = null;
+            const pollProgress = async () => {
+                try {
+                    const resp = await fetch(progressUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    let eta = '';
+                    if (typeof data.eta_seconds === 'number' && data.eta_seconds > 0) {
+                        const mins = Math.floor(data.eta_seconds / 60);
+                        const secs = Math.round(data.eta_seconds % 60);
+                        eta = `ETA: ${mins}m ${secs}s`;
+                    }
+
+                    let stageHint = '';
+                    if (data.stage === 'extraction') {
+                        stageHint = 'Extracting workbook from ZIP (approx. 20s).';
+                    } else if (data.stage === 'import') {
+                        stageHint = 'Finalizing import (may take some time).';
+                    }
+
+                    let rowStatus = '';
+                    if (data.stage === 'validation' && typeof data.processed_rows === 'number' && typeof data.total_rows === 'number' && data.total_rows > 0) {
+                        rowStatus = `Validating row ${data.processed_rows} / ${data.total_rows}`;
+                    }
+
+                    const statusDetail = [rowStatus, stageHint, eta].filter(Boolean).join(' | ');
+                    setProgress(
+                        50 + Math.round((data.progress ?? 0) / 2), // Validation: 50-100%
+                        data.message || 'Processing…',
+                        statusDetail
+                    );
+                    if (data.status === 'ready' || data.status === 'failed') {
+                        clearInterval(pollTimer);
+                        if (data.status === 'ready') {
+                            setProgress(100, 'Upload & validation complete', 'File uploaded and validated. Click Submit to continue.', { hideBar: true });
+                        } else {
+                            const errors = (Array.isArray(data.errors) && data.errors.length > 0)
+                                ? data.errors
+                                : (data.error ? [data.error] : ['Validation failed. Please check your file and try again.']);
+
+                            renderError(data.file_name, errors);
+                            setProgress(0, 'Validation failed', 'Please fix the errors and upload again.');
+                            resetState();
+                        }
+                    }
+                } catch (e) {}
+            };
+            pollProgress();
+            pollTimer = setInterval(pollProgress, 150); // 150ms for smooth updates
+            // --- END POLL ---
+
         } catch (error) {
             if (error instanceof DOMException && error.name === 'AbortError') {
                 setProgress(0, 'Upload canceled', 'You can select a file again.');

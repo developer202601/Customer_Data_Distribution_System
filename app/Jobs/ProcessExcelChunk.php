@@ -12,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use RuntimeException;
@@ -82,6 +83,9 @@ class ProcessExcelChunk implements ShouldQueue
 
     public function handle(): void
     {
+        // Increase memory limit for large Excel files
+        ini_set('memory_limit', '512M');
+        ini_set('max_execution_time', 300);
         try {
             $rows = $this->loadChunkRows();
             $dataRows = $this->stripHeader($rows);
@@ -98,6 +102,20 @@ class ProcessExcelChunk implements ShouldQueue
 
                 $processedRows++;
                 $passesValidation = true;
+
+                // --- HASH-BASED VALIDATION USING REDIS ---
+                // Build a unique string for the row (e.g., join all values)
+                $rowString = json_encode(array_values($columns));
+                $rowHash = hash('sha256', $rowString);
+                $redisKey = 'excel_row_hash:' . $rowHash;
+                // If hash exists, mark as duplicate and skip
+                if (Redis::exists($redisKey)) {
+                    $errors[] = sprintf('Row %d: Duplicate row detected (hash: %s).', $rowIndex, $rowHash);
+                    $passesValidation = false;
+                } else {
+                    // Set hash with TTL (e.g., 2 hours)
+                    Redis::setex($redisKey, 7200, 1);
+                }
 
                 foreach ($this->headers as $columnLetter => $headerMeta) {
                     $normalised = $headerMeta['normalised'];

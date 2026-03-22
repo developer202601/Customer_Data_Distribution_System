@@ -35,6 +35,9 @@ class ProcessExclusionUpload implements ShouldQueue
 
     public function handle(MasterDatasetWorkflowService $workflowService, MasterDatasetExportCoordinator $exportCoordinator): void
     {
+        // Increase memory limit for large Excel files
+        ini_set('memory_limit', '512M');
+        ini_set('max_execution_time', 300);
         $process = MasterDatasetProcess::find($this->processId);
 
         if (! $process) {

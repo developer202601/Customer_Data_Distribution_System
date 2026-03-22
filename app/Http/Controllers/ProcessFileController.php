@@ -166,11 +166,41 @@ class ProcessFileController extends Controller
 
 	public function progress(string $token): JsonResponse
 	{
-		return response()->json([
-			'status' => 'unsupported',
-			'progress' => 0,
-			'message' => $this->legacyWorkflowDisabledMessage(),
-		], 410);
+		   // Read progress state from cache (written by jobs)
+		   $state = \Cache::get($this->progressCacheKey($token));
+		   if (!$state) {
+			   return response()->json([
+				   'status' => 'not-found',
+				   'progress' => 0,
+				   'message' => 'No progress available for this upload.'
+			   ], 404);
+		   }
+
+		   // Calculate ETA if possible
+		   $etaSeconds = null;
+		   if (!empty($state['processed_rows']) && !empty($state['total_rows']) && !empty($state['started_at'])) {
+			   $elapsed = time() - (int)$state['started_at'];
+			   $rate = $state['processed_rows'] / max($elapsed, 1);
+			   if ($rate > 0) {
+				   $remaining = $state['total_rows'] - $state['processed_rows'];
+				   $etaSeconds = (int)($remaining / $rate);
+			   }
+		   }
+
+		   return response()->json([
+		   'status' => $state['status'] ?? (($state['progress'] ?? 0) >= 100 ? 'ready' : 'processing'),
+		   'progress' => $state['progress'] ?? 0,
+		   'message' => $state['message'] ?? 'Validating…',
+		   'processed_rows' => $state['processed_rows'] ?? 0,
+		   'total_rows' => $state['total_rows'] ?? 0,
+		   'currently_validating' => $state['currently_validating'] ?? [],
+		   'eta_seconds' => $etaSeconds,
+		   'stage' => $state['stage'] ?? null,
+		   'started_at' => $state['started_at'] ?? null,
+		   'error' => $state['error'] ?? null,
+		   'errors' => $state['errors'] ?? [],
+		   'file_name' => $state['file_name'] ?? null,
+		   ]);
 	}
 
 	public function complete(string $token): RedirectResponse

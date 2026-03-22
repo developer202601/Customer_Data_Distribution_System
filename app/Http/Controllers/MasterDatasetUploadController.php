@@ -171,11 +171,40 @@ class MasterDatasetUploadController extends Controller
                 'mime_type' => (string) ($metadata['mime_type'] ?? 'application/zip'),
             ]);
 
+            // Initialize progress in cache so polling knows about this upload
+            \Cache::put('process:upload:' . $token, [
+                'status' => 'queued',
+                'progress' => 50,
+                'message' => 'Upload complete; queued for validation.',
+                'processed_rows' => 0,
+                'total_rows' => null,
+                'started_at' => time(),
+            ], now()->addMinutes(120));
+
+            // --- IMMEDIATE VALIDATION ---
+            $validationErrors = null;
+            $validationStatus = 'ok';
+            $validationMessage = 'Upload complete. Validating...';
+            try {
+                // Dispatch validation job to exports queue (existing worker listens on exports)
+                \App\Jobs\ValidateMasterFile::dispatch(
+                    $token,
+                    $disk->path($relativePath),
+                    (string) ($metadata['original_name'] ?? 'master.zip'),
+                    (string) ($metadata['mime_type'] ?? 'application/zip')
+                )->onQueue('exports');
+            } catch (Throwable $e) {
+                $validationErrors = ['upload' => [$e->getMessage() ?: 'Failed to start validation']];
+                $validationStatus = 'failed';
+                $validationMessage = 'Validation failed.';
+            }
+
             return response()->json([
-                'status' => 'ok',
-                'message' => 'Upload complete. Click Submit to continue.',
+                'status' => $validationStatus,
+                'message' => $validationMessage,
                 'staged_upload_token' => $token,
                 'file_name' => (string) ($metadata['original_name'] ?? 'master.zip'),
+                'validation_errors' => $validationErrors,
             ]);
         } catch (ValidationException $exception) {
             throw $exception;

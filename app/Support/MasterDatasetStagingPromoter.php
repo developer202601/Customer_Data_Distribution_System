@@ -83,22 +83,20 @@ class MasterDatasetStagingPromoter
         DB::table('master_dataset_rows_staging')
             ->where('process_id', $process->id)
             ->orderBy('id')
-            ->select(['id', 'run_date_raw', 'product_label', 'account_num', 'payload'])
+            ->select(['id', 'product_label', 'payload'])
             ->chunkById(1000, function ($rows) use (&$seen, &$firstConflict) {
                 foreach ($rows as $row) {
-                    $runDateRaw = trim((string) ($row->run_date_raw ?? ''));
                     $productLabel = trim((string) ($row->product_label ?? ''));
-                    $accountNum = trim((string) ($row->account_num ?? ''));
 
-                    if ($runDateRaw === '' || $productLabel === '' || $accountNum === '') {
+                    if ($productLabel === '') {
                         continue;
                     }
 
-                    $composite = strtolower($runDateRaw) . '|' . strtolower($productLabel) . '|' . strtolower($accountNum);
+                    $key = strtolower($productLabel);
                     $rowNumber = $this->sourceRowNumber($row);
 
-                    if (! isset($seen[$composite])) {
-                        $seen[$composite] = [
+                    if (! isset($seen[$key])) {
+                        $seen[$key] = [
                             'row_number' => $rowNumber,
                             'staging_id' => (int) $row->id,
                         ];
@@ -126,7 +124,7 @@ class MasterDatasetStagingPromoter
             throw ValidationException::withMessages([
                 'upload' => [
                     sprintf(
-                        'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM at %s; repeated at %s.',
+                        'Duplicate value found for PRODUCT_LABEL at %s; repeated at %s.',
                         $existingLabel,
                         $duplicateLabel
                     ),

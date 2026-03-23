@@ -542,12 +542,13 @@ class MasterDatasetImporter
             }
 
             $productLabel = trim($this->getColumnValue($columns, $headerMap, 'PRODUCT_LABEL'));
+            $productSeq = trim($this->getColumnValue($columns, $headerMap, 'PRODUCT_SEQ'));
 
-            if ($productLabel !== '') {
-                $key = strtolower($productLabel);
+            if ($productLabel !== '' && $productSeq !== '') {
+                $key = strtolower($productLabel) . '|' . strtolower($productSeq);
                 if (isset($seenCompositeKey[$key])) {
                     $errors[] = sprintf(
-                        'Row %d, column PRODUCT_LABEL: duplicate value already found at row %d.',
+                        'Row %d, columns PRODUCT_LABEL/PRODUCT_SEQ: duplicate value already found at row %d.',
                         (int) $excelRow,
                         (int) $seenCompositeKey[$key]
                     );

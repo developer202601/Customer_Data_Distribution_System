@@ -307,6 +307,20 @@ class MasterDatasetUploadController extends Controller
     {
         $staged = $request->session()->get(self::STAGED_UPLOAD_SESSION_KEY);
 
+        // Signal background validation job to stop as soon as possible.
+        Cache::put('process:upload:' . $token . ':abort', true, now()->addMinutes(30));
+        Cache::put('process:upload:' . $token, [
+            'status' => 'canceled',
+            'progress' => 0,
+            'message' => 'Validation canceled by user.',
+            'stage' => 'validation',
+            'processed_rows' => 0,
+            'total_rows' => 0,
+            'started_at' => time(),
+            'errors' => [],
+            'file_name' => is_array($staged) ? ($staged['original_name'] ?? null) : null,
+        ], now()->addMinutes(120));
+
         if (is_array($staged) && !empty($staged['token']) && hash_equals((string) $staged['token'], $token)) {
             if (!empty($staged['relative_path'])) {
                 Storage::disk('local')->delete((string) $staged['relative_path']);

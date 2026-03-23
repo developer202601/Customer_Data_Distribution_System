@@ -44,6 +44,9 @@ class ValidateMasterFile implements ShouldQueue
         }
 
         $cacheKey = 'process:upload:' . $this->token;
+        $abortKey = $cacheKey . ':abort';
+
+        Cache::forget($abortKey);
 
         try {
             Cache::put($cacheKey, [
@@ -193,24 +196,19 @@ class ValidateMasterFile implements ShouldQueue
                 return;
             }
 
+            // Validation scope requested by user:
+            // - PRODUCT_LABEL: required + duplicates
+            // - RUN_DATE: required only
+            // - ACCOUNT_NUM: required only
             $requiredColumns = [
                 'RUN_DATE',
-                'REGION',
-                'RTOM',
-                'CUSTOMER_REF',
                 'ACCOUNT_NUM',
                 'PRODUCT_LABEL',
-                'MEDIUM',
-                'CUSTOMER_SEGMENT',
-                'FULL_ADDRESS',
-                'LATEST_BILL_MNY',
-                'LATEST_PRODUCT_STATUS',
-                'SLT_BUSINESS_LINE_VALUE',
             ];
 
             $errors = [];
             $maxErrors = 20;
-            $seenProductLabel = [];
+            $seenProductComposite = [];
 
             Cache::put($cacheKey, [
                 'status' => 'processing',
@@ -228,6 +226,30 @@ class ValidateMasterFile implements ShouldQueue
 
             $rowIterator = $sheet->getRowIterator(2); // start from data rows
             foreach ($rowIterator as $row) {
+                if ((bool) Cache::get($abortKey, false)) {
+                    Cache::put($cacheKey, [
+                        'status' => 'canceled',
+                        'progress' => 0,
+                        'message' => 'Validation canceled by user.',
+                        'stage' => 'validation',
+                        'processed_rows' => $processed,
+                        'total_rows' => $totalRows,
+                        'started_at' => time(),
+                        'errors' => $errors,
+                        'file_name' => $this->originalName,
+                    ], now()->addMinutes(120));
+
+                    if (isset($spreadsheet)) {
+                        $spreadsheet->disconnectWorksheets();
+                        unset($spreadsheet);
+                    }
+                    if (!empty($workbookPath) && file_exists($workbookPath)) {
+                        @unlink($workbookPath);
+                    }
+
+                    return;
+                }
+
                 $rowIndex = $row->getRowIndex();
                 $processed++;
 
@@ -253,18 +275,21 @@ class ValidateMasterFile implements ShouldQueue
                     }
                 }
 
-                // Check PRODUCT_LABEL duplicates only
-                if (! $rowProblems && isset($headerMap['PRODUCT_LABEL'])) {
+                // Check duplicates by PRODUCT_LABEL + PRODUCT_SEQ
+                if (! $rowProblems && isset($headerMap['PRODUCT_LABEL']) && isset($headerMap['PRODUCT_SEQ'])) {
                     $productLabelCell = $sheet->getCell($headerMap['PRODUCT_LABEL'] . $rowIndex);
                     $productLabel = trim((string) ($productLabelCell->getValue() ?? ''));
-                    if ($productLabel !== '') {
-                        $key = mb_strtolower($productLabel);
-                        if (isset($seenProductLabel[$key])) {
+                    $productSeqCell = $sheet->getCell($headerMap['PRODUCT_SEQ'] . $rowIndex);
+                    $productSeq = trim((string) ($productSeqCell->getValue() ?? ''));
+
+                    if ($productLabel !== '' && $productSeq !== '') {
+                        $key = mb_strtolower($productLabel) . '|' . mb_strtolower($productSeq);
+                        if (isset($seenProductComposite[$key])) {
                             if (count($errors) < $maxErrors) {
-                                $errors[] = "Row {$rowIndex}, column PRODUCT_LABEL: duplicate value already found at row {$seenProductLabel[$key]}.";
+                                $errors[] = "Row {$rowIndex}, columns PRODUCT_LABEL/PRODUCT_SEQ: duplicate value already found at row {$seenProductComposite[$key]}.";
                             }
                         } else {
-                            $seenProductLabel[$key] = $rowIndex;
+                            $seenProductComposite[$key] = $rowIndex;
                         }
                     }
                 }
@@ -329,6 +354,30 @@ class ValidateMasterFile implements ShouldQueue
                 return;
             }
 
+            if ((bool) Cache::get($abortKey, false)) {
+                Cache::put($cacheKey, [
+                    'status' => 'canceled',
+                    'progress' => 0,
+                    'message' => 'Validation canceled by user.',
+                    'stage' => 'validation',
+                    'processed_rows' => $processed,
+                    'total_rows' => $totalRows,
+                    'started_at' => time(),
+                    'errors' => $errors,
+                    'file_name' => $this->originalName,
+                ], now()->addMinutes(120));
+
+                if (isset($spreadsheet)) {
+                    $spreadsheet->disconnectWorksheets();
+                    unset($spreadsheet);
+                }
+                if (!empty($workbookPath) && file_exists($workbookPath)) {
+                    @unlink($workbookPath);
+                }
+
+                return;
+            }
+
             // Row-level validation done, now import step
             Cache::put($cacheKey, [
                 'status' => 'processing',
@@ -379,6 +428,8 @@ class ValidateMasterFile implements ShouldQueue
                 'total_rows' => $totalRows ?? 0,
                 'started_at' => time(),
                 'error' => $e->getMessage(),
+                'errors' => $errors ?? [],
+                'file_name' => $this->originalName,
             ], now()->addMinutes(120));
         }
     }

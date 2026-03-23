@@ -215,6 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeUploadToken = null;
     let stagedUploadToken = null;
     let activeAbortController = null;
+    let validationStage = null;
+    let lastErrorCount = 0;
 
     const formatBytes = (bytes) => {
         if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -289,6 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Backward-compatible signature: renderError('message')
+        if (messages === undefined) {
+            messages = fileName;
+            fileName = null;
+        }
+
         const filteredMessages = (Array.isArray(messages) ? messages : [messages])
             .filter((entry) => typeof entry === 'string' && entry.trim() !== '');
 
@@ -344,7 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         clearButton.classList.toggle('d-none', !(isUploading || isUploaded || Boolean(fileInput?.files?.length)));
-        const label = isUploading ? 'Cancel upload' : 'Remove uploaded file';
+        const isValidationActive = isUploaded && validationStage && !['ready', 'failed', 'canceled'].includes(validationStage);
+        const label = isUploading
+            ? 'Cancel upload'
+            : (isValidationActive ? 'Abort validation' : 'Remove uploaded file');
         clearButton.textContent = label;
         clearButton.setAttribute('title', label);
         clearButton.setAttribute('aria-label', label);
@@ -367,6 +378,8 @@ document.addEventListener('DOMContentLoaded', () => {
         activeUploadToken = null;
         stagedUploadToken = null;
         activeAbortController = null;
+        validationStage = null;
+        lastErrorCount = 0;
         if (submitButton) {
             submitButton.textContent = 'Submit';
             submitButton.disabled = true;
@@ -591,6 +604,9 @@ document.addEventListener('DOMContentLoaded', () => {
             isUploading = false;
             isUploaded = true;
             activeAbortController = null;
+            validationStage = 'queued';
+            lastErrorCount = 0;
+            updateClearButtonLabel();
 
             // --- POLL FOR VALIDATION PROGRESS ---
             const progressUrl = '/process/upload/progress/' + encodeURIComponent(stagedUploadToken);
@@ -600,6 +616,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const resp = await fetch(progressUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
                     if (!resp.ok) return;
                     const data = await resp.json();
+                    validationStage = data.stage || data.status || validationStage;
+                    updateClearButtonLabel();
+
+                    if (Array.isArray(data.errors) && data.errors.length > 0 && data.errors.length !== lastErrorCount) {
+                        lastErrorCount = data.errors.length;
+                        renderError(data.file_name, data.errors.slice(0, 20));
+                    }
+
                     let eta = '';
                     if (typeof data.eta_seconds === 'number' && data.eta_seconds > 0) {
                         const mins = Math.floor(data.eta_seconds / 60);
@@ -625,10 +649,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         data.message || 'Processing…',
                         statusDetail
                     );
-                    if (data.status === 'ready' || data.status === 'failed') {
+                    if (data.status === 'ready' || data.status === 'failed' || data.status === 'canceled') {
                         clearInterval(pollTimer);
                         if (data.status === 'ready') {
                             setProgress(100, 'Upload & validation complete', 'File uploaded and validated. Click Submit to continue.', { hideBar: true });
+                        } else if (data.status === 'canceled') {
+                            setProgress(0, 'Validation canceled', 'Upload canceled. Please upload a new file.');
+                            resetState();
                         } else {
                             const errors = (Array.isArray(data.errors) && data.errors.length > 0)
                                 ? data.errors
@@ -696,6 +723,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isUploading) {
             activeAbortController?.abort();
             await cancelActiveUpload();
+            resetState();
+            return;
+        }
+
+        const isValidationActive = isUploaded && validationStage && !['ready', 'failed', 'canceled'].includes(validationStage);
+        if (isValidationActive) {
+            await deleteStagedUpload();
+            setProgress(0, 'Validation canceled', 'Upload canceled. Please upload a new file.');
             resetState();
             return;
         }

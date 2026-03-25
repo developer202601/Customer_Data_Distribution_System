@@ -38,21 +38,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const loader = document.getElementById('page-loader');
   if (!loader) return;
   const statusUrl = loader.dataset.statusUrl;
+  const statusStreamUrl = loader.dataset.statusStreamUrl;
   const readyRedirect = loader.dataset.readyRedirect;
   const staticComplete = loader.dataset.staticComplete === '1';
   let lastProgress = 0;
   // Remove complex JS animation for reliability; use CSS transitions
   let animationFrame = null;
   let pollTimer = null;
+  let eventSource = null;
+  let noStatusHideTimer = null;
 
   const els = {
     msg: loader.querySelector('[data-loader-message]'),
     bar: loader.querySelector('[data-loader-bar]'),
     pct: loader.querySelector('[data-loader-percent]'),
     line: loader.querySelector('[data-loader-line-fill]'),
+    heartbeat: loader.querySelector('[data-loader-heartbeat]'),
   };
 
-  const showLoader = () => loader.classList.remove('page-loader--hidden');
+  const showLoader = () => {
+    loader.classList.remove('page-loader--hidden');
+
+    // Safety: on pages that do not provide process-status endpoints,
+    // do not allow the full-screen loader to remain indefinitely.
+    if (!statusUrl && !statusStreamUrl && !staticComplete) {
+      if (noStatusHideTimer) clearTimeout(noStatusHideTimer);
+      noStatusHideTimer = setTimeout(() => {
+        hideLoader();
+        noStatusHideTimer = null;
+      }, 2500);
+    }
+  };
   const hideLoader = () => loader.classList.add('page-loader--hidden');
 
   // Hide loader when restoring from bfcache (Back/Forward Cache)
@@ -68,11 +84,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (els.pct) els.pct.textContent = value + '%';
   };
 
+  const formatHeartbeat = (timestamp) => {
+    if (!timestamp) return '';
+    const last = new Date(timestamp).getTime();
+    if (Number.isNaN(last)) return '';
+    const delta = Math.max(0, Math.floor((Date.now() - last) / 1000));
+    if (delta > 5) return `Stalled ${delta}s`;
+    return `Active ${delta}s`;
+  };
+
   const apply = (data) => {
     if (!data) return;
     const raw = typeof data.progress === 'number' ? data.progress : lastProgress;
     const target = raw < lastProgress ? lastProgress : raw; // monotonic
-    if (els.msg) els.msg.textContent = data.message || data.status || 'Processing…';
+    if (els.msg) {
+      const baseMessage = data.message || data.status || 'Processing…';
+      const processedRows = Number.isFinite(Number(data.processed_rows)) ? Number(data.processed_rows) : null;
+      const totalRows = Number.isFinite(Number(data.total_rows)) ? Number(data.total_rows) : null;
+
+      if (processedRows !== null && totalRows !== null && totalRows > 0) {
+        els.msg.textContent = `${baseMessage} (${processedRows}/${totalRows} rows checked...)`;
+      } else {
+        els.msg.textContent = baseMessage;
+      }
+    }
+    if (els.heartbeat) {
+      const heartbeat = formatHeartbeat(data.last_updated_at);
+      if (heartbeat) {
+        els.heartbeat.textContent = heartbeat;
+      }
+    }
     if (target !== lastProgress) {
       lastProgress = target;
       setWidths(lastProgress);
@@ -121,13 +162,58 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(() => {});
   };
 
+  const startStream = () => {
+    if (!statusStreamUrl || typeof window.EventSource === 'undefined') {
+      return false;
+    }
+
+    try {
+      eventSource = new EventSource(statusStreamUrl, { withCredentials: true });
+    } catch (err) {
+      eventSource = null;
+      return false;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event?.data) return;
+      try {
+        const data = JSON.parse(event.data);
+        apply(data);
+        if (data.status === 'ready' || data.status === 'failed' || data.redirect_url) {
+          eventSource?.close();
+          eventSource = null;
+        }
+      } catch (_) {}
+    };
+
+    eventSource.onerror = () => {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      if (!pollTimer) {
+        poll();
+        pollTimer = setInterval(poll, 2000);
+      }
+    };
+
+    return true;
+  };
+
   if (staticComplete) {
     // Non-process pages: show full bar immediately
     setWidths(100);
   } else {
-    // Start polling immediately for process-aware pages
-    poll();
-    pollTimer = setInterval(poll, 2000);
+    // If no status endpoints are configured for this page, keep loader hidden.
+    if (!statusUrl && !statusStreamUrl) {
+      hideLoader();
+    }
+
+    // Prefer SSE stream, fallback to polling
+    if ((statusUrl || statusStreamUrl) && !startStream()) {
+      poll();
+      pollTimer = setInterval(poll, 2000);
+    }
   }
 
   // Basic navigation & form triggers

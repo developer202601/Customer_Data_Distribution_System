@@ -15,7 +15,6 @@ use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use RuntimeException;
 use Throwable;
-use ZipArchive;
 
 class MasterDatasetExclusionService
 {
@@ -40,7 +39,7 @@ class MasterDatasetExclusionService
     {
         if (empty($uploads)) {
             throw ValidationException::withMessages([
-                'exclusions' => 'Please upload at least one exclusion archive.',
+                'exclusions' => 'Please upload at least one exclusion workbook.',
             ]);
         }
 
@@ -64,42 +63,17 @@ class MasterDatasetExclusionService
                 $multipleEntries = count($stored['extracted_paths']) > 1;
 
                 foreach ($stored['extracted_paths'] as $extracted) {
-                    $worksheetRows = $this->loadWorksheetRows($extracted['path']);
-                    if (empty($worksheetRows)) {
-                        continue;
-                    }
+                    $fileLabel = $multipleEntries
+                        ? sprintf('%s :: %s', $stored['original_name'], $extracted['entry_name'])
+                        : $stored['original_name'];
 
-                    [$headers, $dataRows] = $this->separateHeaderAndRows($worksheetRows);
-                    $headerMap = $this->buildHeaderMap($headers);
-
-                    foreach ($dataRows as $excelRow => $columns) {
-                        if (! $this->rowHasData($columns)) {
-                            continue;
-                        }
-
-                        $account = $this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM');
-                        if ($account === '') {
-                            $rowErrorCount++;
-                            if (count($rowErrors) < self::MAX_ROW_ERRORS) {
-                                $rowErrors[] = sprintf(
-                                    'File %s, row %d, column ACCOUNT_NUM: value is required.',
-                                    $stored['original_name'],
-                                    (int) $excelRow
-                                );
-                            }
-                            continue;
-                        }
-
-                        $reason = $this->extractExclusionReason($columns, $headerMap);
-                        $fileLabel = $multipleEntries
-                            ? sprintf('%s :: %s', $stored['original_name'], $extracted['entry_name'])
-                            : $stored['original_name'];
-
-                        $accountMap[$account][] = [
-                            'file' => $fileLabel,
-                            'reason' => $reason,
-                        ];
-                    }
+                    $this->extractAccountsFromWorkbook(
+                        $extracted['path'],
+                        $fileLabel,
+                        $accountMap,
+                        $rowErrors,
+                        $rowErrorCount
+                    );
                 }
             }
 
@@ -115,7 +89,7 @@ class MasterDatasetExclusionService
         } catch (Throwable $exception) {
             $this->cleanupSavedArchives($savedArchives);
             throw $exception instanceof ValidationException ? $exception : ValidationException::withMessages([
-                'exclusions' => $exception->getMessage() ?: 'Unable to read one of the exclusion archives.',
+                'exclusions' => $exception->getMessage() ?: 'Unable to read one of the exclusion workbooks.',
             ]);
         } finally {
             foreach ($savedArchives as $archive) {
@@ -194,13 +168,13 @@ class MasterDatasetExclusionService
     private function storeArchive(UploadedFile $upload, string $archiveDirectory): array
     {
         $token = Str::uuid()->toString();
-        $filename = $token . '.zip';
+        $filename = $token . '.xlsx';
         $storedPath = $archiveDirectory . '/' . $filename;
 
         $this->disk->makeDirectory($archiveDirectory);
         $this->disk->putFileAs($archiveDirectory, $upload, $filename);
 
-        $extractedPaths = $this->extractWorkbooks($storedPath);
+        $extractedPaths = [$this->copyWorkbookToTemp($storedPath)];
 
         return [
             'stored_path' => $storedPath,
@@ -210,83 +184,113 @@ class MasterDatasetExclusionService
         ];
     }
 
-    /**
-     * Extract up to 3 Excel files from the uploaded ZIP.
-     */
-    private function extractWorkbooks(string $storedPath): array
+    private function copyWorkbookToTemp(string $storedPath): array
     {
-        $absoluteZip = $this->disk->path($storedPath);
-        $zip = new ZipArchive();
-
-        if ($zip->open($absoluteZip) !== true) {
-            throw new RuntimeException('Unable to open one of the exclusion ZIP archives.');
+        $source = $this->disk->path($storedPath);
+        if (! is_file($source)) {
+            throw new RuntimeException('Unable to read the uploaded exclusion workbook.');
         }
 
-        $entries = [];
+        $target = storage_path('app/tmp/exclusion_' . uniqid('', true) . '.xlsx');
+        $directory = dirname($target);
 
-        try {
-            $excelEntries = $this->locateExcelEntries($zip);
-
-            foreach ($excelEntries as $entry) {
-                $target = storage_path('app/tmp/exclusion_' . uniqid('', true) . '.xlsx');
-                $directory = dirname($target);
-
-                if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
-                    throw new RuntimeException('Unable to prepare a temporary directory for exclusions.');
-                }
-
-                $stream = $zip->getStream($entry);
-                if (! $stream) {
-                    throw new RuntimeException(sprintf('Unable to read "%s" inside the ZIP archive.', $entry));
-                }
-
-                $handle = fopen($target, 'wb');
-                if (! $handle) {
-                    fclose($stream);
-                    throw new RuntimeException('Unable to extract exclusion workbook.');
-                }
-
-                stream_copy_to_stream($stream, $handle);
-                fclose($stream);
-                fclose($handle);
-
-                $entries[] = [
-                    'path' => $target,
-                    'entry_name' => $entry,
-                ];
-            }
-
-            return $entries;
-        } finally {
-            $zip->close();
+        if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
+            throw new RuntimeException('Unable to prepare a temporary directory for exclusions.');
         }
+
+        if (! copy($source, $target)) {
+            throw new RuntimeException('Unable to prepare the exclusion workbook for processing.');
+        }
+
+        return [
+            'path' => $target,
+            'entry_name' => basename($storedPath),
+        ];
     }
 
-    private function loadWorksheetRows(string $workbookPath): array
+    private function extractAccountsFromWorkbook(
+        string $workbookPath,
+        string $fileLabel,
+        array &$accountMap,
+        array &$rowErrors,
+        int &$rowErrorCount
+    ): void
     {
         $reader = IOFactory::createReader('Xlsx');
         $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($workbookPath);
 
-        $rows = [];
-        foreach ($spreadsheet->getAllSheets() as $index => $sheet) {
-            $sheetRows = $sheet->toArray(null, true, true, true);
-            if ($index === 0) {
-                $rows = array_merge($rows, $sheetRows);
-            } else {
-                $rowKeys = array_keys($sheetRows);
-                $headerKey = $rowKeys[0] ?? null;
-                if ($headerKey !== null) {
-                    unset($sheetRows[$headerKey]);
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            $sheetTitle = (string) $sheet->getTitle();
+            $headers = [];
+            $headerMap = [];
+            $accountLetter = null;
+
+            foreach ($sheet->getRowIterator() as $row) {
+                $excelRow = (int) $row->getRowIndex();
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false);
+
+                $columns = [];
+                foreach ($cellIterator as $cell) {
+                    $columns[$cell->getColumn()] = $cell->getValue();
                 }
-                $rows = array_merge($rows, $sheetRows);
+
+                if ($excelRow === 1) {
+                    $headers = $this->prepareHeaders($columns);
+                    $headerMap = $this->buildHeaderMap($headers);
+                    $accountLetter = $headerMap['ACCOUNT_NUM'] ?? null;
+
+                    if (! $accountLetter) {
+                        throw ValidationException::withMessages([
+                            'exclusions' => sprintf('File %s, worksheet %s: required column ACCOUNT_NUM is missing.', $fileLabel, $sheetTitle),
+                        ]);
+                    }
+
+                    continue;
+                }
+
+                // Skip validation for rows that are completely blank (all columns empty)
+                if (! $this->rowHasData($columns)) {
+                    // All columns are empty, skip this row entirely
+                    continue;
+                }
+
+                $account = trim((string) ($columns[$accountLetter] ?? ''));
+                if ($account === '') {
+                    // Only trigger error if at least one other column is non-empty (row is not fully blank)
+                    $nonEmpty = false;
+                    foreach ($columns as $col => $val) {
+                        if ($col !== $accountLetter && !$this->isEmpty($val)) {
+                            $nonEmpty = true;
+                            break;
+                        }
+                    }
+                    if ($nonEmpty) {
+                        $rowErrorCount++;
+                        if (count($rowErrors) < self::MAX_ROW_ERRORS) {
+                            $rowErrors[] = sprintf(
+                                'File %s, row %d, column ACCOUNT_NUM: value is required.',
+                                $fileLabel,
+                                $excelRow
+                            );
+                        }
+                    }
+                    // If row is only blank in ACCOUNT_NUM but has other data, error; if all blank, skip
+                    continue;
+                }
+
+                $reason = $this->extractExclusionReason($columns, $headerMap);
+                $accountMap[$account][] = [
+                    'file' => $fileLabel,
+                    'reason' => $reason,
+                ];
             }
         }
 
         $spreadsheet->disconnectWorksheets();
         unset($spreadsheet);
-
-        return $rows;
+        gc_collect_cycles();
     }
 
     private function extractExclusionReason(array $columns, array $headerMap): string
@@ -344,34 +348,6 @@ class MasterDatasetExclusionService
                 $this->disk->delete($archive['stored_path']);
             }
         }
-    }
-
-    private function locateExcelEntries(ZipArchive $zip): array
-    {
-        $entries = [];
-
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $stat = $zip->statIndex($index);
-            $name = $stat['name'] ?? '';
-
-            if ($name === '' || str_ends_with($name, '/')) {
-                continue;
-            }
-
-            if (str_ends_with(strtolower($name), '.xlsx')) {
-                $entries[] = $name;
-            }
-        }
-
-        if (empty($entries)) {
-            throw new RuntimeException('Each exclusion ZIP must contain at least one Excel (.xlsx) workbook.');
-        }
-
-        if (count($entries) > 3) {
-            throw new RuntimeException('Each exclusion ZIP can include up to 3 Excel (.xlsx) workbooks.');
-        }
-
-        return $entries;
     }
 
     private function archiveDirectory(string $token): string

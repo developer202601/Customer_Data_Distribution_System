@@ -2,7 +2,7 @@
 
 @section('title', 'Exclusions')
 
-@section('loaderPollStatus', true)
+@section('loaderPollStatus', false)
 
 @section('navbar-right')
 <div class="process-stepper d-flex align-items-center gap-2">
@@ -38,7 +38,7 @@
                         <div class="d-flex align-items-center gap-3">
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
-                                <p class="text-muted mb-0">Upload up to {{ $maxFiles }} ZIP archives (each with a single Excel workbook) that list the identifiers you want to remove from the master list.</p>
+                                <p class="text-muted mb-0">Upload up to {{ $maxFiles }} Excel (.xlsx) workbooks that list the identifiers you want to remove from the master list.</p>
                             </div>
                         </div>
                         <div class="text-end">
@@ -70,11 +70,11 @@
                     </div>
 
                     <div class="process-dropzone mt-4" id="exclusion-dropzone">
-                        <input type="file" class="visually-hidden" id="exclusion-files" name="exclusions[]" accept=".zip" multiple>
+                        <input type="file" class="visually-hidden" id="exclusion-files" name="exclusions[]" accept=".xlsx" multiple>
                         <label for="exclusion-files" class="process-dropzone-content text-center" tabindex="0" role="button">
-                            <p class="process-dropzone-title mb-1">Drag and drop or click to add ZIP files</p>
+                            <p class="process-dropzone-title mb-1">Drag and drop or click to add Excel files</p>
                             <p class="text-muted mb-0" id="exclusion-dropzone-helper">
-                                You can queue up to {{ $maxFiles }} .zip files. Each ZIP must include exactly one Excel workbook.
+                                You can queue up to {{ $maxFiles }} .xlsx files. Each file must include the standard header row.
                             </p>
                         </label>
                     </div>
@@ -107,14 +107,14 @@
                         <h2 class="process-guidelines-title">Exclusion guidelines</h2>
                         <p class="mb-2">For the remaining non-VIP records, perform the exclusion process as follows:</p>
                         <ol class="mb-2">
-                            <li><strong>Import the three exclusion workbooks:</strong> Add each exclusion file (up to three) to the form. Each file should be a ZIP containing exactly one Excel workbook with the standard header row (for example, <code>CUSTOMER_REF</code> and <code>ACCOUNT_NUM</code>).</li>
+                            <li><strong>Import the three exclusion workbooks:</strong> Add each exclusion file (up to three) to the form. Each file should be an Excel (.xlsx) workbook with the standard header row (for example, <code>CUSTOMER_REF</code> and <code>ACCOUNT_NUM</code>).</li>
                             <li><strong>Remove matches from the master list:</strong> After uploading, you can either let the system apply exclusions when you press <em>Apply exclusions</em>, or you may perform the matching yourself offline before uploading by using Excel functions such as <code>VLOOKUP</code>, <code>XLOOKUP</code> or conditional filters. Matching is performed when either <code>CUSTOMER_REF</code> or <code>ACCOUNT_NUM</code> appears in any exclusion workbook.</li>
                         </ol>
                         <ul class="mb-0">
-                            <li>Each ZIP must contain exactly one workbook with the standard header row (for example, <strong>CUSTOMER_REF</strong> and <strong>ACCOUNT_NUM</strong>).</li>
-                            <li>You may add the three ZIP archives sequentially; they will appear in the list before you submit.</li>
-                            <li>When you press <strong>Apply exclusions</strong>, the system will extract each workbook, merge the rows, and remove any matching rows from the master list.</li>
-                            <li>Only ZIP archives containing Microsoft Excel (.xlsx) files are supported for this workflow.</li>
+                            <li>Each file must contain exactly one workbook with the standard header row (for example, <strong>CUSTOMER_REF</strong> and <strong>ACCOUNT_NUM</strong>).</li>
+                            <li>You may add the three Excel files sequentially; they will appear in the list before you submit.</li>
+                            <li>When you press <strong>Apply exclusions</strong>, the system will merge the rows and remove any matching rows from the master list.</li>
+                            <li>Only Microsoft Excel (.xlsx) files are supported for this workflow.</li>
                         </ul>
                     </div>
                 </div>
@@ -165,10 +165,32 @@
         const submitButton = form.querySelector('button[type="submit"]');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const stagedUploads = @json($stagedUploads ?? []);
-        const startRoute = @json(route('process.exclusions.chunks.start'));
-        const partRoute = @json(route('process.exclusions.chunks.part'));
-        const finishRoute = @json(route('process.exclusions.chunks.finish'));
+        const uploadSingleRoute = @json(route('process.exclusions.upload.single'));
         const destroyRouteTemplate = @json(route('process.exclusions.staged.destroy', ['token' => '__TOKEN__']));
+        const progressStreamTemplate = @json(route('process.exclusions.progress.stream', ['token' => '__TOKEN__']));
+        const progressPollTemplate = @json(route('process.exclusions.progress', ['token' => '__TOKEN__']));
+        const exclusionDebugEnabled = true;
+
+        const debugLog = (...args) => {
+            if (!exclusionDebugEnabled) {
+                return;
+            }
+
+            const line = ['[EXCLUSION_DEBUG]', new Date().toISOString(), ...args];
+            console.log(...line);
+            window.__exclusionDebugLog = window.__exclusionDebugLog || [];
+            window.__exclusionDebugLog.push(line.map((item) => {
+                if (typeof item === 'string') {
+                    return item;
+                }
+
+                try {
+                    return JSON.stringify(item);
+                } catch (_error) {
+                    return String(item);
+                }
+            }).join(' '));
+        };
 
         const formatBytes = (bytes) => {
             if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -182,6 +204,14 @@
                 index += 1;
             }
             return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+        };
+
+        const createLocalId = () => {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+
+            return `${Date.now()}-${Math.random()}`;
         };
 
         const setProgress = (percentage, label, meta, options = {}) => {
@@ -215,7 +245,7 @@
 
             const uploadedFiles = selectedFiles.filter((entry) => entry.status === 'uploaded').length;
             const workbookCount = getUploadedWorkbookCount();
-            progressDetails.textContent = `${uploadedFiles} ZIP uploaded, ${workbookCount}/${maxWorkbooks} Excel workbook(s) received.`;
+            progressDetails.textContent = `${uploadedFiles} file(s) uploaded, ${workbookCount}/${maxWorkbooks} Excel workbook(s) received.`;
         };
 
         const updateDropzoneState = () => {
@@ -310,9 +340,18 @@
                 state.className = 'd-block text-muted';
                 if (file.status === 'uploaded') {
                     const workbookCount = Number(file.excelCount || 0);
-                    state.textContent = workbookCount > 0
-                        ? `Uploaded • ${workbookCount} Excel workbook(s) in this ZIP`
+                    const baseLabel = workbookCount > 0
+                        ? `Uploaded • ${workbookCount} Excel workbook(s) in this file`
                         : 'Uploaded';
+                    if (file.validationStatus) {
+                        const statusLabel = file.validationStatus === 'ready'
+                            ? 'Validated'
+                            : (file.validationStatus === 'failed' ? 'Validation failed' : 'Validating');
+                        const heartbeat = file.validationHeartbeat ? ` • ${file.validationHeartbeat}` : '';
+                        state.textContent = `${baseLabel} • ${statusLabel}${heartbeat}`;
+                    } else {
+                        state.textContent = baseLabel;
+                    }
                 } else if (file.status === 'uploading') {
                     state.textContent = `Uploading ${file.progress}%`;
                 } else if (file.status === 'failed') {
@@ -438,6 +477,8 @@
                 return;
             }
 
+            debugLog('addFiles', { count: files.length });
+
             clearErrors();
 
             if (getUploadedWorkbookCount() >= maxWorkbooks) {
@@ -452,8 +493,8 @@
                     break;
                 }
 
-                if (!file.name.toLowerCase().endsWith('.zip')) {
-                    showError(['Only .zip archives are allowed for exclusions.']);
+                if (!file.name.toLowerCase().endsWith('.xlsx')) {
+                    showError(['Only .xlsx workbooks are allowed for exclusions.']);
                     continue;
                 }
 
@@ -463,7 +504,7 @@
                 }
 
                 selectedFiles.push({
-                    localId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+                    localId: createLocalId(),
                     file,
                     name: file.name,
                     size: file.size,
@@ -508,6 +549,7 @@
         };
 
         const uploadEntry = async (entry) => {
+            debugLog('uploadEntry:start', { name: entry.name, size: entry.size });
             entry.status = 'uploading';
             entry.error = null;
             entry.progress = 0;
@@ -520,63 +562,37 @@
                 ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
             };
 
-            const startPayload = new FormData();
-            startPayload.append('file_name', entry.name);
-            startPayload.append('file_size', String(entry.size));
-            startPayload.append('mime_type', entry.file?.type || 'application/zip');
+            const payload = new FormData();
+            payload.append('exclusion', entry.file, entry.name);
 
-            const startResponse = await fetch(startRoute, {
-                method: 'POST',
-                body: startPayload,
-                headers: requestHeaders,
-                credentials: 'same-origin',
-            });
-            const startJson = await startResponse.json().catch(() => null);
-            if (!startResponse.ok || !startJson?.upload_token) {
-                throw new Error(startJson?.message || 'Unable to start exclusion upload.');
-            }
+            const controller = new AbortController();
+            const timeoutMs = 20000;
+            const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
-            const uploadToken = startJson.upload_token;
-            const chunkSize = Number(startJson.chunk_size || (2 * 1024 * 1024));
-            const totalChunks = Math.max(1, Math.ceil(entry.size / chunkSize));
-
-            for (let index = 0; index < totalChunks; index += 1) {
-                const start = index * chunkSize;
-                const end = Math.min(start + chunkSize, entry.size);
-                const chunk = entry.file.slice(start, end);
-                const payload = new FormData();
-                payload.append('upload_token', uploadToken);
-                payload.append('chunk_index', String(index));
-                payload.append('chunk', chunk, `${entry.name}.part${index}`);
-
-                const chunkResponse = await fetch(partRoute, {
+            let uploadResponse = null;
+            try {
+                uploadResponse = await fetch(uploadSingleRoute, {
                     method: 'POST',
                     body: payload,
                     headers: requestHeaders,
                     credentials: 'same-origin',
+                    signal: controller.signal,
                 });
-                const chunkJson = await chunkResponse.json().catch(() => null);
-                if (!chunkResponse.ok) {
-                    throw new Error(chunkJson?.message || 'Unable to upload a chunk.');
+            } catch (error) {
+                if (error && error.name === 'AbortError') {
+                    debugLog('uploadEntry:timeout', { name: entry.name, timeoutMs });
+                    throw new Error('Upload request timed out. Please retry.');
                 }
 
-                entry.progress = Math.min(99, Math.round(((index + 1) / totalChunks) * 100));
-                renderList();
+                throw error;
+            } finally {
+                window.clearTimeout(timeoutId);
             }
 
-            const finishPayload = new FormData();
-            finishPayload.append('upload_token', uploadToken);
-            finishPayload.append('total_chunks', String(totalChunks));
-
-            const finishResponse = await fetch(finishRoute, {
-                method: 'POST',
-                body: finishPayload,
-                headers: requestHeaders,
-                credentials: 'same-origin',
-            });
-            const finishJson = await finishResponse.json().catch(() => null);
-            if (!finishResponse.ok || !finishJson?.file?.id) {
-                throw new Error(finishJson?.message || 'Unable to finalize exclusion upload.');
+            const finishJson = await uploadResponse.json().catch(() => null);
+            debugLog('uploadEntry:response', { ok: uploadResponse.ok, status: uploadResponse.status, body: finishJson });
+            if (!uploadResponse.ok || !finishJson?.file?.id) {
+                throw new Error(finishJson?.message || 'Unable to upload exclusion file.');
             }
 
             entry.status = 'uploaded';
@@ -584,7 +600,117 @@
             entry.stagedId = finishJson.file.id;
             entry.excelCount = Number(finishJson?.file?.excel_count || 0);
             entry.file = null;
+            entry.validationStatus = 'validating';
+            entry.validationHeartbeat = '';
             renderList();
+            startValidationStream(entry);
+        };
+
+        const startValidationStream = (entry) => {
+            if (!entry?.stagedId) {
+                return;
+            }
+
+            debugLog('validation:stream:start', { stagedId: entry.stagedId, file: entry.name });
+
+            const streamUrl = progressStreamTemplate.replace('__TOKEN__', encodeURIComponent(entry.stagedId));
+            const pollUrl = progressPollTemplate.replace('__TOKEN__', encodeURIComponent(entry.stagedId));
+
+            if (typeof window.EventSource === 'undefined') {
+                return startValidationPoll(entry, pollUrl);
+            }
+
+            let source = null;
+            try {
+                source = new EventSource(streamUrl, { withCredentials: true });
+            } catch (_error) {
+                return startValidationPoll(entry, pollUrl);
+            }
+
+            const handlePayload = (data) => {
+                if (!data) {
+                    return;
+                }
+                debugLog('validation:payload', { stagedId: entry.stagedId, status: data.status, progress: data.progress, message: data.message, error: data.error });
+                entry.validationStatus = data.status || entry.validationStatus;
+                entry.validationMessage = data.message || entry.validationMessage;
+                entry.validationProgress = typeof data.progress === 'number' ? data.progress : entry.validationProgress;
+                entry.validationHeartbeat = buildHeartbeat(data.last_updated_at);
+                if (entry.validationStatus === 'failed' && Array.isArray(data.errors) && data.errors.length) {
+                    entry.error = data.errors[0];
+                } else if (entry.validationStatus === 'failed' && data.error) {
+                    entry.error = data.error;
+                }
+                if (entry.validationStatus === 'failed') {
+                    showError([entry.error || data.message || 'Validation failed.']);
+                }
+                renderList();
+            };
+
+            source.onmessage = (event) => {
+                if (!event?.data) {
+                    return;
+                }
+                try {
+                    handlePayload(JSON.parse(event.data));
+                } catch (_error) {}
+            };
+
+            source.onerror = () => {
+                debugLog('validation:stream:error', { stagedId: entry.stagedId });
+                source?.close();
+                source = null;
+                startValidationPoll(entry, pollUrl);
+            };
+        };
+
+        const startValidationPoll = (entry, url) => {
+            let pollTimer = null;
+            const poll = async () => {
+                try {
+                    const resp = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    entry.validationStatus = data.status || entry.validationStatus;
+                    entry.validationMessage = data.message || entry.validationMessage;
+                    entry.validationProgress = typeof data.progress === 'number' ? data.progress : entry.validationProgress;
+                    entry.validationHeartbeat = buildHeartbeat(data.last_updated_at);
+                    if (entry.validationStatus === 'failed' && Array.isArray(data.errors) && data.errors.length) {
+                        entry.error = data.errors[0];
+                    } else if (entry.validationStatus === 'failed' && data.error) {
+                        entry.error = data.error;
+                    }
+                    if (entry.validationStatus === 'failed') {
+                        showError([entry.error || data.message || 'Validation failed.']);
+                    }
+                    renderList();
+
+                    if (['ready', 'failed', 'canceled'].includes(entry.validationStatus)) {
+                        clearInterval(pollTimer);
+                    }
+                } catch (_error) {}
+            };
+
+            poll();
+            pollTimer = setInterval(poll, 2000);
+        };
+
+        const buildHeartbeat = (timestamp) => {
+            if (!timestamp) {
+                return '';
+            }
+
+            const last = new Date(timestamp).getTime();
+            if (Number.isNaN(last)) {
+                return '';
+            }
+
+            const delta = Math.max(0, Math.floor((Date.now() - last) / 1000));
+            if (delta > 5) {
+                return `Stalled ${delta}s`;
+            }
+
+            return `Active ${delta}s`;
         };
 
         const processQueue = async () => {
@@ -725,9 +851,6 @@
             loaderActive = true;
             clearErrors();
 
-            // Show simplified global loader (polling already active via app.js)
-            window.CDDSLoader?.show?.();
-
             if (submitButton) {
                 submitButton.disabled = true;
             }
@@ -759,7 +882,6 @@
                 const payload = await response.json().catch(() => null);
 
                 if (!response.ok) {
-                    window.CDDSLoader?.hide?.();
                     loaderActive = false;
                     if (submitButton) {
                         submitButton.disabled = false;
@@ -784,35 +906,9 @@
                 }
 
                 if (payload?.redirect_url) {
-                    // Defer redirect until final status (ready/failed) is reported
-                    const onFinal = (event) => {
-                        document.removeEventListener('cdds:loader-final', onFinal);
-                        const finalStatus = event?.detail?.status;
-                        const finalMessage = event?.detail?.message;
-                        const finalRedirectUrl = event?.detail?.redirect_url;
-
-                        if (finalStatus === 'failed') {
-                            if (finalRedirectUrl) {
-                                return;
-                            }
-
-                            window.CDDSLoader?.hide?.();
-                            loaderActive = false;
-                            if (submitButton) {
-                                submitButton.disabled = false;
-                            }
-                            const messages = typeof finalMessage === 'string'
-                                ? finalMessage.split(' | ').map((item) => item.trim()).filter((item) => item !== '')
-                                : ['Processing failed. Please review the uploaded files.'];
-                            showError(messages);
-                            return;
-                        }
-
-                        window.setTimeout(() => {
-                            window.location.href = payload.redirect_url;
-                        }, 400);
-                    };
-                    document.addEventListener('cdds:loader-final', onFinal);
+                    window.setTimeout(() => {
+                        window.location.href = payload.redirect_url;
+                    }, 250);
                 }
 
 
@@ -822,7 +918,7 @@
 
                 clearAll(false);
             } catch (error) {
-                    window.CDDSLoader?.hide?.();
+                    debugLog('submit:error', { message: error?.message || 'unknown error' });
                 loaderActive = false;
                 if (submitButton) {
                     submitButton.disabled = false;
@@ -841,6 +937,8 @@
                 status: 'uploaded',
                 stagedId: entry.id,
                 excelCount: Number(entry.excel_count || 1),
+                validationStatus: 'ready',
+                validationHeartbeat: 'Active',
                 error: null,
             });
         });

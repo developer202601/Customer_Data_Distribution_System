@@ -75,77 +75,12 @@ class ValidateMasterFile implements ShouldQueue
                 'started_at' => time(),
             ], now()->addMinutes(120));
 
-            // Setup importer and extract workbook from ZIP archive (DIY extraction because extractWorkbook() is private)
-            $zip = new \ZipArchive();
-            if ($zip->open($this->filePath) !== true) {
-                throw new \RuntimeException('Unable to open the uploaded ZIP archive for validation.');
+            if (! str_ends_with(strtolower($this->filePath), '.xlsx')) {
+                throw new \RuntimeException('Please upload a Microsoft Excel (.xlsx) workbook.');
             }
 
-            try {
-                Cache::put($cacheKey, [
-                    'status' => 'processing',
-                    'progress' => 52,
-                    'message' => 'Extracting workbook from ZIP...',
-                    'stage' => 'extraction',
-                    'processed_rows' => 0,
-                    'total_rows' => null,
-                    'started_at' => time(),
-                    'errors' => [],
-                    'file_name' => $this->originalName,
-                ], now()->addMinutes(120));
-
-                $entries = [];
-                for ($i = 0; $i < $zip->numFiles; $i++) {
-                    $stat = $zip->statIndex($i);
-                    $name = $stat['name'] ?? '';
-                    $name = str_replace('\\', '/', $name);
-
-                    if ($name === '' || str_ends_with($name, '/')) {
-                        continue;
-                    }
-
-                    $base = basename($name);
-                    if ($base === '' || $base === '.DS_Store' || str_starts_with($base, '._') || str_starts_with($base, '~$') || str_starts_with($base, '.')) {
-                        continue;
-                    }
-
-                    if (str_ends_with(strtolower($name), '.xlsx')) {
-                        $entries[] = $name;
-                    }
-                }
-
-                if (empty($entries)) {
-                    throw new \RuntimeException('The ZIP file must contain exactly one Excel (.xlsx) workbook. None were found.');
-                }
-
-                if (count($entries) > 1) {
-                    throw new \RuntimeException('The ZIP file must contain exactly one Excel (.xlsx) workbook.');
-                }
-
-                $entryName = $entries[0];
-                $rawStream = $zip->getStream($entryName);
-                if (! $rawStream) {
-                    throw new \RuntimeException('Unable to read the Excel workbook inside the uploaded ZIP file.');
-                }
-
-                $workbookPath = storage_path('app/tmp/validated_' . $this->token . '.xlsx');
-                $workbookDir = dirname($workbookPath);
-                if (! is_dir($workbookDir)) {
-                    mkdir($workbookDir, 0755, true);
-                }
-
-                $targetHandle = fopen($workbookPath, 'wb');
-                if (! $targetHandle) {
-                    fclose($rawStream);
-                    throw new \RuntimeException('Unable to create temporary workbook file.');
-                }
-
-                stream_copy_to_stream($rawStream, $targetHandle);
-                fclose($rawStream);
-                fclose($targetHandle);
-            } finally {
-                $zip->close();
-            }
+            $workbookPath = $this->filePath;
+            $cleanupWorkbook = false;
 
             $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
             $reader->setReadDataOnly(true);
@@ -190,7 +125,7 @@ class ValidateMasterFile implements ShouldQueue
                     'errors' => ['Workbook contains no data rows.'],
                     'file_name' => $this->originalName,
                 ], now()->addMinutes(120));
-                if (file_exists($workbookPath)) {
+                if (! empty($cleanupWorkbook) && file_exists($workbookPath)) {
                     unlink($workbookPath);
                 }
                 return;
@@ -208,7 +143,7 @@ class ValidateMasterFile implements ShouldQueue
 
             $errors = [];
             $maxErrors = 20;
-            $seenProductComposite = [];
+            $seenProductLabels = [];
 
             Cache::put($cacheKey, [
                 'status' => 'processing',
@@ -275,21 +210,19 @@ class ValidateMasterFile implements ShouldQueue
                     }
                 }
 
-                // Check duplicates by PRODUCT_LABEL + PRODUCT_SEQ
-                if (! $rowProblems && isset($headerMap['PRODUCT_LABEL']) && isset($headerMap['PRODUCT_SEQ'])) {
+                // Check duplicates by PRODUCT_LABEL only
+                if (! $rowProblems && isset($headerMap['PRODUCT_LABEL'])) {
                     $productLabelCell = $sheet->getCell($headerMap['PRODUCT_LABEL'] . $rowIndex);
                     $productLabel = trim((string) ($productLabelCell->getValue() ?? ''));
-                    $productSeqCell = $sheet->getCell($headerMap['PRODUCT_SEQ'] . $rowIndex);
-                    $productSeq = trim((string) ($productSeqCell->getValue() ?? ''));
 
-                    if ($productLabel !== '' && $productSeq !== '') {
-                        $key = mb_strtolower($productLabel) . '|' . mb_strtolower($productSeq);
-                        if (isset($seenProductComposite[$key])) {
+                    if ($productLabel !== '') {
+                        $key = mb_strtolower($productLabel);
+                        if (isset($seenProductLabels[$key])) {
                             if (count($errors) < $maxErrors) {
-                                $errors[] = "Row {$rowIndex}, columns PRODUCT_LABEL/PRODUCT_SEQ: duplicate value already found at row {$seenProductComposite[$key]}.";
+                                $errors[] = "Row {$rowIndex}, column PRODUCT_LABEL: duplicate value already found at row {$seenProductLabels[$key]}.";
                             }
                         } else {
-                            $seenProductComposite[$key] = $rowIndex;
+                            $seenProductLabels[$key] = $rowIndex;
                         }
                     }
                 }
@@ -371,7 +304,7 @@ class ValidateMasterFile implements ShouldQueue
                     $spreadsheet->disconnectWorksheets();
                     unset($spreadsheet);
                 }
-                if (!empty($workbookPath) && file_exists($workbookPath)) {
+                if (! empty($cleanupWorkbook) && file_exists($workbookPath)) {
                     @unlink($workbookPath);
                 }
 
@@ -399,7 +332,7 @@ class ValidateMasterFile implements ShouldQueue
             app(MasterDatasetImporter::class)->import($uploadedFile, null);
 
             // Remove temporary workbook copy after import
-            if (!empty($workbookPath) && file_exists($workbookPath)) {
+            if (! empty($cleanupWorkbook) && file_exists($workbookPath)) {
                 @unlink($workbookPath);
             }
 
@@ -416,7 +349,7 @@ class ValidateMasterFile implements ShouldQueue
 
         } catch (Throwable $e) {
             // Ensure temp workbook cleanup on failure as well
-            if (!empty($workbookPath) && file_exists($workbookPath)) {
+            if (! empty($cleanupWorkbook) && file_exists($workbookPath)) {
                 @unlink($workbookPath);
             }
 

@@ -70,6 +70,11 @@ class ProcessExcelChunk implements ShouldQueue
     private const FILTER_STATUS_VALUE = 'OK';
     private const FILTER_MIN_ARREARS = 2400;
     private const FILTER_INVOICING_CO_IDS = ['1'];
+    private const REQUIRED_MISSING_COLUMNS = [
+        'RUN_DATE',
+        'ACCOUNT_NUM',
+        'PRODUCT_LABEL',
+    ];
 
     public function __construct(
         private readonly string $token,
@@ -94,6 +99,15 @@ class ProcessExcelChunk implements ShouldQueue
             $filteredRows = [];
             $skippedRows = [];
             $processedRows = 0;
+            $headerMap = $this->buildHeaderMap($this->headers);
+            $productLabelLetter = $headerMap['PRODUCT_LABEL'] ?? null;
+
+            if (! $productLabelLetter) {
+                throw new RuntimeException('Missing required column: PRODUCT_LABEL');
+            }
+
+            $dedupeKey = 'master:dedupe:' . $this->token;
+            Redis::expire($dedupeKey, 7200);
 
             foreach ($dataRows as $rowIndex => $columns) {
                 if (! $this->rowHasData($columns)) {
@@ -103,43 +117,40 @@ class ProcessExcelChunk implements ShouldQueue
                 $processedRows++;
                 $passesValidation = true;
 
-                // --- HASH-BASED VALIDATION USING REDIS ---
-                // Build a unique string for the row (e.g., join all values)
-                $rowString = json_encode(array_values($columns));
-                $rowHash = hash('sha256', $rowString);
-                $redisKey = 'excel_row_hash:' . $rowHash;
-                // If hash exists, mark as duplicate and skip
-                if (Redis::exists($redisKey)) {
-                    $errors[] = sprintf('Row %d: Duplicate row detected (hash: %s).', $rowIndex, $rowHash);
-                    $passesValidation = false;
-                } else {
-                    // Set hash with TTL (e.g., 2 hours)
-                    Redis::setex($redisKey, 7200, 1);
+                foreach (self::REQUIRED_MISSING_COLUMNS as $required) {
+                    $requiredLetter = $headerMap[$required] ?? null;
+                    $value = $requiredLetter ? ($columns[$requiredLetter] ?? null) : null;
+
+                    if (! $requiredLetter || $this->isEmpty($value)) {
+                        $errors[] = sprintf('Row %d: "%s" cannot be empty.', $rowIndex, $required);
+                        $passesValidation = false;
+                    }
                 }
 
                 foreach ($this->headers as $columnLetter => $headerMeta) {
                     $normalised = $headerMeta['normalised'];
-
-                    if (! $this->isExpectedColumn($normalised)) {
-                        continue;
-                    }
-
                     $value = $columns[$columnLetter] ?? null;
 
-                    if ($this->isEmpty($value) && ! in_array($normalised, self::OPTIONAL_COLUMNS, true)) {
-                        $errors[] = sprintf('Row %d: "%s" cannot be empty.', $rowIndex, $headerMeta['label']);
-                        $passesValidation = false;
-                    }
-
-                    if ($normalised === 'LATEST_BILL_MNY' && ! $this->isValidLatestBill($value)) {
+                    if ($normalised === 'LATEST_BILL_MNY' && ! $this->isEmpty($value) && ! $this->isValidLatestBill($value)) {
                         $errors[] = sprintf('Row %d: "%s" must contain a numeric amount or "-".', $rowIndex, $headerMeta['label']);
                         $passesValidation = false;
                     }
 
-                    // Validate dynamic NEW_ARREARS_YYYYMMDD columns contain only numeric amount characters
-                    if (str_starts_with($normalised, 'NEW_ARREARS_') && ! $this->isValidArrears($value)) {
+                    if (str_starts_with($normalised, 'NEW_ARREARS_') && ! $this->isEmpty($value) && ! $this->isValidArrears($value)) {
                         $errors[] = sprintf('Row %d: "%s" must contain only a numeric amount (no letters or currency symbols).', $rowIndex, $headerMeta['label']);
                         $passesValidation = false;
+                    }
+                }
+
+                if ($passesValidation) {
+                    $productLabel = trim((string) ($columns[$productLabelLetter] ?? ''));
+                    if ($productLabel !== '') {
+                        $dedupeValue = mb_strtolower($productLabel);
+                        $added = Redis::sadd($dedupeKey, $dedupeValue);
+                        if ((int) $added === 0) {
+                            $errors[] = sprintf('Row %d: Duplicate PRODUCT_LABEL "%s" detected.', $rowIndex, $productLabel);
+                            $passesValidation = false;
+                        }
                     }
                 }
 
@@ -240,6 +251,7 @@ class ProcessExcelChunk implements ShouldQueue
                 $state['chunks_completed'],
                 max((int) ($state['chunks_total'] ?? 0), 1)
             );
+            $state['last_updated_at'] = now()->toIso8601String();
 
             Cache::put($this->cacheKey(), $state, now()->addMinutes(60));
         });

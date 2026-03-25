@@ -12,30 +12,69 @@
 @endsection
 
 @section('content')
-<div class="process-upload py-4">
-    <div class="container-fluid">
-        <div class="card process-upload-card shadow-sm">
-            <div class="card-body p-4 p-lg-5">
-                <h1 class="process-upload-title mb-2">Processing dataset</h1>
-                <p class="text-muted mb-0">Please wait while the system applies the confirmed configuration and generates the filtered outputs.</p>
-            </div>
-        </div>
-    </div>
-</div>
+@include('partials.task-loader-card', [
+    'title' => 'Processing dataset',
+    'message' => 'Please wait while the system applies the confirmed configuration and generates the filtered outputs.',
+])
 @endsection
 
 @push('scripts')
 <script nonce="{{ $cspNonce ?? '' }}">
     document.addEventListener('DOMContentLoaded', function () {
-        try {
-            if (window.CDDSLoader && typeof window.CDDSLoader.show === 'function') {
-                window.CDDSLoader.show();
+        var statusUrl = @json(route('process.status.current'));
+        var assignmentsUrl = @json(route('process.assignments.index'));
+        var messageEl = document.getElementById('task-loader-message');
+        var redirecting = false;
+
+        var tick = function () {
+            if (redirecting) {
                 return;
             }
 
-            var loader = document.getElementById('page-loader');
-            if (loader) loader.classList.remove('page-loader--hidden');
-        } catch (e) {}
+            fetch(statusUrl, {
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store',
+                credentials: 'same-origin',
+            })
+            .then(function (response) {
+                if (!response.ok) {
+                    return null;
+                }
+
+                return response.json();
+            })
+            .then(function (payload) {
+                if (!payload) {
+                    return;
+                }
+
+                if (messageEl) {
+                    var msg = payload.message || 'Processing...';
+                    messageEl.textContent = msg;
+                }
+
+                if (payload.redirect_url) {
+                    redirecting = true;
+                    window.location.href = payload.redirect_url;
+                    return;
+                }
+
+                if (payload.status === 'ready') {
+                    redirecting = true;
+                    window.location.href = assignmentsUrl;
+                    return;
+                }
+
+                if (payload.status === 'failed') {
+                    redirecting = true;
+                    window.location.href = @json(route('master.upload.create'));
+                }
+            })
+            .catch(function () {});
+        };
+
+        tick();
+        window.setInterval(tick, 1000);
     });
 </script>
 @endpush

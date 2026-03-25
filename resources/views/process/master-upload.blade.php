@@ -41,7 +41,7 @@
                         <div class="d-flex align-items-center gap-3">
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload Master Dataset</h1>
-                                <p class="text-muted mb-0">Upload a ZIP file containing a single Microsoft Excel (.xlsx) workbook with the required headers.</p>
+                                <p class="text-muted mb-0">Upload a Microsoft Excel (.xlsx) workbook with the required headers.</p>
                             </div>
                         </div>
                         <div class="d-flex gap-2">
@@ -124,17 +124,17 @@
                     </div>
 
                     <div class="process-dropzone mt-4" id="master-dropzone">
-                        <input type="file" class="visually-hidden" id="upload" name="upload" accept=".zip" required>
+                        <input type="file" class="visually-hidden" id="upload" name="upload" accept=".xlsx" required>
                         <label for="upload" class="process-dropzone-content text-center" tabindex="0" role="button">
                             <p class="process-dropzone-title mb-1">Drag and drop file or click to browse</p>
-                            <p class="text-muted mb-0" id="master-dropzone-helper">Upload a .zip that contains your master Excel workbook.</p>
+                            <p class="text-muted mb-0" id="master-dropzone-helper">Upload your master Excel workbook (.xlsx).</p>
                         </label>
                     </div>
 
                     <div class="process-guidelines mt-4">
                         <h2 class="process-guidelines-title">File requirements</h2>
                         <ul class="mb-0">
-                            <li>Compress the master Microsoft Excel workbook into a ZIP archive before uploading.</li>
+                            <li>Upload the master Microsoft Excel workbook directly (.xlsx).</li>
                             <li>Each upload must contain exactly one Excel (.xlsx) workbook with the agreed master dataset headers.</li>
                             <li>Numeric columns such as <strong>LATEST_BILL_MNY</strong> and the arrears column must contain valid numbers or the character <strong>-</strong>.</li>
                             <li>Optional columns may be empty, but required columns must be present for every populated row.</li>
@@ -207,6 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const startRoute = @json(route('master.upload.chunks.start'));
     const partRoute = @json(route('master.upload.chunks.part'));
     const finishRoute = @json(route('master.upload.chunks.finish'));
+    const progressStreamTemplate = @json(route('process.upload.progress.stream', ['token' => '__TOKEN__']));
+    const progressPollTemplate = @json(route('process.upload.progress', ['token' => '__TOKEN__']));
     const submitRoute = @json(route('master.upload.chunks.submit'));
     const cancelRouteTemplate = @json(route('master.upload.chunks.cancel', ['token' => '__TOKEN__']));
     const stagedDestroyRouteTemplate = @json(route('master.upload.chunks.staged.destroy', ['token' => '__TOKEN__']));
@@ -215,8 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeUploadToken = null;
     let stagedUploadToken = null;
     let activeAbortController = null;
-    let validationStage = null;
-    let lastErrorCount = 0;
 
     const formatBytes = (bytes) => {
         if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -275,7 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!helper) {
             return;
         }
-        helper.textContent = file ? `${file.name} (${formatBytes(file.size)})` : 'Upload a .zip that contains your master Excel workbook.';
+        helper.textContent = file ? `${file.name} (${formatBytes(file.size)})` : 'Upload your master Excel workbook (.xlsx).';
     };
 
     const updateProgressFile = (file) => {
@@ -352,10 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         clearButton.classList.toggle('d-none', !(isUploading || isUploaded || Boolean(fileInput?.files?.length)));
-        const isValidationActive = isUploaded && validationStage && !['ready', 'failed', 'canceled'].includes(validationStage);
-        const label = isUploading
-            ? 'Cancel upload'
-            : (isValidationActive ? 'Abort validation' : 'Remove uploaded file');
+        const label = isUploading ? 'Cancel upload' : 'Remove uploaded file';
         clearButton.textContent = label;
         clearButton.setAttribute('title', label);
         clearButton.setAttribute('aria-label', label);
@@ -378,8 +375,6 @@ document.addEventListener('DOMContentLoaded', () => {
         activeUploadToken = null;
         stagedUploadToken = null;
         activeAbortController = null;
-        validationStage = null;
-        lastErrorCount = 0;
         if (submitButton) {
             submitButton.textContent = 'Submit';
             submitButton.disabled = true;
@@ -440,6 +435,110 @@ document.addEventListener('DOMContentLoaded', () => {
         activeUploadToken = null;
     };
 
+    const startProgressStream = (token) => {
+        const streamUrl = progressStreamTemplate.replace('__TOKEN__', encodeURIComponent(token));
+        const pollUrl = progressPollTemplate.replace('__TOKEN__', encodeURIComponent(token));
+
+        if (typeof window.EventSource === 'undefined') {
+            return startProgressPoll(pollUrl);
+        }
+
+        let source = null;
+        try {
+            source = new EventSource(streamUrl, { withCredentials: true });
+        } catch (_error) {
+            return startProgressPoll(pollUrl);
+        }
+
+        const handlePayload = (data) => {
+            if (!data) {
+                return;
+            }
+
+            const message = data.message || 'Processing…';
+            const status = data.status;
+            const progressValue = typeof data.progress === 'number' ? Math.round(data.progress) : 100;
+            const heartbeat = buildHeartbeat(data.last_updated_at);
+
+            setProgress(
+                Math.min(100, Math.max(0, progressValue)),
+                message,
+                status === 'awaiting_exclusions'
+                    ? `Upload complete. Please submit and add exclusions to begin processing.${heartbeat ? ' • ' + heartbeat : ''}`
+                    : heartbeat
+            );
+
+            if (['ready', 'failed', 'canceled', 'awaiting_exclusions'].includes(status)) {
+                source?.close();
+                source = null;
+            }
+        };
+
+        source.onmessage = (event) => {
+            if (!event?.data) {
+                return;
+            }
+            try {
+                handlePayload(JSON.parse(event.data));
+            } catch (_error) {}
+        };
+
+        source.onerror = () => {
+            source?.close();
+            source = null;
+            startProgressPoll(pollUrl);
+        };
+
+        return source;
+    };
+
+    const startProgressPoll = (url) => {
+        let pollTimer = null;
+        const poll = async () => {
+            try {
+                const resp = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const message = data.message || 'Processing…';
+                const progressValue = typeof data.progress === 'number' ? Math.round(data.progress) : 100;
+                const heartbeat = buildHeartbeat(data.last_updated_at);
+                setProgress(
+                    Math.min(100, Math.max(0, progressValue)),
+                    message,
+                    data.status === 'awaiting_exclusions'
+                        ? `Upload complete. Please submit and add exclusions to begin processing.${heartbeat ? ' • ' + heartbeat : ''}`
+                        : heartbeat
+                );
+
+                if (['ready', 'failed', 'canceled', 'awaiting_exclusions'].includes(data.status)) {
+                    clearInterval(pollTimer);
+                }
+            } catch (_error) {}
+        };
+
+        const buildHeartbeat = (timestamp) => {
+            if (!timestamp) {
+                return '';
+            }
+
+            const last = new Date(timestamp).getTime();
+            if (Number.isNaN(last)) {
+                return '';
+            }
+
+            const delta = Math.max(0, Math.floor((Date.now() - last) / 1000));
+            if (delta > 5) {
+                return `Stalled ${delta}s`;
+            }
+
+            return `Active ${delta}s`;
+        };
+
+        poll();
+        pollTimer = setInterval(poll, 2000);
+        return pollTimer;
+    };
+
     if (dropzone) {
         dropzone.addEventListener('click', (event) => {
             if (event.target && event.target.closest && event.target.closest('label')) {
@@ -465,13 +564,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const [file] = event.dataTransfer.files;
-            if (file && file.name.toLowerCase().endsWith('.zip')) {
+            if (file && file.name.toLowerCase().endsWith('.xlsx')) {
                 fileInput.files = event.dataTransfer.files;
                 updateHelper(file);
                 fileInput.dispatchEvent(new Event('change', { bubbles: true }));
             } else {
                 updateHelper(null);
-                renderError('Please upload a ZIP file that contains your master Excel workbook.');
+                renderError('Please upload the master Excel workbook (.xlsx).');
             }
         });
     }
@@ -498,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const startPayload = new FormData();
             startPayload.append('file_name', file.name);
             startPayload.append('file_size', String(file.size));
-            startPayload.append('mime_type', file.type || 'application/zip');
+            startPayload.append('mime_type', file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
             activeAbortController = new AbortController();
 
@@ -576,101 +675,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(finishJson?.message || finishJson?.errors?.upload?.[0] || 'Unable to finalize the uploaded file.');
             }
 
-            // --- Handle validation result ---
-            if (finishJson.status === 'failed' && finishJson.validation_errors) {
-                // Show validation errors
-                let errorList = [];
-                for (const key in finishJson.validation_errors) {
-                    if (Array.isArray(finishJson.validation_errors[key])) {
-                        errorList = errorList.concat(finishJson.validation_errors[key]);
-                    }
-                }
-                renderError(errorList.length ? errorList : 'Validation failed.');
-                setProgress(0, 'Validation failed', 'Please fix the errors and upload again.');
-                isUploading = false;
-                isUploaded = false;
-                activeUploadToken = null;
-                stagedUploadToken = null;
-                updateClearButtonLabel();
-                updateDropzoneState();
-                updateSubmitState();
-                return;
-            }
-
-
             activeUploadToken = null;
             stagedUploadToken = finishJson.staged_upload_token;
             window.masterUploadToken = finishJson.staged_upload_token;
             isUploading = false;
             isUploaded = true;
             activeAbortController = null;
-            validationStage = 'queued';
-            lastErrorCount = 0;
             updateClearButtonLabel();
-
-            // --- POLL FOR VALIDATION PROGRESS ---
-            const progressUrl = '/process/upload/progress/' + encodeURIComponent(stagedUploadToken);
-            let pollTimer = null;
-            const pollProgress = async () => {
-                try {
-                    const resp = await fetch(progressUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
-                    if (!resp.ok) return;
-                    const data = await resp.json();
-                    validationStage = data.stage || data.status || validationStage;
-                    updateClearButtonLabel();
-
-                    if (Array.isArray(data.errors) && data.errors.length > 0 && data.errors.length !== lastErrorCount) {
-                        lastErrorCount = data.errors.length;
-                        renderError(data.file_name, data.errors.slice(0, 20));
-                    }
-
-                    let eta = '';
-                    if (typeof data.eta_seconds === 'number' && data.eta_seconds > 0) {
-                        const mins = Math.floor(data.eta_seconds / 60);
-                        const secs = Math.round(data.eta_seconds % 60);
-                        eta = `ETA: ${mins}m ${secs}s`;
-                    }
-
-                    let stageHint = '';
-                    if (data.stage === 'extraction') {
-                        stageHint = 'Extracting workbook from ZIP (approx. 20s).';
-                    } else if (data.stage === 'import') {
-                        stageHint = 'Finalizing import (may take some time).';
-                    }
-
-                    let rowStatus = '';
-                    if (data.stage === 'validation' && typeof data.processed_rows === 'number' && typeof data.total_rows === 'number' && data.total_rows > 0) {
-                        rowStatus = `Validating row ${data.processed_rows} / ${data.total_rows}`;
-                    }
-
-                    const statusDetail = [rowStatus, stageHint, eta].filter(Boolean).join(' | ');
-                    setProgress(
-                        50 + Math.round((data.progress ?? 0) / 2), // Validation: 50-100%
-                        data.message || 'Processing…',
-                        statusDetail
-                    );
-                    if (data.status === 'ready' || data.status === 'failed' || data.status === 'canceled') {
-                        clearInterval(pollTimer);
-                        if (data.status === 'ready') {
-                            setProgress(100, 'Upload & validation complete', 'File uploaded and validated. Click Submit to continue.', { hideBar: true });
-                        } else if (data.status === 'canceled') {
-                            setProgress(0, 'Validation canceled', 'Upload canceled. Please upload a new file.');
-                            resetState();
-                        } else {
-                            const errors = (Array.isArray(data.errors) && data.errors.length > 0)
-                                ? data.errors
-                                : (data.error ? [data.error] : ['Validation failed. Please check your file and try again.']);
-
-                            renderError(data.file_name, errors);
-                            setProgress(0, 'Validation failed', 'Please fix the errors and upload again.');
-                            resetState();
-                        }
-                    }
-                } catch (e) {}
-            };
-            pollProgress();
-            pollTimer = setInterval(pollProgress, 150); // 150ms for smooth updates
-            // --- END POLL ---
+            startProgressStream(stagedUploadToken);
+            setProgress(100, 'Upload complete', 'Click Submit to continue and upload exclusions.', { hideBar: true });
+            updateSubmitState();
 
         } catch (error) {
             if (error instanceof DOMException && error.name === 'AbortError') {
@@ -701,10 +715,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!file.name.toLowerCase().endsWith('.zip')) {
+        if (!file.name.toLowerCase().endsWith('.xlsx')) {
             fileInput.value = '';
             updateHelper(null);
-            renderError('Please upload a ZIP file that contains your master Excel workbook.');
+            renderError('Please upload the master Excel workbook (.xlsx).');
             updateSubmitState();
             return;
         }
@@ -723,14 +737,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isUploading) {
             activeAbortController?.abort();
             await cancelActiveUpload();
-            resetState();
-            return;
-        }
-
-        const isValidationActive = isUploaded && validationStage && !['ready', 'failed', 'canceled'].includes(validationStage);
-        if (isValidationActive) {
-            await deleteStagedUpload();
-            setProgress(0, 'Validation canceled', 'Upload canceled. Please upload a new file.');
             resetState();
             return;
         }

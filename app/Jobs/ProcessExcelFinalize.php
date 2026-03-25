@@ -190,7 +190,9 @@ class ProcessExcelFinalize implements ShouldQueue
     private function updateProgressState(array $overrides): void
     {
         $state = Cache::get($this->cacheKey(), []);
-        $payload = array_merge($state, $overrides);
+        $payload = array_merge($state, $overrides, [
+            'last_updated_at' => now()->toIso8601String(),
+        ]);
         Cache::put($this->cacheKey(), $payload, now()->addMinutes(60));
     }
 

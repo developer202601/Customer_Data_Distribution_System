@@ -83,17 +83,16 @@ class MasterDatasetStagingPromoter
         DB::table('master_dataset_rows_staging')
             ->where('process_id', $process->id)
             ->orderBy('id')
-            ->select(['id', 'product_label', 'product_seq', 'payload'])
+            ->select(['id', 'product_label', 'payload'])
             ->chunkById(1000, function ($rows) use (&$seen, &$firstConflict) {
                 foreach ($rows as $row) {
                     $productLabel = trim((string) ($row->product_label ?? ''));
-                    $productSeq = trim((string) ($row->product_seq ?? ''));
 
-                    if ($productLabel === '' || $productSeq === '') {
+                    if ($productLabel === '') {
                         continue;
                     }
 
-                    $key = strtolower($productLabel) . '|' . strtolower($productSeq);
+                    $key = strtolower($productLabel);
                     $rowNumber = $this->sourceRowNumber($row);
 
                     if (! isset($seen[$key])) {
@@ -125,7 +124,7 @@ class MasterDatasetStagingPromoter
             throw ValidationException::withMessages([
                 'upload' => [
                     sprintf(
-                        'Duplicate value found for PRODUCT_LABEL/PRODUCT_SEQ at %s; repeated at %s.',
+                        'Duplicate value found for PRODUCT_LABEL at %s; repeated at %s.',
                         $existingLabel,
                         $duplicateLabel
                     ),

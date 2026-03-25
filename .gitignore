@@ -22,6 +22,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/testfiles
 
 # Local training/report notes
 NAITA_*.md

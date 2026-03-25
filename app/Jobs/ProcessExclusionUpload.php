@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\MasterDatasetProcess;
 use App\Support\MasterDatasetExportCoordinator;
+use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetWorkflowService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,6 +23,8 @@ class ProcessExclusionUpload implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     private const FAILURE_CACHE_TTL_SECONDS = 7200;
+    public int $timeout = 3600;
+    public int $tries = 1;
 
     /**
      * @param array<int, array{name: string, path: string, mime: string|null}> $files
@@ -35,9 +38,9 @@ class ProcessExclusionUpload implements ShouldQueue
 
     public function handle(MasterDatasetWorkflowService $workflowService, MasterDatasetExportCoordinator $exportCoordinator): void
     {
-        // Increase memory limit for large Excel files
-        ini_set('memory_limit', '512M');
-        ini_set('max_execution_time', 300);
+        // Increase limits for large workbooks processed in this queued job.
+        ini_set('memory_limit', '1536M');
+        ini_set('max_execution_time', 0);
         $process = MasterDatasetProcess::find($this->processId);
 
         if (! $process) {
@@ -170,5 +173,36 @@ class ProcessExclusionUpload implements ShouldQueue
         foreach ($this->files as $file) {
             Storage::disk('local')->delete($file['path']);
         }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $process = MasterDatasetProcess::find($this->processId);
+        if (! $process) {
+            $this->cleanup();
+
+            return;
+        }
+
+        $message = trim((string) ($exception?->getMessage() ?? 'Exclusion processing failed.'));
+        $wrapped = ValidationException::withMessages([
+            'exclusions' => [$message],
+        ]);
+
+        Log::error('Exclusion job failed in failed() handler', [
+            'process_id' => $this->processId,
+            'message' => $message,
+            'exception' => $exception,
+        ]);
+
+        $failurePayload = $this->buildFailurePayload($process, $wrapped);
+        $this->cacheFailurePayloadForUser($process, $failurePayload);
+
+        MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::FAILED);
+        $process->update([
+            'failure_reason' => $message,
+        ]);
+
+        $this->cleanup();
     }
 }

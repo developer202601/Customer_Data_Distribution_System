@@ -121,7 +121,13 @@ class ProcessExclusionUpload implements ShouldQueue
         }
 
         if (empty($masterErrors) && empty($exclusionErrors) && empty($generalErrors)) {
-            $generalErrors = [trim((string) $exception->getMessage()) ?: 'Processing failed.'];
+            $rawMessage = trim((string) $exception->getMessage());
+
+            if (str_contains($rawMessage, 'No query results for model [App\\Models\\MasterDatasetProcess]')) {
+                $masterErrors = ['Dataset process record could not be found, please re-upload the master file.'];
+            } else {
+                $generalErrors = [$rawMessage ?: 'Processing failed.'];
+            }
         }
 
         return [

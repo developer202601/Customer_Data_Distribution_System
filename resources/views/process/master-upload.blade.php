@@ -249,6 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         progressBlock.classList.remove('d-none');
         progressTrack?.classList.toggle('d-none', hideBar);
+
+        // Ensure percentage reaches 100% when complete
+        if (options?.stage === 'completed') {
+            percentage = 100;
+        }
+        
         progressBar.style.width = `${percentage}%`;
         progressBar.textContent = `${percentage}%`;
         progressBar.setAttribute('aria-valuenow', String(percentage));
@@ -651,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     : instantBytesPerSecond;
                 previousUploadedBytes = uploadedBytes;
                 previousTickAt = tickAt;
-                const percentage = Math.min(50, Math.round((uploadedBytes / file.size) * 50)); // Upload: 0-50%
+                const percentage = Math.min(100, Math.round((uploadedBytes / file.size) * 100)); // Upload: 0-100%
                 setProgress(
                     percentage,
                     'Uploading master dataset',
@@ -683,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
             activeAbortController = null;
             updateClearButtonLabel();
             startProgressStream(stagedUploadToken);
-            setProgress(100, 'Upload complete', 'Click Submit to continue and upload exclusions.', { hideBar: true });
+            setProgress(100, 'Upload complete', 'Click Submit to continue.', { stage: 'completed' });
             updateSubmitState();
 
         } catch (error) {

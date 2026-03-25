@@ -44,7 +44,7 @@
                         <div class="text-end">
                             <div class="d-flex justify-content-end align-items-center gap-2">
                                 <a href="{{ route('master.upload.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
-                                <button type="button" class="btn btn-outline-secondary" id="exclusion-clear">Clear selected</button>
+                                <button type="button" class="btn btn-outline-secondary" id="exclusion-clear">Clear all exclusions</button>
                                 <button type="submit" class="btn btn-dark px-4" disabled>Apply exclusions</button>
                             </div>
                             <p class="text-muted mb-0 mt-2">You can add files one at a time or all at once.</p>
@@ -243,9 +243,15 @@
                 return;
             }
 
-            const uploadedFiles = selectedFiles.filter((entry) => entry.status === 'uploaded').length;
-            const workbookCount = getUploadedWorkbookCount();
-            progressDetails.textContent = `${uploadedFiles} file(s) uploaded, ${workbookCount}/${maxWorkbooks} Excel workbook(s) received.`;
+            const uploadedFiles = selectedFiles.filter((entry) => entry.status === 'uploaded');
+            
+            // Only pluralize if there is specifically more than 1 file uploaded, since it will be removed otherwise
+            if (uploadedFiles.length > 0) {
+                const workbookCount = getUploadedWorkbookCount();
+                progressDetails.textContent = `${uploadedFiles.length} file(s) uploaded, ${workbookCount}/${maxWorkbooks} Excel workbook(s) received.`;
+            } else {
+                progressDetails.textContent = '';
+            }
         };
 
         const updateDropzoneState = () => {
@@ -294,7 +300,10 @@
 
             const hasUploaded = selectedFiles.some((entry) => entry.status === 'uploaded');
             const hasPending = selectedFiles.some((entry) => entry.status === 'uploading' || entry.status === 'queued');
-            submitButton.disabled = loaderActive || uploadQueueActive || !hasUploaded || hasPending;
+            const isAnyValidating = selectedFiles.some((entry) => entry.status === 'uploaded' && entry.validationStatus !== 'ready' && entry.validationStatus !== 'failed');
+            const hasFailed = selectedFiles.some((entry) => entry.status === 'error' || entry.validationStatus === 'failed');
+
+            submitButton.disabled = loaderActive || uploadQueueActive || !hasUploaded || hasPending || isAnyValidating || hasFailed;
         };
 
         if (!dropzone || !fileInput || !form) {
@@ -365,8 +374,8 @@
 
                 const remove = document.createElement('button');
                 remove.type = 'button';
-                remove.className = 'btn btn-sm btn-outline-danger';
-                remove.textContent = 'Remove';
+                remove.className = 'btn text-danger py-0 btn-link text-decoration-none shadow-none';
+                remove.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x-circle-fill" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/></svg>`;
                 remove.disabled = file.status === 'uploading';
                 remove.addEventListener('click', () => removeFile(index));
                 row.appendChild(remove);
@@ -391,6 +400,7 @@
             fileList.appendChild(list);
             updateOverallProgress();
             updateDropzoneState();
+            toggleSubmitState();
         };
 
         const createTransfer = () => {
@@ -544,6 +554,7 @@
             }
 
             updateHelperText();
+            fileInput.value = ''; // reset input to allow same file reselect after delete
             renderList();
             toggleSubmitState();
         };

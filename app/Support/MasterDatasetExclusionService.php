@@ -121,23 +121,32 @@ class MasterDatasetExclusionService
 
         try {
             $rows = MasterDatasetRow::query()
+                ->select(['id', 'account_num'])
                 ->where('process_id', $process->id)
                 ->where('excluded', false)
                 ->whereIn('account_num', array_keys($accountMap))
                 ->lockForUpdate()
                 ->get();
 
+            $updatesByReason = [];
+
             foreach ($rows as $row) {
                 $details = $accountMap[$row->account_num] ?? [];
                 $reasonText = $this->buildReasonText($details);
 
                 $matched++;
+                $updatesByReason[$reasonText][] = $row->id;
+            }
 
-                $row->excluded = true;
-                $row->exclusion_reason = $reasonText;
-                $row->assigned_to = self::ASSIGNMENT_EXCLUDED;
-                $row->exclusion_priority = 10;
-                $row->save();
+            foreach ($updatesByReason as $reasonText => $ids) {
+                foreach (array_chunk($ids, 1000) as $chunk) {
+                    MasterDatasetRow::whereIn('id', $chunk)->update([
+                        'excluded' => true,
+                        'exclusion_reason' => $reasonText,
+                        'assigned_to' => self::ASSIGNMENT_EXCLUDED,
+                        'exclusion_priority' => 10,
+                    ]);
+                }
             }
 
             $archivesPayload = $this->mergeArchiveHistory($process, $savedArchives);

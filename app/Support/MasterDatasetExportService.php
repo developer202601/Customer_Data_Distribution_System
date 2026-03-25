@@ -141,10 +141,15 @@ class MasterDatasetExportService
         $rowPointer = 2;
 
         (clone $query)->chunkById(500, function ($rows) use (&$rowPointer, $sheet, $process, $columns) {
+            $batchData = [];
             /** @var MasterDatasetRow $row */
             foreach ($rows as $row) {
-                $sheet->fromArray($this->mapRow($process, $row, $columns), null, 'A' . $rowPointer);
-                $rowPointer++;
+                $batchData[] = $this->mapRow($process, $row, $columns);
+            }
+
+            if (!empty($batchData)) {
+                $sheet->fromArray($batchData, null, 'A' . $rowPointer);
+                $rowPointer += count($batchData);
             }
         });
 

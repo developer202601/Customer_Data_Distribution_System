@@ -484,6 +484,11 @@ class MasterDatasetImporter
             ? ($headers[$secondaryArrearsLetter]['normalised'] ?? 'NEW_ARREARS_SECONDARY')
             : null;
 
+        $batch = [];
+        $batchSize = 1000;
+        $now = now();
+        $processId = $process->id;
+
         foreach ($dataRows as $columns) {
             if (! $this->rowHasData($columns)) {
                 continue;
@@ -515,9 +520,15 @@ class MasterDatasetImporter
                 $parsed['assigned_to'] = self::ASSIGNMENT_EXCLUDED;
                 $statistics['excluded_count']++;
 
-                MasterDatasetRow::create(array_merge($parsed, [
-                    'process_id' => $process->id,
-                ]));
+                $parsed['process_id'] = $processId;
+                $parsed['created_at'] = $now;
+                $parsed['updated_at'] = $now;
+                $batch[] = $parsed;
+                
+                if (count($batch) >= $batchSize) {
+                    MasterDatasetRow::insert($batch);
+                    $batch = [];
+                }
                 continue;
             }
 
@@ -525,9 +536,19 @@ class MasterDatasetImporter
                 $parsed['assigned_to'] = self::ASSIGNMENT_VIP;
             }
 
-            MasterDatasetRow::create(array_merge($parsed, [
-                'process_id' => $process->id,
-            ]));
+            $parsed['process_id'] = $processId;
+            $parsed['created_at'] = $now;
+            $parsed['updated_at'] = $now;
+            $batch[] = $parsed;
+
+            if (count($batch) >= $batchSize) {
+                MasterDatasetRow::insert($batch);
+                $batch = [];
+            }
+        }
+
+        if (! empty($batch)) {
+            MasterDatasetRow::insert($batch);
         }
 
         return $statistics;

@@ -306,7 +306,7 @@ class MasterDatasetImporter
             Cache::put($cacheKey, [
                 'status' => 'processing',
                 'progress' => 6,
-                'message' => 'Reading master workbook into memory (this may take a minute)...',
+                'message' => 'Reading master workbook into memory (this may take a minute(s) depending on the uploaded file size and row count)...',
                 'stage' => 'loading',
                 'processed_rows' => 0,
                 'total_rows' => 0,

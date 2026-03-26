@@ -15,11 +15,8 @@
 @include('partials.task-loader-card', [
     'title' => 'Preparing confirmation',
     'message' => 'We are processing the uploaded master and exclusion files. You will be redirected to configuration confirmation automatically.',
-    'buttonHref' => route('process.confirm.create'),
-    'buttonLabel' => 'Open configuration now',
-    'buttonId' => 'confirm-wait-open-now',
-    'buttonDisabled' => true,
 ])
+<div class="task-loader-meta text-muted text-center" id="confirm-wait-elapsed" aria-live="polite"></div>
 
 <div id="validation-progress-template" style="display: none;">
     <div class="mt-4 w-100" id="tpl-validation-progress-container">
@@ -42,6 +39,18 @@
         var redirecting = false;
         var messageEl = document.getElementById('task-loader-message');
         var openNowEl = document.getElementById('confirm-wait-open-now');
+        var elapsedEl = document.getElementById('confirm-wait-elapsed');
+        var elapsedStart = Date.now();
+        var elapsedTimer = null;
+
+        if (elapsedEl) {
+            elapsedTimer = window.setInterval(function () {
+                var elapsed = Math.max(0, Math.floor((Date.now() - elapsedStart) / 1000));
+                var mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                var secs = String(elapsed % 60).padStart(2, '0');
+                elapsedEl.textContent = 'Elapsed ' + mins + ':' + secs;
+            }, 1000);
+        }
 
         // Progress elements
         var progressContainer = null;
@@ -147,6 +156,9 @@
                         openNowEl.removeAttribute('aria-disabled');
                     }
                     redirecting = true;
+                    if (elapsedTimer) {
+                        window.clearInterval(elapsedTimer);
+                    }
                     window.location.replace(confirmUrl + '?refresh=' + Date.now());
                     return;
                 }
@@ -155,6 +167,9 @@
                     var target = document.createElement('a');
                     target.href = payload.redirect_url;
                     if (target.pathname !== window.location.pathname || (target.search || '') !== (window.location.search || '')) {
+                        if (elapsedTimer) {
+                            window.clearInterval(elapsedTimer);
+                        }
                         window.location.href = payload.redirect_url;
                     }
                 }

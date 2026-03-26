@@ -37,10 +37,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // Simplified loader implementation
   const loader = document.getElementById('page-loader');
   if (!loader) return;
+  const NAV_FLASH_KEY = 'cdds-loader-shown';
   const statusUrl = loader.dataset.statusUrl;
   const statusStreamUrl = loader.dataset.statusStreamUrl;
   const readyRedirect = loader.dataset.readyRedirect;
   const staticComplete = loader.dataset.staticComplete === '1';
+  const rootEl = document.documentElement;
+  const navFlashSeen = (() => {
+    try {
+      const seen = sessionStorage.getItem(NAV_FLASH_KEY) === '1';
+      sessionStorage.removeItem(NAV_FLASH_KEY);
+      return seen;
+    } catch {
+      return false;
+    }
+  })();
+  if (navFlashSeen && rootEl?.hasAttribute('data-loader-init')) {
+    rootEl.removeAttribute('data-loader-init');
+  }
   let lastProgress = 0;
   // Remove complex JS animation for reliability; use CSS transitions
   let animationFrame = null;
@@ -58,6 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const showLoader = () => {
     loader.classList.remove('page-loader--hidden');
+    try {
+      sessionStorage.setItem(NAV_FLASH_KEY, '1');
+    } catch {}
 
     // Safety: on pages that do not provide process-status endpoints,
     // do not allow the full-screen loader to remain indefinitely.
@@ -69,7 +86,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 2500);
     }
   };
-  const hideLoader = () => loader.classList.add('page-loader--hidden');
+  const hideLoader = () => {
+    loader.classList.add('page-loader--hidden');
+    if (rootEl?.hasAttribute('data-loader-init')) {
+      rootEl.removeAttribute('data-loader-init');
+    }
+  };
 
   // Hide loader when restoring from bfcache (Back/Forward Cache)
   window.addEventListener('pageshow', (event) => {
@@ -201,14 +223,15 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   if (staticComplete) {
-    // Non-process pages: show full bar immediately
-    setWidths(100);
-  } else {
-    // If no status endpoints are configured for this page, keep loader hidden.
-    if (!statusUrl && !statusStreamUrl) {
-      hideLoader();
+    // Non-process pages: show loader briefly on initial load, then hide.
+    if (!navFlashSeen) {
+      showLoader();
+      setWidths(100);
     }
-
+    setTimeout(() => {
+      hideLoader();
+    }, 200);
+  } else {
     // Prefer SSE stream, fallback to polling
     if ((statusUrl || statusStreamUrl) && !startStream()) {
       poll();

@@ -134,10 +134,10 @@
                     <div class="process-guidelines mt-4">
                         <h2 class="process-guidelines-title">File requirements</h2>
                         <ul class="mb-0">
-                            <li>Upload the master Microsoft Excel workbook directly (.xlsx).</li>
-                            <li>Each upload must contain exactly one Excel (.xlsx) workbook with the agreed master dataset headers.</li>
-                            <li>Numeric columns such as <strong>LATEST_BILL_MNY</strong> and the arrears column must contain valid numbers or the character <strong>-</strong>.</li>
-                            <li>Optional columns may be empty, but required columns must be present for every populated row.</li>
+                            <li>Upload one Microsoft Excel workbook (.xlsx).</li>
+                            <li>The first row must contain headers, including <strong>RUN_DATE</strong>, <strong>ACCOUNT_NUM</strong>, and <strong>PRODUCT_LABEL</strong>.</li>
+                            <li>Every data row must include values for those required columns.</li>
+                            <li><strong>PRODUCT_LABEL</strong> values must be unique (duplicates are rejected).</li>
                         </ul>
                     </div>
 

@@ -34,8 +34,14 @@
                     @enderror
                 </div>
                 <button type="submit" class="btn btn-primary btn-block w-100">Continue</button>
-                <p class="login-card__hint mt-3">Having trouble? <a href="#">Contact support</a></p>
+                <!-- <p class="login-card__hint mt-3">Having trouble? <a href="#">Contact support</a></p> -->
             </form>
+            <div class="text-center mt-3" style="display:inline-flex;align-items:center;gap:.5rem;white-space:nowrap;">
+                <span>Powered by</span>
+                <a href="" style="display:inline-flex;align-items:center;gap:.25rem;">
+                    <img src="{{ asset('images/transzent-logo.png') }}" alt="Transzent" style="height:24px;max-height:24px;padding-bottom:1px;" />
+                </a>
+            </div>
         </div>
     </div>
 </section>

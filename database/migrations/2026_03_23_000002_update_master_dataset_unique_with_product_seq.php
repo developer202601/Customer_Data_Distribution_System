@@ -13,7 +13,11 @@ return new class extends Migration
             Schema::table('master_dataset_rows', function (Blueprint $table) {
                 $table->dropForeign(['process_id']);
                 $table->dropUnique('mdr_process_run_product_unique');
-                $table->dropUnique('mdr_process_run_productseq_unique');
+                try {
+                    $table->dropUnique('mdr_process_run_productseq_unique');
+                } catch (\Exception $e) {
+                    // ignore if the index does not exist in SQLite
+                }
 
                 $table->unique(
                     ['process_id', 'run_date_raw', 'account_num', 'product_label', 'product_seq'],
@@ -80,7 +84,11 @@ return new class extends Migration
             Schema::table('master_dataset_rows', function (Blueprint $table) {
                 $table->dropForeign(['process_id']);
                 $table->dropUnique('mdr_process_run_product_unique');
-                $table->dropUnique('mdr_process_run_productseq_unique');
+                try {
+                    $table->dropUnique('mdr_process_run_productseq_unique');
+                } catch (\Exception $e) {
+                    // ignore if the index does not exist in SQLite
+                }
 
                 $table->unique([
                     'process_id',

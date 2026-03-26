@@ -140,11 +140,31 @@ class MasterDatasetExportService
 
         $rowPointer = 2;
 
-        (clone $query)->chunkById(500, function ($rows) use (&$rowPointer, $sheet, $process, $columns) {
+        $chunkSize = 2000;
+        $activeColumns = array_keys($columns);
+        $selectColumns = array_filter($activeColumns, fn ($column) => $column !== 'dataset_month');
+
+        // chunkById requires the id column to be present, so ensure it is always selected.
+        if (! in_array('id', $selectColumns, true)) {
+            $selectColumns[] = 'id';
+        }
+
+        $dataQuery = (clone $query);
+        if (! empty($selectColumns)) {
+            $dataQuery = $dataQuery->select($selectColumns);
+        }
+
+        $dataQuery->chunkById($chunkSize, function ($rows) use (&$rowPointer, $sheet, $process, $columns) {
+            $batchData = [];
+
             /** @var MasterDatasetRow $row */
             foreach ($rows as $row) {
-                $sheet->fromArray($this->mapRow($process, $row, $columns), null, 'A' . $rowPointer);
-                $rowPointer++;
+                $batchData[] = $this->mapRow($process, $row, $columns);
+            }
+
+            if (! empty($batchData)) {
+                $sheet->fromArray($batchData, null, 'A' . $rowPointer);
+                $rowPointer += count($batchData);
             }
         });
 

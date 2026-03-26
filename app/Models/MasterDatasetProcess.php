@@ -16,6 +16,7 @@ class MasterDatasetProcess extends Model
 
     protected $fillable = [
         'token',
+        'latest_exclusion_token',
         'dataset_month',
         'arrears_date',
         'run_date',

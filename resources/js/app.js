@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const loadStoredTheme = () => { try { const s = localStorage.getItem(THEME_STORAGE_KEY); return (s === THEMES.DARK || s === THEMES.LIGHT) ? s : null; } catch { return null; } };
   const detectPreferredTheme = () => window.matchMedia('(prefers-color-scheme: dark)').matches ? THEMES.DARK : THEMES.LIGHT;
-  const saveTheme = (t) => { try { localStorage.setItem(THEME_STORAGE_KEY, t); } catch {} };
+  const saveTheme = (t) => { try { localStorage.setItem(THEME_STORAGE_KEY, t); } catch { } };
   const toggleTheme = () => { const cur = document.body.classList.contains('theme-dark') ? THEMES.DARK : THEMES.LIGHT; const next = cur === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK; applyTheme(next); saveTheme(next); };
   const initTheme = () => { applyTheme(loadStoredTheme() || detectPreferredTheme()); };
   if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
@@ -37,28 +37,66 @@ document.addEventListener('DOMContentLoaded', () => {
   // Simplified loader implementation
   const loader = document.getElementById('page-loader');
   if (!loader) return;
+  const NAV_FLASH_KEY = 'cdds-loader-shown';
   const statusUrl = loader.dataset.statusUrl;
+  const statusStreamUrl = loader.dataset.statusStreamUrl;
   const readyRedirect = loader.dataset.readyRedirect;
   const staticComplete = loader.dataset.staticComplete === '1';
+  const rootEl = document.documentElement;
+  const navFlashSeen = (() => {
+    try {
+      const seen = sessionStorage.getItem(NAV_FLASH_KEY) === '1';
+      sessionStorage.removeItem(NAV_FLASH_KEY);
+      return seen;
+    } catch {
+      return false;
+    }
+  })();
+  if (navFlashSeen && rootEl?.hasAttribute('data-loader-init')) {
+    rootEl.removeAttribute('data-loader-init');
+  }
   let lastProgress = 0;
   // Remove complex JS animation for reliability; use CSS transitions
   let animationFrame = null;
   let pollTimer = null;
+  let eventSource = null;
+  let noStatusHideTimer = null;
 
   const els = {
     msg: loader.querySelector('[data-loader-message]'),
     bar: loader.querySelector('[data-loader-bar]'),
     pct: loader.querySelector('[data-loader-percent]'),
     line: loader.querySelector('[data-loader-line-fill]'),
+    heartbeat: loader.querySelector('[data-loader-heartbeat]'),
   };
 
-  const showLoader = () => loader.classList.remove('page-loader--hidden');
-  const hideLoader = () => loader.classList.add('page-loader--hidden');
+  const showLoader = () => {
+    loader.classList.remove('page-loader--hidden');
+    try {
+      sessionStorage.setItem(NAV_FLASH_KEY, '1');
+    } catch { }
+
+    // Safety: on pages that do not provide process-status endpoints,
+    // do not allow the full-screen loader to remain indefinitely.
+    if (!statusUrl && !statusStreamUrl && !staticComplete) {
+      if (noStatusHideTimer) clearTimeout(noStatusHideTimer);
+      noStatusHideTimer = setTimeout(() => {
+        hideLoader();
+        noStatusHideTimer = null;
+      }, 2500);
+    }
+  };
+  const hideLoader = () => {
+    loader.classList.add('page-loader--hidden');
+    if (rootEl?.hasAttribute('data-loader-init')) {
+      rootEl.removeAttribute('data-loader-init');
+    }
+  };
 
   // Hide loader when restoring from bfcache (Back/Forward Cache)
   window.addEventListener('pageshow', (event) => {
     if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2)) {
-        hideLoader();
+      hideLoader();
     }
   });
 
@@ -68,11 +106,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (els.pct) els.pct.textContent = value + '%';
   };
 
+  const formatHeartbeat = (timestamp) => {
+    if (!timestamp) return '';
+    const last = new Date(timestamp).getTime();
+    if (Number.isNaN(last)) return '';
+    const delta = Math.max(0, Math.floor((Date.now() - last) / 1000));
+    if (delta > 5) return `Stalled ${delta}s`;
+    return `Active ${delta}s`;
+  };
+
   const apply = (data) => {
     if (!data) return;
     const raw = typeof data.progress === 'number' ? data.progress : lastProgress;
     const target = raw < lastProgress ? lastProgress : raw; // monotonic
-    if (els.msg) els.msg.textContent = data.message || data.status || 'Processing…';
+    if (els.msg) {
+      const baseMessage = data.message || data.status || 'Processing…';
+      const processedRows = Number.isFinite(Number(data.processed_rows)) ? Number(data.processed_rows) : null;
+      const totalRows = Number.isFinite(Number(data.total_rows)) ? Number(data.total_rows) : null;
+
+      if (processedRows !== null && totalRows !== null && totalRows > 0) {
+        els.msg.textContent = `${baseMessage} (${processedRows}/${totalRows} rows checked...)`;
+      } else {
+        els.msg.textContent = baseMessage;
+      }
+    }
+    if (els.heartbeat) {
+      const heartbeat = formatHeartbeat(data.last_updated_at);
+      if (heartbeat) {
+        els.heartbeat.textContent = heartbeat;
+      }
+    }
     if (target !== lastProgress) {
       lastProgress = target;
       setWidths(lastProgress);
@@ -83,18 +146,18 @@ document.addEventListener('DOMContentLoaded', () => {
       clearInterval(pollTimer);
       try {
         document.dispatchEvent(new CustomEvent('cdds:loader-final', { detail: data }));
-      } catch (_) {}
+      } catch (_) { }
       // Slight delay to allow final UI update before redirect/hide
       setTimeout(() => {
         if (data.redirect_url) {
-            const parser = document.createElement('a');
-            parser.href = data.redirect_url;
-            const isSamePath = parser.pathname === window.location.pathname;
-            const isSameSearch = (parser.search || '') === (window.location.search || '');
-            if (!(isSamePath && isSameSearch)) {
-              window.location.href = data.redirect_url;
-              return;
-            }
+          const parser = document.createElement('a');
+          parser.href = data.redirect_url;
+          const isSamePath = parser.pathname === window.location.pathname;
+          const isSameSearch = (parser.search || '') === (window.location.search || '');
+          if (!(isSamePath && isSameSearch)) {
+            window.location.href = data.redirect_url;
+            return;
+          }
         }
         if (data.status === 'ready' && readyRedirect) {
           // Avoid redirect loop if already on target
@@ -118,16 +181,62 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : null)
       .then(apply)
-      .catch(() => {});
+      .catch(() => { });
+  };
+
+  const startStream = () => {
+    if (!statusStreamUrl || typeof window.EventSource === 'undefined') {
+      return false;
+    }
+
+    try {
+      eventSource = new EventSource(statusStreamUrl, { withCredentials: true });
+    } catch (err) {
+      eventSource = null;
+      return false;
+    }
+
+    eventSource.onmessage = (event) => {
+      if (!event?.data) return;
+      try {
+        const data = JSON.parse(event.data);
+        apply(data);
+        if (data.status === 'ready' || data.status === 'failed' || data.redirect_url) {
+          eventSource?.close();
+          eventSource = null;
+        }
+      } catch (_) { }
+    };
+
+    eventSource.onerror = () => {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      if (!pollTimer) {
+        poll();
+        pollTimer = setInterval(poll, 2000);
+      }
+    };
+
+    return true;
   };
 
   if (staticComplete) {
-    // Non-process pages: show full bar immediately
-    setWidths(100);
+    // Non-process pages: show loader briefly on initial load, then hide.
+    if (!navFlashSeen) {
+      showLoader();
+      setWidths(100);
+    }
+    setTimeout(() => {
+      hideLoader();
+    }, 200);
   } else {
-    // Start polling immediately for process-aware pages
-    poll();
-    pollTimer = setInterval(poll, 2000);
+    // Prefer SSE stream, fallback to polling
+    if ((statusUrl || statusStreamUrl) && !startStream()) {
+      poll();
+      pollTimer = setInterval(poll, 2000);
+    }
   }
 
   // Basic navigation & form triggers

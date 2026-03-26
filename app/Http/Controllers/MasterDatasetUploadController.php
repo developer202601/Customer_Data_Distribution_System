@@ -116,9 +116,9 @@ class MasterDatasetUploadController extends Controller
             'mime_type' => 'nullable|string',
         ]);
 
-        if (! Str::endsWith(strtolower($data['file_name']), '.zip')) {
+        if (! Str::endsWith(strtolower($data['file_name']), '.xlsx')) {
             throw ValidationException::withMessages([
-                'upload' => 'Please upload a ZIP file that contains your master Excel workbook.',
+                'upload' => 'Please upload the master Excel workbook (.xlsx).',
             ]);
         }
 
@@ -166,7 +166,7 @@ class MasterDatasetUploadController extends Controller
             }
 
             $token = (string) Str::uuid();
-            $safeName = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) ($metadata['original_name'] ?? 'master.zip'));
+            $safeName = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) ($metadata['original_name'] ?? 'master.xlsx'));
             $relativePath = 'master/staged/' . $token . '-' . ltrim((string) $safeName, '.');
             $disk = Storage::disk('local');
             $disk->makeDirectory('master/staged');
@@ -180,15 +180,26 @@ class MasterDatasetUploadController extends Controller
             $request->session()->put(self::STAGED_UPLOAD_SESSION_KEY, [
                 'token' => $token,
                 'relative_path' => $relativePath,
-                'original_name' => (string) ($metadata['original_name'] ?? 'master.zip'),
-                'mime_type' => (string) ($metadata['mime_type'] ?? 'application/zip'),
+                'original_name' => (string) ($metadata['original_name'] ?? 'master.xlsx'),
+                'mime_type' => (string) ($metadata['mime_type'] ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
             ]);
+
+            // Initialize progress in cache so polling knows about this upload
+            \Cache::put('process:upload:' . $token, [
+                'status' => 'awaiting_exclusions',
+                'progress' => 100,
+                'message' => 'Upload complete. Please upload exclusions to begin processing.',
+                'processed_rows' => 0,
+                'total_rows' => null,
+                'started_at' => time(),
+                'last_updated_at' => now()->toIso8601String(),
+            ], now()->addMinutes(120));
 
             return response()->json([
                 'status' => 'ok',
-                'message' => 'Upload complete. Click Submit to continue.',
+                'message' => 'Upload complete. Please submit and add exclusions to begin processing.',
                 'staged_upload_token' => $token,
-                'file_name' => (string) ($metadata['original_name'] ?? 'master.zip'),
+                'file_name' => (string) ($metadata['original_name'] ?? 'master.xlsx'),
             ]);
         } catch (ValidationException $exception) {
             throw $exception;
@@ -237,7 +248,7 @@ class MasterDatasetUploadController extends Controller
             $uploadedFile = new IlluminateUploadedFile(
                 $disk->path((string) $staged['relative_path']),
                 (string) $staged['original_name'],
-                (string) ($staged['mime_type'] ?? 'application/zip'),
+                (string) ($staged['mime_type'] ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
                 null,
                 true
             );
@@ -278,6 +289,20 @@ class MasterDatasetUploadController extends Controller
     {
         $staged = $request->session()->get(self::STAGED_UPLOAD_SESSION_KEY);
 
+        // Signal background validation job to stop as soon as possible.
+        Cache::put('process:upload:' . $token . ':abort', true, now()->addMinutes(30));
+        Cache::put('process:upload:' . $token, [
+            'status' => 'canceled',
+            'progress' => 0,
+            'message' => 'Validation canceled by user.',
+            'stage' => 'validation',
+            'processed_rows' => 0,
+            'total_rows' => 0,
+            'started_at' => time(),
+            'errors' => [],
+            'file_name' => is_array($staged) ? ($staged['original_name'] ?? null) : null,
+        ], now()->addMinutes(120));
+
         if (is_array($staged) && !empty($staged['token']) && hash_equals((string) $staged['token'], $token)) {
             if (!empty($staged['relative_path'])) {
                 Storage::disk('local')->delete((string) $staged['relative_path']);
@@ -294,7 +319,7 @@ class MasterDatasetUploadController extends Controller
     public function store(Request $request, MasterDatasetWorkflowService $workflow, SessionUserResolver $resolver): RedirectResponse
     {
         $data = $request->validate([
-            'upload' => 'required|file|mimes:zip|max:51200',
+            'upload' => 'required|file|mimes:xlsx|max:51200',
         ]);
 
         try {

@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -46,7 +47,14 @@ class MasterDatasetImporter
         'LATEST_PRODUCT_STATUS',
         'SLT_BUSINESS_LINE_VALUE',
     ];
+    private const REQUIRED_ROW_COLUMNS = [
+        'RUN_DATE',
+        'ACCOUNT_NUM',
+        'PRODUCT_LABEL',
+    ];
     private const DUPLICATE_ROW_CONSTRAINT = 'mdr_process_run_product_unique';
+    private const PROCESS_UPLOAD_CACHE_PREFIX = 'process:upload:';
+    private const VALIDATION_PROGRESS_UPDATE_EVERY = 200;
 
     private Filesystem $disk;
 
@@ -65,7 +73,7 @@ class MasterDatasetImporter
         }
 
         if ($this->isDuplicateCompositeKeyViolation($exception)) {
-            return 'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. Please remove duplicates and re-upload the master file.';
+            return 'Duplicate PRODUCT_LABEL found. Please remove duplicates and re-upload the master file.';
         }
 
         return $exception->getMessage();
@@ -74,7 +82,7 @@ class MasterDatasetImporter
     private function uploadErrorMessage(Throwable $exception): string
     {
         if ($this->isDuplicateCompositeKeyViolation($exception)) {
-            return 'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. Please remove duplicates and re-upload the master file.';
+            return 'Duplicate PRODUCT_LABEL found. Please remove duplicates and re-upload the master file.';
         }
 
         return $exception->getMessage();
@@ -280,8 +288,36 @@ class MasterDatasetImporter
         bool $skipAssignment
     ): MasterDatasetProcess
     {
+        // Use PhpSpreadsheet disk cache for large workbook processing to reduce peak memory.
+        if (class_exists(\PhpOffice\PhpSpreadsheet\CachedObjectStorageFactory::class)) {
+            try {
+                \PhpOffice\PhpSpreadsheet\Settings::setCacheStorageMethod(
+                    \PhpOffice\PhpSpreadsheet\CachedObjectStorageFactory::cache_to_discISAM,
+                    ['dir' => storage_path('app/tmp')]
+                );
+            } catch (\Throwable $e) {
+                // ignore; fallback in-memory
+            }
+        }
+
+        $token = (string) ($process->token ?? '');
+        $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
+        if ($cacheKey) {
+            Cache::put($cacheKey, [
+                'status' => 'processing',
+                'progress' => 6,
+                'message' => 'Reading master workbook into memory (this may take a minute(s) depending on the uploaded file size and row count)...',
+                'stage' => 'loading',
+                'processed_rows' => 0,
+                'total_rows' => 0,
+                'started_at' => time(),
+                'last_updated_at' => now()->toIso8601String(),
+                'errors' => [],
+            ], now()->addMinutes(120));
+        }
+
         $reader = IOFactory::createReader('Xlsx');
-        $reader->setReadDataOnly(false);
+        $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($workbookAbsolutePath);
 
         $sheet = $spreadsheet->getActiveSheet();
@@ -309,6 +345,10 @@ class MasterDatasetImporter
         $arrearsColumnName = $headers[$arrearsLetter]['normalised'] ?? 'NEW_ARREARS';
         $arrearsDate = $this->extractArrearsDate($arrearsColumnName);
         $datasetMonth = $arrearsDate ? $arrearsDate->format('Ym') : now()->format('Ym');
+
+        // Run row integrity checks while status is still "validating" so
+        // the UI can display live master-validation row progress.
+        $this->assertRowIntegrity($process, $dataRows, $headerMap, $arrearsLetter);
 
         $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VALIDATED);
 
@@ -423,8 +463,6 @@ class MasterDatasetImporter
 
     private function importRows(MasterDatasetProcess $process, array $dataRows, array $headers, array $headerMap, string $arrearsLetter, string $arrearsColumnName): array
     {
-        $this->assertRowIntegrity($dataRows, $headerMap, $arrearsLetter);
-
         $statistics = [
             'row_count' => 0,
             'excluded_count' => 0,
@@ -445,6 +483,11 @@ class MasterDatasetImporter
         $secondaryArrearsColumnName = $secondaryArrearsLetter
             ? ($headers[$secondaryArrearsLetter]['normalised'] ?? 'NEW_ARREARS_SECONDARY')
             : null;
+
+        $batch = [];
+        $batchSize = 1000;
+        $now = now();
+        $processId = $process->id;
 
         foreach ($dataRows as $columns) {
             if (! $this->rowHasData($columns)) {
@@ -477,9 +520,15 @@ class MasterDatasetImporter
                 $parsed['assigned_to'] = self::ASSIGNMENT_EXCLUDED;
                 $statistics['excluded_count']++;
 
-                MasterDatasetRow::create(array_merge($parsed, [
-                    'process_id' => $process->id,
-                ]));
+                $parsed['process_id'] = $processId;
+                $parsed['created_at'] = $now;
+                $parsed['updated_at'] = $now;
+                $batch[] = $parsed;
+                
+                if (count($batch) >= $batchSize) {
+                    MasterDatasetRow::insert($batch);
+                    $batch = [];
+                }
                 continue;
             }
 
@@ -487,26 +536,83 @@ class MasterDatasetImporter
                 $parsed['assigned_to'] = self::ASSIGNMENT_VIP;
             }
 
-            MasterDatasetRow::create(array_merge($parsed, [
-                'process_id' => $process->id,
-            ]));
+            $parsed['process_id'] = $processId;
+            $parsed['created_at'] = $now;
+            $parsed['updated_at'] = $now;
+            $batch[] = $parsed;
+
+            if (count($batch) >= $batchSize) {
+                MasterDatasetRow::insert($batch);
+                $batch = [];
+            }
+        }
+
+        if (! empty($batch)) {
+            MasterDatasetRow::insert($batch);
         }
 
         return $statistics;
     }
 
-    private function assertRowIntegrity(array $dataRows, array $headerMap, string $arrearsLetter): void
+    private function assertRowIntegrity(MasterDatasetProcess $process, array $dataRows, array $headerMap, string $arrearsLetter): void
     {
         $errors = [];
         $seenCompositeKey = [];
         $maxReached = false;
+
+        $token = (string) ($process->token ?? '');
+        $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
+        $totalRows = 0;
+        foreach ($dataRows as $columns) {
+            if (is_array($columns) && $this->rowHasData($columns)) {
+                $totalRows++;
+            }
+        }
+
+        $startTime = time();
+        if ($cacheKey) {
+            Cache::put($cacheKey, [
+                'status' => 'processing',
+                'progress' => 6,
+                'message' => 'Validating master dataset...',
+                'stage' => 'validation',
+                'processed_rows' => 0,
+                'total_rows' => $totalRows,
+                'started_at' => $startTime,
+                'last_updated_at' => now()->toIso8601String(),
+                'errors' => [],
+            ], now()->addMinutes(120));
+        }
+
+        $processed = 0;
+        $rowSleepMicros = $this->validationLoopSleepMicros();
 
         foreach ($dataRows as $excelRow => $columns) {
             if (! is_array($columns) || ! $this->rowHasData($columns)) {
                 continue;
             }
 
-            foreach (self::REQUIRED_COLUMNS as $requiredColumn) {
+            $processed++;
+            if ($cacheKey && (($processed % self::VALIDATION_PROGRESS_UPDATE_EVERY === 0) || $processed === $totalRows)) {
+                Cache::put($cacheKey, [
+                    'status' => 'processing',
+                    'progress' => 6,
+                    'message' => 'Validating master dataset...',
+                    'stage' => 'validation',
+                    'processed_rows' => $processed,
+                    'total_rows' => $totalRows,
+                    'started_at' => $startTime,
+                    'last_updated_at' => now()->toIso8601String(),
+                    'errors' => [],
+                ], now()->addMinutes(120));
+            }
+
+            // Optional local-only throttle for UI/demo validation progress visibility.
+            if ($rowSleepMicros > 0) {
+                usleep($rowSleepMicros);
+            }
+
+            foreach (self::REQUIRED_ROW_COLUMNS as $requiredColumn) {
                 $value = trim($this->getColumnValue($columns, $headerMap, $requiredColumn));
                 if ($value === '') {
                     $errors[] = sprintf('Row %d, column %s: value is required.', (int) $excelRow, $requiredColumn);
@@ -529,17 +635,15 @@ class MasterDatasetImporter
                 }
             }
 
-            $runDateRaw = trim($this->getColumnValue($columns, $headerMap, 'RUN_DATE'));
             $productLabel = trim($this->getColumnValue($columns, $headerMap, 'PRODUCT_LABEL'));
-            $accountNum = trim($this->getColumnValue($columns, $headerMap, 'ACCOUNT_NUM'));
 
-            if ($runDateRaw !== '' && $productLabel !== '' && $accountNum !== '') {
-                $composite = strtolower($runDateRaw) . '|' . strtolower($productLabel) . '|' . strtolower($accountNum);
-                if (isset($seenCompositeKey[$composite])) {
+            if ($productLabel !== '') {
+                $key = strtolower($productLabel);
+                if (isset($seenCompositeKey[$key])) {
                     $errors[] = sprintf(
-                        'Row %d, columns RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM: duplicate combination already found at row %d.',
+                        'Row %d, column PRODUCT_LABEL: duplicate value already found at row %d.',
                         (int) $excelRow,
-                        (int) $seenCompositeKey[$composite]
+                        (int) $seenCompositeKey[$key]
                     );
 
                     if (count($errors) >= self::MAX_ROW_ERRORS) {
@@ -547,7 +651,7 @@ class MasterDatasetImporter
                         break;
                     }
                 } else {
-                    $seenCompositeKey[$composite] = (int) $excelRow;
+                    $seenCompositeKey[$key] = (int) $excelRow;
                 }
             }
 
@@ -557,6 +661,20 @@ class MasterDatasetImporter
         }
 
         if (! empty($errors)) {
+            if ($cacheKey) {
+                Cache::put($cacheKey, [
+                    'status' => 'failed',
+                    'progress' => 6,
+                    'message' => 'Master dataset validation failed.',
+                    'stage' => 'validation',
+                    'processed_rows' => $processed,
+                    'total_rows' => $totalRows,
+                    'started_at' => time(),
+                    'last_updated_at' => now()->toIso8601String(),
+                    'errors' => $errors,
+                ], now()->addMinutes(120));
+            }
+
             if ($maxReached) {
                 $errors[] = sprintf('Showing first %d validation errors only.', self::MAX_ROW_ERRORS);
             }
@@ -565,6 +683,20 @@ class MasterDatasetImporter
                 'upload' => $errors,
             ]);
         }
+    }
+
+    private function validationLoopSleepMicros(): int
+    {
+        if (! app()->environment('local')) {
+            return 0;
+        }
+
+        $value = (int) env('MASTER_VALIDATION_ROW_SLEEP_US', 0);
+        if ($value <= 0) {
+            return 0;
+        }
+
+        return min($value, 1_000_000);
     }
 
     private function databaseStatistics(MasterDatasetProcess $process): array
@@ -837,7 +969,7 @@ class MasterDatasetImporter
         $directory = $this->masterSourceDirectory($token);
         $this->disk->makeDirectory($directory);
 
-        $filename = 'master.zip';
+        $filename = 'master.xlsx';
         $stored = $this->disk->putFileAs($directory, $archive, $filename);
 
         if (! $stored) {
@@ -851,6 +983,10 @@ class MasterDatasetImporter
 
     private function extractWorkbook(string $zipPath, string $token): string
     {
+        if (str_ends_with(strtolower($zipPath), '.xlsx')) {
+            return $this->disk->path($zipPath);
+        }
+
         $absoluteZip = $this->disk->path($zipPath);
         $zip = new ZipArchive();
 

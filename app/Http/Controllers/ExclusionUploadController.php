@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessExclusionUpload;
+use App\Jobs\ValidateExclusionWorkbook;
 use App\Models\MasterDatasetProcess;
 use App\Support\ChunkedUploadManager;
 use App\Support\MasterDatasetExportCoordinator;
@@ -13,13 +14,14 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
-use Illuminate\Http\UploadedFile as IlluminateUploadedFile;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
-use ZipArchive;
 
 class ExclusionUploadController extends Controller
 {
@@ -27,6 +29,7 @@ class ExclusionUploadController extends Controller
     private const MAX_WORKBOOKS = 3;
     private const EXCLUSION_MAX_BYTES = 20971520;
     private const CHUNK_BYTES = 2097152;
+    private const PROGRESS_CACHE_PREFIX = 'process:exclusion:upload:';
 
     public function __construct(
         private MasterDatasetWorkflowService $workflowService,
@@ -58,11 +61,112 @@ class ExclusionUploadController extends Controller
         ]);
     }
 
-    public function startChunkUpload(Request $request, ChunkedUploadManager $chunks): JsonResponse|RedirectResponse
+    public function progressStream(Request $request, string $token)
+    {
+        $response = response()->stream(function () use ($token) {
+            @ini_set('zlib.output_compression', '0');
+            @ini_set('implicit_flush', '1');
+            while (ob_get_level() > 0) {
+                ob_end_flush();
+            }
+            ob_implicit_flush(true);
+
+            $lastPayload = null;
+            $start = time();
+            $timeoutSeconds = 600;
+
+            while ((time() - $start) < $timeoutSeconds) {
+                [$payload, $statusCode] = $this->buildProgressPayload($token);
+                $json = json_encode($payload);
+                if ($json && $json !== $lastPayload) {
+                    echo "data: {$json}\n\n";
+                    $lastPayload = $json;
+                } else {
+                    echo ": heartbeat\n\n";
+                }
+
+                if (connection_aborted()) {
+                    break;
+                }
+
+                $status = $payload['status'] ?? null;
+                if (in_array($status, ['ready', 'failed', 'canceled'], true)) {
+                    break;
+                }
+
+                usleep(500000);
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
+
+        return $response;
+    }
+
+    public function progress(string $token): JsonResponse
+    {
+        [$payload, $statusCode] = $this->buildProgressPayload($token);
+
+        return response()->json($payload, $statusCode);
+    }
+
+    public function startChunkUpload(Request $request): JsonResponse
+    {
+        Log::warning('Exclusion chunk start called while chunk flow is disabled', [
+            'process_id' => session('master.dataset.process_id'),
+            'file_name' => (string) $request->input('file_name', ''),
+            'file_size' => (int) $request->input('file_size', 0),
+        ]);
+
+        return response()->json([
+            'status' => 'unsupported',
+            'message' => 'Chunk upload is disabled. Refresh the page and retry.',
+        ], 410);
+    }
+
+    public function uploadChunk(Request $request): JsonResponse
+    {
+        Log::warning('Exclusion chunk part called while chunk flow is disabled', [
+            'process_id' => session('master.dataset.process_id'),
+            'upload_token' => (string) $request->input('upload_token', ''),
+            'chunk_index' => (int) $request->input('chunk_index', -1),
+        ]);
+
+        return response()->json([
+            'status' => 'unsupported',
+            'message' => 'Chunk upload is disabled. Refresh the page and retry.',
+        ], 410);
+    }
+
+    public function finishChunkUpload(Request $request): JsonResponse
+    {
+        Log::warning('Exclusion chunk finish called while chunk flow is disabled', [
+            'process_id' => session('master.dataset.process_id'),
+            'upload_token' => (string) $request->input('upload_token', ''),
+        ]);
+
+        return response()->json([
+            'status' => 'unsupported',
+            'message' => 'Chunk upload is disabled. Refresh the page and retry.',
+        ], 410);
+    }
+
+    public function uploadSingle(Request $request): JsonResponse|RedirectResponse
     {
         $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
 
         if ($process instanceof RedirectResponse) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'status' => 'missing-process',
+                    'message' => 'Please upload the master dataset before managing exclusions.',
+                    'redirect_url' => route('master.upload.create'),
+                ], 409);
+            }
+
             return $process;
         }
 
@@ -80,105 +184,98 @@ class ExclusionUploadController extends Controller
         }
 
         $data = $request->validate([
-            'file_name' => 'required|string',
-            'file_size' => 'required|integer|min:1|max:' . self::EXCLUSION_MAX_BYTES,
-            'mime_type' => 'nullable|string',
+            'exclusion' => 'required|file|mimes:xlsx|max:20480',
         ]);
 
-        if (! Str::endsWith(strtolower($data['file_name']), '.zip')) {
+        /** @var UploadedFile $file */
+        $file = $data['exclusion'];
+        $originalName = $file->getClientOriginalName();
+        $size = (int) $file->getSize();
+        $mime = (string) ($file->getClientMimeType() ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        Log::info('Exclusion single upload request received', [
+            'process_id' => $process->id,
+            'file_name' => $originalName,
+            'file_size' => $size,
+            'mime_type' => $mime,
+        ]);
+
+        $uploadToken = (string) Str::uuid();
+        $safeName = preg_replace('/[^A-Za-z0-9._-]+/', '-', $originalName) ?: 'exclusion.xlsx';
+        $directory = sprintf('exclusions/%d/staged', $process->id);
+        $storedName = sprintf('%s-%s', $uploadToken, $safeName);
+
+        $path = Storage::disk('local')->putFileAs($directory, $file, $storedName);
+
+    // Save latest_exclusion_token to process
+    $process->latest_exclusion_token = $uploadToken;
+    $process->save();
+
+        if (! $path) {
             throw ValidationException::withMessages([
-                'exclusions' => 'Only .zip archives are allowed for exclusions.',
+                'exclusions' => 'Unable to store the uploaded exclusion file.',
             ]);
         }
 
-        $upload = $chunks->start('exclusions', $data['file_name'], (int) $data['file_size'], $data['mime_type'] ?? null, [
-            'process_id' => $process->id,
-        ]);
+        $stagedUploads = session('master.dataset.staged_exclusions', []);
+        $stagedUploads[$uploadToken] = [
+            'id' => $uploadToken,
+            'path' => $path,
+            'name' => $originalName,
+            'mime' => $mime,
+            'size' => $size,
+            'excel_count' => 1,
+        ];
+        session()->put('master.dataset.staged_exclusions', $stagedUploads);
 
-        return response()->json([
-            'status' => 'ok',
-            'upload_token' => $upload['token'],
-            'chunk_size' => self::CHUNK_BYTES,
-        ]);
-    }
-
-    public function uploadChunk(Request $request, ChunkedUploadManager $chunks): JsonResponse
-    {
-        $data = $request->validate([
-            'upload_token' => 'required|string',
-            'chunk_index' => 'required|integer|min:0',
-            'chunk' => 'required|file|max:20480',
-        ]);
-
-        $chunks->append('exclusions', $data['upload_token'], (int) $data['chunk_index'], $request->file('chunk'));
-
-        return response()->json([
-            'status' => 'ok',
-            'chunk_index' => (int) $data['chunk_index'],
-        ]);
-    }
-
-    public function finishChunkUpload(Request $request, ChunkedUploadManager $chunks): JsonResponse|RedirectResponse
-    {
-        $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
-
-        if ($process instanceof RedirectResponse) {
-            return $process;
-        }
-
-        $data = $request->validate([
-            'upload_token' => 'required|string',
-            'total_chunks' => 'required|integer|min:1',
-        ]);
+        $cacheKey = self::PROGRESS_CACHE_PREFIX . $uploadToken;
+        Cache::put($cacheKey, [
+            'status' => 'processing',
+            'progress' => 0,
+            'message' => 'Queued for validation...',
+            'processed_rows' => 0,
+            'total_rows' => 0,
+            'stage' => 'queued',
+            'started_at' => time(),
+            'last_updated_at' => now()->toIso8601String(),
+            'errors' => [],
+            'file_name' => $originalName,
+        ], now()->addMinutes(30));
 
         try {
-            $assembled = $chunks->assemble('exclusions', $data['upload_token'], (int) $data['total_chunks']);
-            $metadata = $assembled['metadata'];
-            $originalName = $metadata['original_name'];
-            $safeName = preg_replace('/[^A-Za-z0-9._-]+/', '-', $originalName) ?: 'exclusion.zip';
-            $relativePath = sprintf('exclusions/%d/staged/%s-%s', $process->id, $data['upload_token'], $safeName);
-            $workbookCount = $this->countExcelWorkbooksInZip($assembled['absolute_path']);
-
-            if ($workbookCount < 1) {
-                throw ValidationException::withMessages([
-                    'exclusions' => 'Uploaded ZIP must contain at least one Excel workbook (.xlsx, .xlsm, or .xls).',
-                ]);
-            }
-
-            $stagedUploads = session('master.dataset.staged_exclusions', []);
-            $currentWorkbookCount = $this->totalStagedWorkbookCount($stagedUploads);
-            if (($currentWorkbookCount + $workbookCount) > self::MAX_WORKBOOKS) {
-                throw ValidationException::withMessages([
-                    'exclusions' => sprintf('%d Excel workbooks already received. This ZIP contains %d workbook(s), which exceeds the limit of %d total.', $currentWorkbookCount, $workbookCount, self::MAX_WORKBOOKS),
-                ]);
-            }
-
-            Storage::disk('local')->put($relativePath, fopen($assembled['absolute_path'], 'rb'));
-
-            $stagedUploads[$data['upload_token']] = [
-                'id' => $data['upload_token'],
-                'path' => $relativePath,
-                'name' => $originalName,
-                'mime' => $metadata['mime_type'] ?? 'application/zip',
-                'size' => (int) ($metadata['file_size'] ?? 0),
-                'excel_count' => $workbookCount,
-            ];
+            ValidateExclusionWorkbook::dispatch(
+                $uploadToken,
+                Storage::disk('local')->path($path),
+                $originalName
+            )->onQueue('exports');
+        } catch (Throwable $exception) {
+            Storage::disk('local')->delete($path);
+            unset($stagedUploads[$uploadToken]);
             session()->put('master.dataset.staged_exclusions', $stagedUploads);
+            Cache::forget($cacheKey);
 
-            $totalWorkbooks = $this->totalStagedWorkbookCount($stagedUploads);
-
-            return response()->json([
-                'status' => 'ok',
-                'file' => $stagedUploads[$data['upload_token']],
-                'totals' => [
-                    'files' => count($stagedUploads),
-                    'workbooks' => $totalWorkbooks,
-                    'max_workbooks' => self::MAX_WORKBOOKS,
-                ],
+            throw ValidationException::withMessages([
+                'exclusions' => 'Unable to queue exclusion validation: ' . $exception->getMessage(),
             ]);
-        } finally {
-            $chunks->delete('exclusions', $data['upload_token']);
         }
+
+        Log::info('Exclusion single upload staged and validation dispatched', [
+            'process_id' => $process->id,
+            'upload_token' => $uploadToken,
+            'path' => $path,
+        ]);
+
+        $totalWorkbooks = $this->totalStagedWorkbookCount($stagedUploads);
+
+        return response()->json([
+            'status' => 'ok',
+            'file' => $stagedUploads[$uploadToken],
+            'totals' => [
+                'files' => count($stagedUploads),
+                'workbooks' => $totalWorkbooks,
+                'max_workbooks' => self::MAX_WORKBOOKS,
+            ],
+        ]);
     }
 
     public function destroyStagedUpload(string $token): JsonResponse
@@ -187,14 +284,65 @@ class ExclusionUploadController extends Controller
         $entry = $stagedUploads[$token] ?? null;
 
         if ($entry) {
-            Storage::disk('local')->delete($entry['path'] ?? '');
+            Storage::disk('local')->delete((string) ($entry['path'] ?? ''));
             unset($stagedUploads[$token]);
             session()->put('master.dataset.staged_exclusions', $stagedUploads);
         }
 
+        Cache::forget(self::PROGRESS_CACHE_PREFIX . $token);
+
         return response()->json([
             'status' => 'ok',
         ]);
+    }
+
+    private function buildProgressPayload(string $token): array
+    {
+        $state = Cache::get(self::PROGRESS_CACHE_PREFIX . $token);
+
+        if (! $state) {
+            return [[
+                'status' => 'not-found',
+                'progress' => 0,
+                'message' => 'No progress available for this exclusion upload.',
+            ], 404];
+        }
+
+        $etaSeconds = null;
+        if (! empty($state['processed_rows']) && ! empty($state['total_rows']) && ! empty($state['started_at'])) {
+            $elapsed = time() - (int) $state['started_at'];
+            $rate = $state['processed_rows'] / max($elapsed, 1);
+            if ($rate > 0) {
+                $remaining = $state['total_rows'] - $state['processed_rows'];
+                $etaSeconds = (int) ($remaining / $rate);
+            }
+        }
+
+        $errors = is_array($state['errors'] ?? null) ? $state['errors'] : [];
+        $primaryError = (string) ($state['error'] ?? '');
+        if ($primaryError === '' && ! empty($errors)) {
+            $primaryError = (string) ($errors[0] ?? '');
+        }
+
+        $message = (string) ($state['message'] ?? 'Validating…');
+        if (($state['status'] ?? null) === 'failed' && $primaryError !== '' && stripos($message, $primaryError) === false) {
+            $message .= ': ' . $primaryError;
+        }
+
+        return [[
+            'status' => $state['status'] ?? (($state['progress'] ?? 0) >= 100 ? 'ready' : 'processing'),
+            'progress' => $state['progress'] ?? 0,
+            'message' => $message,
+            'processed_rows' => $state['processed_rows'] ?? 0,
+            'total_rows' => $state['total_rows'] ?? 0,
+            'eta_seconds' => $etaSeconds,
+            'stage' => $state['stage'] ?? null,
+            'started_at' => $state['started_at'] ?? null,
+            'last_updated_at' => $state['last_updated_at'] ?? null,
+            'error' => $primaryError !== '' ? $primaryError : null,
+            'errors' => $errors,
+            'file_name' => $state['file_name'] ?? null,
+        ], 200];
     }
 
     private function totalStagedWorkbookCount(array $stagedUploads): int
@@ -208,35 +356,6 @@ class ExclusionUploadController extends Controller
         return $total;
     }
 
-    private function countExcelWorkbooksInZip(string $zipPath): int
-    {
-        $zip = new ZipArchive();
-        $opened = $zip->open($zipPath);
-
-        if ($opened !== true) {
-            throw ValidationException::withMessages([
-                'exclusions' => 'Unable to read the uploaded ZIP archive. Please upload a valid ZIP file.',
-            ]);
-        }
-
-        try {
-            $count = 0;
-            for ($index = 0; $index < $zip->numFiles; $index++) {
-                $name = (string) $zip->getNameIndex($index);
-                if (str_ends_with($name, '/')) {
-                    continue;
-                }
-
-                if (preg_match('/\.(xlsx|xlsm|xls)$/i', $name) === 1) {
-                    $count++;
-                }
-            }
-
-            return $count;
-        } finally {
-            $zip->close();
-        }
-    }
 
     public function store(Request $request, SessionUserResolver $resolver): RedirectResponse|JsonResponse
     {
@@ -269,7 +388,7 @@ class ExclusionUploadController extends Controller
         if (count($files) > 0) {
             $request->validate([
                 'exclusions' => 'required',
-                'exclusions.*' => 'file|mimes:zip|max:20480',
+                'exclusions.*' => 'file|mimes:xlsx|max:20480',
             ]);
         }
 

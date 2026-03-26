@@ -31,15 +31,19 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
     Route::get('/process/upload/progress/{token}', [ProcessFileController::class, 'progress'])->name('process.upload.progress');
+    Route::get('/process/upload/progress/stream/{token}', [ProcessFileController::class, 'progressStream'])->name('process.upload.progress.stream');
     Route::get('/process/upload/complete/{token}', [ProcessFileController::class, 'complete'])->name('process.upload.complete');
     Route::get('/process/upload/preview', [ProcessFileController::class, 'preview'])->name('process.upload.preview');
     Route::get('/process/upload/vip', [ProcessFileController::class, 'vip'])->name('process.upload.vip');
     Route::get('/process/upload/rows', [ProcessFileController::class, 'rows'])->name('process.upload.rows');
     Route::get('/process/upload/export', [ProcessFileController::class, 'exportVip'])->name('process.upload.export');
     Route::get('/process/exclusions', [ExclusionUploadController::class, 'create'])->name('process.exclusions.create');
+    Route::get('/process/exclusions/progress/{token}', [ExclusionUploadController::class, 'progress'])->name('process.exclusions.progress');
+    Route::get('/process/exclusions/progress/stream/{token}', [ExclusionUploadController::class, 'progressStream'])->name('process.exclusions.progress.stream');
     Route::post('/process/exclusions/chunks/start', [ExclusionUploadController::class, 'startChunkUpload'])->name('process.exclusions.chunks.start');
     Route::post('/process/exclusions/chunks/part', [ExclusionUploadController::class, 'uploadChunk'])->name('process.exclusions.chunks.part');
     Route::post('/process/exclusions/chunks/finish', [ExclusionUploadController::class, 'finishChunkUpload'])->name('process.exclusions.chunks.finish');
+    Route::post('/process/exclusions/upload', [ExclusionUploadController::class, 'uploadSingle'])->name('process.exclusions.upload.single');
     Route::delete('/process/exclusions/staged/{token}', [ExclusionUploadController::class, 'destroyStagedUpload'])->name('process.exclusions.staged.destroy');
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
     
@@ -48,6 +52,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/running', [ProcessRunningController::class, 'show'])->name('process.running.show');
     
     Route::get('/process/status', [ProcessStatusController::class, 'show'])->name('process.status.current');
+    Route::get('/process/status/stream', [ProcessStatusController::class, 'stream'])->name('process.status.stream');
     Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
     Route::get('/process/assignments/reports', [AssignmentController::class, 'reports'])->name('process.assignments.reports');
     Route::get('/process/assignments/report/{process}', [AssignmentController::class, 'report'])->name('process.assignments.report');

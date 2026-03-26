@@ -30,10 +30,12 @@ class ProcessConfirmController extends Controller
             ->count();
     }
 
-    public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View|RedirectResponse
+    public function create(
+        Request $request,
+        MasterDatasetAssignmentConfiguration $configuration
+    ): View|RedirectResponse
     {
-        $processId = $request->session()->get('master.dataset.process_id');
-        $process = MasterDatasetProcess::find($processId);
+        $process = $this->resolveProcessForConfirmation($request);
 
         if (! $process) {
             return redirect()->route('master.upload.create');
@@ -79,6 +81,35 @@ class ProcessConfirmController extends Controller
             'ftthCount' => $ftthCount,
             'assignmentConfig' => $configuration->toArray(),
         ]);
+    }
+
+    private function resolveProcessForConfirmation(Request $request): ?MasterDatasetProcess
+    {
+        $sessionProcessId = (int) $request->session()->get('master.dataset.process_id');
+        $sessionProcess = $sessionProcessId > 0
+            ? MasterDatasetProcess::find($sessionProcessId)
+            : null;
+
+        $sessionUserId = (int) data_get($request->session()->get('user'), 'id', 0);
+        if ($sessionUserId <= 0) {
+            return $sessionProcess;
+        }
+
+        $latest = MasterDatasetProcess::query()
+            ->where('user_id', $sessionUserId)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $latest) {
+            return $sessionProcess;
+        }
+
+        if (! $sessionProcess || $latest->id > $sessionProcess->id) {
+            $request->session()->put('master.dataset.process_id', $latest->id);
+            return $latest;
+        }
+
+        return $sessionProcess;
     }
 
     public function store(

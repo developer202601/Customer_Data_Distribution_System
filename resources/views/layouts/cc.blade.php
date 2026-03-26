@@ -10,18 +10,26 @@
     <link rel="icon" type="image/x-icon" href="{{ asset('favicon/favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon/favicon-16x16.png') }}">
-    <script nonce="{{ $cspNonce ?? '' }}">(function(){try{if(sessionStorage.getItem('cdds-loader-shown')!=='1'){document.documentElement.setAttribute('data-loader-init','1');}}catch(e){}})();</script>
+    <script nonce="{{ $cspNonce ?? '' }}">
+        (function() {
+            try {
+                if (sessionStorage.getItem('cdds-loader-shown') !== '1') {
+                    document.documentElement.setAttribute('data-loader-init', '1');
+                }
+            } catch (e) {}
+        })();
+    </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')
 </head>
 
 <body class="hold-transition sidebar-mini cc-layout">
     @if(View::hasSection('loaderAutoRedirect'))
-        @include('partials.page-loader', ['autoRedirect' => true, 'pollStatus' => true])
+    @include('partials.page-loader', ['autoRedirect' => true, 'pollStatus' => true])
     @elseif(View::hasSection('loaderPollStatus'))
-        @include('partials.page-loader', ['pollStatus' => true])
+    @include('partials.page-loader', ['pollStatus' => true])
     @else
-        @include('partials.page-loader', ['pollStatus' => false])
+    @include('partials.page-loader', ['pollStatus' => false])
     @endif
 
     <div class="wrapper">
@@ -54,25 +62,25 @@
     </footer>
 
     @php
-        $ccUsernameMissing = false;
-        $sessionUser = session('user');
-        if ($sessionUser && (isset($sessionUser['system']) && $sessionUser['system'] === 'cc')) {
-            $uid = $sessionUser['id'] ?? null;
-            if ($uid) {
-                try {
-                    $dbUser = \App\Models\CallCenter\CallCenterUser::find($uid);
-                    if ($dbUser) {
-                        $ccUsernameMissing = empty(trim((string)$dbUser->name));
-                    } else {
-                        $ccUsernameMissing = empty($sessionUser['name']);
-                    }
-                } catch (\Throwable $e) {
-                    $ccUsernameMissing = empty($sessionUser['name']);
-                }
-            } else {
-                $ccUsernameMissing = empty($sessionUser['name']);
-            }
-        }
+    $ccUsernameMissing = false;
+    $sessionUser = session('user');
+    if ($sessionUser && (isset($sessionUser['system']) && $sessionUser['system'] === 'cc')) {
+    $uid = $sessionUser['id'] ?? null;
+    if ($uid) {
+    try {
+    $dbUser = \App\Models\CallCenter\CallCenterUser::find($uid);
+    if ($dbUser) {
+    $ccUsernameMissing = empty(trim((string)$dbUser->name));
+    } else {
+    $ccUsernameMissing = empty($sessionUser['name']);
+    }
+    } catch (\Throwable $e) {
+    $ccUsernameMissing = empty($sessionUser['name']);
+    }
+    } else {
+    $ccUsernameMissing = empty($sessionUser['name']);
+    }
+    }
     @endphp
     @if($ccUsernameMissing)
     <!-- Modal forcing callers to set display name on first login -->
@@ -102,25 +110,39 @@
     </div>
 
     <script nonce="{{ $cspNonce ?? '' }}">
-        (function () {
-            document.addEventListener('DOMContentLoaded', function () {
+        (function() {
+            document.addEventListener('DOMContentLoaded', function() {
                 var modalEl = document.getElementById('ccSetNameModal');
                 var input = document.getElementById('ccDisplayName');
                 var saveBtn = document.getElementById('ccSaveDisplayName');
                 var err = document.getElementById('ccDisplayNameError');
                 // show modal (static backdrop) and prevent closing except via Save or Logout
-                var bs = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+                var bs = new bootstrap.Modal(modalEl, {
+                    backdrop: 'static',
+                    keyboard: false
+                });
                 bs.show();
 
-                saveBtn.addEventListener('click', function () {
+                saveBtn.addEventListener('click', function() {
                     var name = input.value.trim();
-                    if (!name) { err.style.display = 'block'; err.textContent = 'Please enter a name'; return; }
+                    if (!name) {
+                        err.style.display = 'block';
+                        err.textContent = 'Please enter a name';
+                        return;
+                    }
                     fetch("{{ route('cc.profile.setName') }}", {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-                        body: JSON.stringify({ name: name })
-                    }).then(function (r) { return r.json(); }).then(function (json) {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content
+                        },
+                        body: JSON.stringify({
+                            name: name
+                        })
+                    }).then(function(r) {
+                        return r.json();
+                    }).then(function(json) {
                         if (json && json.success) {
                             // reload page so server-side renders with name and navbar restored
                             window.location.reload();
@@ -128,7 +150,7 @@
                             err.style.display = 'block';
                             err.textContent = json.error || 'Failed to save name';
                         }
-                    }).catch(function () {
+                    }).catch(function() {
                         err.style.display = 'block';
                         err.textContent = 'Failed to save name';
                     });
@@ -139,60 +161,64 @@
     @endif
 
     <script nonce="{{ $cspNonce ?? '' }}">
-        (function () {
-            document.addEventListener('DOMContentLoaded', function () {
-                    var off = document.getElementById('ccSidebar');
-                    var toggle = document.querySelector('.cc-sidebar-toggle');
+        (function() {
+            document.addEventListener('DOMContentLoaded', function() {
+                var off = document.getElementById('ccSidebar');
+                var toggle = document.querySelector('.cc-sidebar-toggle');
                 if (!off || !toggle) return;
 
-                    function cleanupBackdrop() {
-                        // remove any leftover offcanvas backdrop elements and related body classes
-                        try {
-                            document.querySelectorAll('.offcanvas-backdrop').forEach(function (el) { el.parentNode && el.parentNode.removeChild(el); });
-                            document.querySelectorAll('.modal-backdrop').forEach(function (el) { el.parentNode && el.parentNode.removeChild(el); });
-                            document.body.classList.remove('offcanvas-backdrop');
-                            document.body.classList.remove('modal-open');
-                            // Bootstrap may also apply inline scroll locks.
-                            document.body.style.overflow = '';
-                            document.body.style.paddingRight = '';
-                        } catch (e) { }
-                    }
+                function cleanupBackdrop() {
+                    // remove any leftover offcanvas backdrop elements and related body classes
+                    try {
+                        document.querySelectorAll('.offcanvas-backdrop').forEach(function(el) {
+                            el.parentNode && el.parentNode.removeChild(el);
+                        });
+                        document.querySelectorAll('.modal-backdrop').forEach(function(el) {
+                            el.parentNode && el.parentNode.removeChild(el);
+                        });
+                        document.body.classList.remove('offcanvas-backdrop');
+                        document.body.classList.remove('modal-open');
+                        // Bootstrap may also apply inline scroll locks.
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    } catch (e) {}
+                }
 
-                    // When returning via browser back/forward cache, DOMContentLoaded won't re-run.
-                    // Ensure any stale scroll locks/backdrops are removed so the page scrolls.
-                    window.addEventListener('pageshow', function () {
-                        cleanupBackdrop();
-                        clearBodyOpen();
-                        showToggle();
-                    });
+                // When returning via browser back/forward cache, DOMContentLoaded won't re-run.
+                // Ensure any stale scroll locks/backdrops are removed so the page scrolls.
+                window.addEventListener('pageshow', function() {
+                    cleanupBackdrop();
+                    clearBodyOpen();
+                    showToggle();
+                });
 
-                    var hideToggle = function () {
-                        toggle.classList.add('cc-toggle-hidden');
-                    };
+                var hideToggle = function() {
+                    toggle.classList.add('cc-toggle-hidden');
+                };
 
-                    var showToggle = function () {
-                        toggle.classList.remove('cc-toggle-hidden');
-                    };
+                var showToggle = function() {
+                    toggle.classList.remove('cc-toggle-hidden');
+                };
 
-                var markBodyOpen = function () {
+                var markBodyOpen = function() {
                     document.body.classList.add('cc-sidebar-open');
                 };
 
-                var clearBodyOpen = function () {
+                var clearBodyOpen = function() {
                     document.body.classList.remove('cc-sidebar-open');
                 };
 
-                toggle.addEventListener('click', function () {
+                toggle.addEventListener('click', function() {
                     hideToggle();
                 });
 
                 if (typeof bootstrap !== 'undefined') {
-                    off.addEventListener('show.bs.offcanvas', function () {
+                    off.addEventListener('show.bs.offcanvas', function() {
                         markBodyOpen();
                         hideToggle();
                     });
                     // ensure clicking the backdrop or anywhere outside the offcanvas closes it
-                    document.addEventListener('click', function (ev) {
+                    document.addEventListener('click', function(ev) {
                         try {
                             if (!off.classList.contains('show')) return;
                             var target = ev.target;
@@ -200,20 +226,20 @@
                             var inst = bootstrap.Offcanvas.getInstance(off) || new bootstrap.Offcanvas(off);
                             inst.hide();
                             cleanupBackdrop();
-                        } catch (err) { }
+                        } catch (err) {}
                     }, true);
-                    off.addEventListener('hide.bs.offcanvas', function () {
+                    off.addEventListener('hide.bs.offcanvas', function() {
                         clearBodyOpen();
                         showToggle();
                     });
-                    off.addEventListener('hidden.bs.offcanvas', function () {
+                    off.addEventListener('hidden.bs.offcanvas', function() {
                         // ensure any lingering backdrop is removed when fully hidden
                         cleanupBackdrop();
                         clearBodyOpen();
                         showToggle();
                     });
                 } else {
-                    document.addEventListener('click', function (ev) {
+                    document.addEventListener('click', function(ev) {
                         if (ev.target.closest && ev.target.closest('#ccSidebar')) return;
                         clearBodyOpen();
                         showToggle();

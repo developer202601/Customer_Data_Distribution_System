@@ -94,8 +94,7 @@
                                     id="exclusion-upload-progress-bar"
                                     class="progress-bar progress-bar-striped progress-bar-animated"
                                     role="progressbar"
-                                    style="width: 0%; --bs-progress-bar-bg: var(--btn-success-bg);"
-                                >0%</div>
+                                    style="width: 0%; --bs-progress-bar-bg: var(--btn-success-bg);">0%</div>
                             </div>
                         </div>
                         <div id="exclusion-file-list" class="process-selected-files">
@@ -244,7 +243,7 @@
             }
 
             const uploadedFiles = selectedFiles.filter((entry) => entry.status === 'uploaded');
-            
+
             // Only pluralize if there is specifically more than 1 file uploaded, since it will be removed otherwise
             if (uploadedFiles.length > 0) {
                 const workbookCount = getUploadedWorkbookCount();
@@ -287,8 +286,9 @@
             setProgress(
                 percentage,
                 label,
-                `${formatBytes(completedBytes)} / ${formatBytes(totalBytes)}`,
-                { hideBar: !hasPending && percentage >= 100 }
+                `${formatBytes(completedBytes)} / ${formatBytes(totalBytes)}`, {
+                    hideBar: !hasPending && percentage >= 100
+                }
             );
             updateProgressDetails();
         };
@@ -360,13 +360,13 @@
                 state.className = 'd-block text-muted';
                 if (file.status === 'uploaded') {
                     const workbookCount = Number(file.excelCount || 0);
-                    const baseLabel = workbookCount > 0
-                        ? `Uploaded • ${workbookCount} Excel workbook(s) in this file`
-                        : 'Uploaded';
+                    const baseLabel = workbookCount > 0 ?
+                        `Uploaded • ${workbookCount} Excel workbook(s) in this file` :
+                        'Uploaded';
                     if (file.validationStatus) {
-                        const statusLabel = file.validationStatus === 'ready'
-                            ? 'Validated'
-                            : (file.validationStatus === 'failed' ? 'Validation failed' : 'Validating');
+                        const statusLabel = file.validationStatus === 'ready' ?
+                            'Validated' :
+                            (file.validationStatus === 'failed' ? 'Validation failed' : 'Validating');
                         const heartbeat = file.validationHeartbeat ? ` • ${file.validationHeartbeat}` : '';
                         state.textContent = `${baseLabel} • ${statusLabel}${heartbeat}`;
                     } else {
@@ -499,7 +499,9 @@
                 return;
             }
 
-            debugLog('addFiles', { count: files.length });
+            debugLog('addFiles', {
+                count: files.length
+            });
 
             clearErrors();
 
@@ -559,7 +561,9 @@
                     headers: {
                         Accept: 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
-                        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                        ...(csrfToken ? {
+                            'X-CSRF-TOKEN': csrfToken
+                        } : {}),
                     },
                     credentials: 'same-origin',
                 }).catch(() => null);
@@ -572,7 +576,10 @@
         };
 
         const uploadEntry = async (entry) => {
-            debugLog('uploadEntry:start', { name: entry.name, size: entry.size });
+            debugLog('uploadEntry:start', {
+                name: entry.name,
+                size: entry.size
+            });
             entry.status = 'uploading';
             entry.error = null;
             entry.progress = 0;
@@ -582,7 +589,9 @@
             const requestHeaders = {
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                ...(csrfToken ? {
+                    'X-CSRF-TOKEN': csrfToken
+                } : {}),
             };
 
             const payload = new FormData();
@@ -603,7 +612,10 @@
                 });
             } catch (error) {
                 if (error && error.name === 'AbortError') {
-                    debugLog('uploadEntry:timeout', { name: entry.name, timeoutMs });
+                    debugLog('uploadEntry:timeout', {
+                        name: entry.name,
+                        timeoutMs
+                    });
                     throw new Error('Upload request timed out. Please retry.');
                 }
 
@@ -613,7 +625,11 @@
             }
 
             const finishJson = await uploadResponse.json().catch(() => null);
-            debugLog('uploadEntry:response', { ok: uploadResponse.ok, status: uploadResponse.status, body: finishJson });
+            debugLog('uploadEntry:response', {
+                ok: uploadResponse.ok,
+                status: uploadResponse.status,
+                body: finishJson
+            });
             if (!uploadResponse.ok || !finishJson?.file?.id) {
                 throw new Error(finishJson?.message || 'Unable to upload exclusion file.');
             }
@@ -634,7 +650,10 @@
                 return;
             }
 
-            debugLog('validation:stream:start', { stagedId: entry.stagedId, file: entry.name });
+            debugLog('validation:stream:start', {
+                stagedId: entry.stagedId,
+                file: entry.name
+            });
 
             const streamUrl = progressStreamTemplate.replace('__TOKEN__', encodeURIComponent(entry.stagedId));
             const pollUrl = progressPollTemplate.replace('__TOKEN__', encodeURIComponent(entry.stagedId));
@@ -645,7 +664,9 @@
 
             let source = null;
             try {
-                source = new EventSource(streamUrl, { withCredentials: true });
+                source = new EventSource(streamUrl, {
+                    withCredentials: true
+                });
             } catch (_error) {
                 return startValidationPoll(entry, pollUrl);
             }
@@ -654,7 +675,13 @@
                 if (!data) {
                     return;
                 }
-                debugLog('validation:payload', { stagedId: entry.stagedId, status: data.status, progress: data.progress, message: data.message, error: data.error });
+                debugLog('validation:payload', {
+                    stagedId: entry.stagedId,
+                    status: data.status,
+                    progress: data.progress,
+                    message: data.message,
+                    error: data.error
+                });
                 entry.validationStatus = data.status || entry.validationStatus;
                 entry.validationMessage = data.message || entry.validationMessage;
                 entry.validationProgress = typeof data.progress === 'number' ? data.progress : entry.validationProgress;
@@ -680,7 +707,9 @@
             };
 
             source.onerror = () => {
-                debugLog('validation:stream:error', { stagedId: entry.stagedId });
+                debugLog('validation:stream:error', {
+                    stagedId: entry.stagedId
+                });
                 source?.close();
                 source = null;
                 startValidationPoll(entry, pollUrl);
@@ -691,7 +720,13 @@
             let pollTimer = null;
             const poll = async () => {
                 try {
-                    const resp = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
+                    const resp = await fetch(url, {
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        cache: 'no-store',
+                        credentials: 'same-origin'
+                    });
                     if (!resp.ok) return;
                     const data = await resp.json();
                     entry.validationStatus = data.status || entry.validationStatus;
@@ -821,7 +856,9 @@
                     headers: {
                         Accept: 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
-                        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                        ...(csrfToken ? {
+                            'X-CSRF-TOKEN': csrfToken
+                        } : {}),
                     },
                     credentials: 'same-origin',
                 }).catch(() => null);
@@ -898,7 +935,9 @@
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
-                        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                        ...(csrfToken ? {
+                            'X-CSRF-TOKEN': csrfToken
+                        } : {}),
                     },
                 });
 
@@ -941,7 +980,9 @@
 
                 clearAll(false);
             } catch (error) {
-                    debugLog('submit:error', { message: error?.message || 'unknown error' });
+                debugLog('submit:error', {
+                    message: error?.message || 'unknown error'
+                });
                 loaderActive = false;
                 if (submitButton) {
                     submitButton.disabled = false;

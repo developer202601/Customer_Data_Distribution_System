@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const loadStoredTheme = () => { try { const s = localStorage.getItem(THEME_STORAGE_KEY); return (s === THEMES.DARK || s === THEMES.LIGHT) ? s : null; } catch { return null; } };
   const detectPreferredTheme = () => window.matchMedia('(prefers-color-scheme: dark)').matches ? THEMES.DARK : THEMES.LIGHT;
-  const saveTheme = (t) => { try { localStorage.setItem(THEME_STORAGE_KEY, t); } catch {} };
+  const saveTheme = (t) => { try { localStorage.setItem(THEME_STORAGE_KEY, t); } catch { } };
   const toggleTheme = () => { const cur = document.body.classList.contains('theme-dark') ? THEMES.DARK : THEMES.LIGHT; const next = cur === THEMES.DARK ? THEMES.LIGHT : THEMES.DARK; applyTheme(next); saveTheme(next); };
   const initTheme = () => { applyTheme(loadStoredTheme() || detectPreferredTheme()); };
   if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loader.classList.remove('page-loader--hidden');
     try {
       sessionStorage.setItem(NAV_FLASH_KEY, '1');
-    } catch {}
+    } catch { }
 
     // Safety: on pages that do not provide process-status endpoints,
     // do not allow the full-screen loader to remain indefinitely.
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Hide loader when restoring from bfcache (Back/Forward Cache)
   window.addEventListener('pageshow', (event) => {
     if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2)) {
-        hideLoader();
+      hideLoader();
     }
   });
 
@@ -146,18 +146,18 @@ document.addEventListener('DOMContentLoaded', () => {
       clearInterval(pollTimer);
       try {
         document.dispatchEvent(new CustomEvent('cdds:loader-final', { detail: data }));
-      } catch (_) {}
+      } catch (_) { }
       // Slight delay to allow final UI update before redirect/hide
       setTimeout(() => {
         if (data.redirect_url) {
-            const parser = document.createElement('a');
-            parser.href = data.redirect_url;
-            const isSamePath = parser.pathname === window.location.pathname;
-            const isSameSearch = (parser.search || '') === (window.location.search || '');
-            if (!(isSamePath && isSameSearch)) {
-              window.location.href = data.redirect_url;
-              return;
-            }
+          const parser = document.createElement('a');
+          parser.href = data.redirect_url;
+          const isSamePath = parser.pathname === window.location.pathname;
+          const isSameSearch = (parser.search || '') === (window.location.search || '');
+          if (!(isSamePath && isSameSearch)) {
+            window.location.href = data.redirect_url;
+            return;
+          }
         }
         if (data.status === 'ready' && readyRedirect) {
           // Avoid redirect loop if already on target
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store', credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : null)
       .then(apply)
-      .catch(() => {});
+      .catch(() => { });
   };
 
   const startStream = () => {
@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
           eventSource?.close();
           eventSource = null;
         }
-      } catch (_) {}
+      } catch (_) { }
     };
 
     eventSource.onerror = () => {

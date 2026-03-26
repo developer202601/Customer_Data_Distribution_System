@@ -58,7 +58,14 @@
 
     <!-- Footer placed outside the main wrapper so it's not affected by content padding -->
     <footer class="main-footer text-center py-3">
-        All right reserved
+        <div style="display:inline-flex;align-items:center;gap:.5rem;white-space:nowrap;">
+            <span>All rights reserved</span>
+            <span>|</span>
+            <span>Powered by</span>
+            <a href="" style="display:inline-flex;align-items:center;gap:.25rem;">
+                <img src="{{ asset('images/transzent-logo.png') }}" alt="Transzent" style="height:24px;max-height:24px;padding-bottom:1px;" />
+            </a>
+        </div>
     </footer>
 
     @php

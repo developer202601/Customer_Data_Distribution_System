@@ -146,21 +146,27 @@ class MasterDatasetAssignmentService
         $staffIds = $selection->slice($offset, $staffQuota)->pluck('id')->all();
 
         if (! empty($callCenterStaffIds)) {
-            MasterDatasetRow::query()
-                ->whereIn('id', $callCenterStaffIds)
-                ->update(['assigned_to' => self::CALL_CENTER_STAFF_LABEL]);
+            foreach (array_chunk($callCenterStaffIds, 5000) as $chunk) {
+                MasterDatasetRow::query()
+                    ->whereIn('id', $chunk)
+                    ->update(['assigned_to' => self::CALL_CENTER_STAFF_LABEL]);
+            }
         }
 
         if (! empty($callCenterIds)) {
-            MasterDatasetRow::query()
-                ->whereIn('id', $callCenterIds)
-                ->update(['assigned_to' => self::CALL_CENTER_LABEL]);
+            foreach (array_chunk($callCenterIds, 5000) as $chunk) {
+                MasterDatasetRow::query()
+                    ->whereIn('id', $chunk)
+                    ->update(['assigned_to' => self::CALL_CENTER_LABEL]);
+            }
         }
 
         if (! empty($staffIds)) {
-            MasterDatasetRow::query()
-                ->whereIn('id', $staffIds)
-                ->update(['assigned_to' => self::STAFF_LABEL]);
+            foreach (array_chunk($staffIds, 5000) as $chunk) {
+                MasterDatasetRow::query()
+                    ->whereIn('id', $chunk)
+                    ->update(['assigned_to' => self::STAFF_LABEL]);
+            }
         }
     }
 
@@ -194,21 +200,27 @@ class MasterDatasetAssignmentService
         }
 
         if (! empty($enterpriseIds)) {
-            MasterDatasetRow::query()
-                ->whereIn('id', $enterpriseIds)
-                ->update(['assigned_to' => self::ENTERPRISE_LABEL]);
+            foreach (array_chunk($enterpriseIds, 5000) as $chunk) {
+                MasterDatasetRow::query()
+                    ->whereIn('id', $chunk)
+                    ->update(['assigned_to' => self::ENTERPRISE_LABEL]);
+            }
         }
 
         if (! empty($smeIds)) {
-            MasterDatasetRow::query()
-                ->whereIn('id', $smeIds)
-                ->update(['assigned_to' => self::SME_LABEL]);
+            foreach (array_chunk($smeIds, 5000) as $chunk) {
+                MasterDatasetRow::query()
+                    ->whereIn('id', $chunk)
+                    ->update(['assigned_to' => self::SME_LABEL]);
+            }
         }
 
         if (! empty($regionIds)) {
-            MasterDatasetRow::query()
-                ->whereIn('id', $regionIds)
-                ->update(['assigned_to' => self::REGION_LABEL]);
+            foreach (array_chunk($regionIds, 5000) as $chunk) {
+                MasterDatasetRow::query()
+                    ->whereIn('id', $chunk)
+                    ->update(['assigned_to' => self::REGION_LABEL]);
+            }
         }
     }
 

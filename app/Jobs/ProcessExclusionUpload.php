@@ -34,8 +34,7 @@ class ProcessExclusionUpload implements ShouldQueue
         private int $processId,
         private array $files,
         private array $userContext,
-    ) {
-    }
+    ) {}
 
     public function handle(MasterDatasetWorkflowService $workflowService, MasterDatasetExportCoordinator $exportCoordinator): void
     {
@@ -73,7 +72,7 @@ class ProcessExclusionUpload implements ShouldQueue
         Log::info('Prepared exclusion uploads for job', [
             'process_id' => $this->processId,
             'count' => count($uploadedFiles),
-            'files' => array_map(static fn ($file) => $file->getClientOriginalName(), $uploadedFiles),
+            'files' => array_map(static fn($file) => $file->getClientOriginalName(), $uploadedFiles),
         ]);
 
         try {

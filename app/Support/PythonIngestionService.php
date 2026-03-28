@@ -120,7 +120,7 @@ class PythonIngestionService
         $details = $stderr !== '' ? $stderr : $stdout;
         if ($details !== '') {
             $lines = preg_split("/\r\n|\r|\n/", $details);
-            $lines = array_values(array_filter(array_map('trim', $lines), fn ($line) => $line !== ''));
+            $lines = array_values(array_filter(array_map('trim', $lines), fn($line) => $line !== ''));
             $summary = implode(' ', array_slice($lines, 0, 6));
         }
 
@@ -224,5 +224,4 @@ class PythonIngestionService
 
         return Storage::disk($disk);
     }
-
 }

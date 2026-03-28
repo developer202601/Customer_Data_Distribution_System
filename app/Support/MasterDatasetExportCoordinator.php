@@ -30,8 +30,7 @@ class MasterDatasetExportCoordinator
     public function __construct(
         private MasterDatasetViewService $viewService,
         private MasterDatasetExportService $exportService,
-    ) {
-    }
+    ) {}
 
     public function ensureFresh(MasterDatasetProcess $process, ?array $userContext = null): array
     {

@@ -813,8 +813,7 @@
                 if (!response.ok) {
                     const validationMessages = json?.errors ? Object.values(json.errors).flat() : [];
                     throw validationMessages.length ?
-                        validationMessages :
-                        [json?.message || 'Unable to submit uploaded file.'];
+                        validationMessages : [json?.message || 'Unable to submit uploaded file.'];
                 }
 
                 window.location.href = json?.redirect_url || @json(route('process.exclusions.create'));

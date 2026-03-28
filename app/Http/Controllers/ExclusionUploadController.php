@@ -33,9 +33,7 @@ class ExclusionUploadController extends Controller
     public function __construct(
         private MasterDatasetWorkflowService $workflowService,
         private MasterDatasetExportCoordinator $exportCoordinator
-    )
-    {
-    }
+    ) {}
 
     public function create(Request $request): View|RedirectResponse|JsonResponse
     {
@@ -206,9 +204,9 @@ class ExclusionUploadController extends Controller
 
         $path = Storage::disk('local')->putFileAs($directory, $file, $storedName);
 
-    // Save latest_exclusion_token to process
-    $process->latest_exclusion_token = $uploadToken;
-    $process->save();
+        // Save latest_exclusion_token to process
+        $process->latest_exclusion_token = $uploadToken;
+        $process->save();
 
         if (! $path) {
             throw ValidationException::withMessages([
@@ -349,7 +347,7 @@ class ExclusionUploadController extends Controller
 
         /** @var UploadedFile[] $files */
         $files = $request->file('exclusions', []);
-        $stagedIds = array_values(array_filter((array) $request->input('staged_upload_ids', []), static fn ($value) => is_string($value) && $value !== ''));
+        $stagedIds = array_values(array_filter((array) $request->input('staged_upload_ids', []), static fn($value) => is_string($value) && $value !== ''));
 
         if (! is_array($files)) {
             $files = array_filter([$files]);

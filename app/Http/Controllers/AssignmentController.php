@@ -29,8 +29,7 @@ class AssignmentController extends Controller
         private MasterDatasetViewService $viewService,
         private MasterDatasetExportService $exportService,
         private MasterDatasetExportCoordinator $exportCoordinator,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request, MasterDatasetAssignmentConfiguration $assignmentConfiguration): View|RedirectResponse
     {
@@ -306,7 +305,7 @@ class AssignmentController extends Controller
             'process_ids.*' => ['integer', 'exists:master_dataset_processes,id'],
         ]);
 
-        $processIds = collect($data['process_ids'])->map(static fn ($id) => (int) $id)->unique()->values();
+        $processIds = collect($data['process_ids'])->map(static fn($id) => (int) $id)->unique()->values();
 
         if ($processIds->isEmpty()) {
             throw ValidationException::withMessages([
@@ -512,5 +511,4 @@ class AssignmentController extends Controller
 
         return in_array($bucket, $map[$group] ?? [], true);
     }
-
 }

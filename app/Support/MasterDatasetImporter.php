@@ -292,8 +292,7 @@ class MasterDatasetImporter
         string $workbookAbsolutePath,
         ?array $userContext,
         bool $skipAssignment
-    ): MasterDatasetProcess
-    {
+    ): MasterDatasetProcess {
         $token = (string) ($process->token ?? '');
         $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
         if ($cacheKey) {
@@ -720,7 +719,7 @@ class MasterDatasetImporter
                 $parsed['created_at'] = $now;
                 $parsed['updated_at'] = $now;
                 $batch[] = $parsed;
-                
+
                 if (count($batch) >= $batchSize) {
                     MasterDatasetRow::insert($batch);
                     $batch = [];
@@ -918,8 +917,7 @@ class MasterDatasetImporter
         ?string $paymentsColumnName,
         ?string $secondaryArrearsLetter,
         ?string $secondaryArrearsColumnName
-    ): array
-    {
+    ): array {
         $runDateRaw = $this->getColumnValue($columns, $headerMap, 'RUN_DATE');
         $runDate = $this->parseRunDate($runDateRaw);
 
@@ -1235,7 +1233,8 @@ class MasterDatasetImporter
 
             $base = basename($name);
 
-            if ($base === ''
+            if (
+                $base === ''
                 || $base === '.DS_Store'
                 || str_starts_with($base, '._')
                 || str_starts_with($base, '~$')
@@ -1263,5 +1262,4 @@ class MasterDatasetImporter
 
         return $entries[0];
     }
-
 }

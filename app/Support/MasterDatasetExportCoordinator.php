@@ -167,7 +167,8 @@ class MasterDatasetExportCoordinator
             ])->save();
 
             try {
-                $this->exportService->storeToDisk($freshProcess, $label, $query, $disk, $path);
+                // Use Spout for memory-efficient export
+                $this->exportService->storeToDiskWithSpout($freshProcess, $label, $query, $disk, $path, 'xlsx');
 
                 $size = $disk->size($path);
                 $hash = null;

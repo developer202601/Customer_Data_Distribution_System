@@ -9,6 +9,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\MasterDatasetUploadController;
+use App\Http\Controllers\MasterValidationReportController;
 use App\Http\Controllers\ProcessFileController;
 use App\Http\Controllers\ProcessRunningController;
 use App\Http\Controllers\ProcessStatusController;
@@ -27,6 +28,7 @@ Route::middleware('session.auth')->group(function () {
     Route::delete('/master/upload/chunks/upload/{token}', [MasterDatasetUploadController::class, 'cancelChunkUpload'])->name('master.upload.chunks.cancel');
     Route::delete('/master/upload/chunks/staged/{token}', [MasterDatasetUploadController::class, 'destroyStagedUpload'])->name('master.upload.chunks.staged.destroy');
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
+    Route::get('/master/upload/validation-report/{token}', [MasterValidationReportController::class, 'download'])->name('master.validation.report.download');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
@@ -46,11 +48,11 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/process/exclusions/upload', [ExclusionUploadController::class, 'uploadSingle'])->name('process.exclusions.upload.single');
     Route::delete('/process/exclusions/staged/{token}', [ExclusionUploadController::class, 'destroyStagedUpload'])->name('process.exclusions.staged.destroy');
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
-    
+
     Route::get('/process/confirm', [App\Http\Controllers\ProcessConfirmController::class, 'create'])->name('process.confirm.create');
     Route::post('/process/confirm', [App\Http\Controllers\ProcessConfirmController::class, 'store'])->name('process.confirm.store');
     Route::get('/process/running', [ProcessRunningController::class, 'show'])->name('process.running.show');
-    
+
     Route::get('/process/status', [ProcessStatusController::class, 'show'])->name('process.status.current');
     Route::get('/process/status/stream', [ProcessStatusController::class, 'stream'])->name('process.status.stream');
     Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
@@ -67,7 +69,7 @@ Route::middleware('session.auth')->group(function () {
     Route::put('/admin/users/{user}/name', [AdminController::class, 'updateUserName'])->name('admin.updateUserName');
     Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.deleteUser');
     Route::post('/configurations/billrange', [BillRangeController::class, 'createRange'])->name('configurations.billrange');
-    
+
     Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');
 
     Route::prefix('cc')->name('cc.')->middleware('session.cc_user')->group(function () {
@@ -152,8 +154,6 @@ Route::middleware('session.auth')->group(function () {
             Route::get('/reports/{report}/download', [CallCenterReportController::class, 'download'])->name('reports.download');
         });
     });
-    
-    
 });
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');

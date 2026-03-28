@@ -42,7 +42,7 @@
                         <label for="report-month" class="form-label mb-1">Filter by month</label>
                         <select id="report-month" name="month" class="form-select" onchange="this.form.submit()">
                             @foreach($monthOptions as $month)
-                            <option value="{{ $month }}" @if($month === $selectedMonth) selected @endif>{{ $month }}</option>
+                            <option value="{{ $month }}" @if($month===$selectedMonth) selected @endif>{{ $month }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -50,9 +50,9 @@
                     <div class="col-auto">
                         <label for="report-generator" class="form-label mb-1">Filter by generator</label>
                         <select id="report-generator" name="generator" class="form-select" onchange="this.form.submit()">
-                            <option value="" @if($selectedGenerator === null) selected @endif>All generators</option>
+                            <option value="" @if($selectedGenerator===null) selected @endif>All generators</option>
                             @foreach($generatorOptions as $key => $label)
-                            <option value="{{ $key }}" @if((string) $key === (string) $selectedGenerator) selected @endif>{{ $label }}</option>
+                            <option value="{{ $key }}" @if((string) $key===(string) $selectedGenerator) selected @endif>{{ $label }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -97,13 +97,34 @@
                             <tbody>
                                 @forelse($filteredProcesses as $processRow)
                                 @php
-                                    $datasetLabel = $processRow->dataset_month ? Carbon::parse($processRow->dataset_month . '-01')->format('M Y') : 'Manual upload';
-                                    $generatedAt = $processRow->run_date ? Carbon::parse($processRow->run_date)->format('d M Y – H:i') : $processRow->created_at->format('d M Y – H:i');
-                                    $statusLabel = ucfirst($processRow->status ?? 'ready');
-                                    $badgeColor = $processRow->status === 'failed' ? 'danger' : 'success';
-                                    $generatorName = $processRow->user?->username ?? $processRow->user_name ?? 'System';
-                                    $isContinuable = ! in_array(($processRow->status ?? 'ready'), ['ready', 'failed'], true);
-                                    $actionLabel = $isContinuable ? 'Continue' : 'View assignments';
+                                $datasetLabel = 'Manual upload';
+                                if ($processRow->dataset_month) {
+                                try {
+                                $datasetLabel = Carbon::createFromFormat('Ym', (string) $processRow->dataset_month)->format('M Y');
+                                } catch (\Throwable) {
+                                $datasetLabel = (string) $processRow->dataset_month;
+                                }
+                                }
+
+                                // "Generated at" represents when this run was created in CDDS,
+                                // not the workbook's internal run_date.
+                                $generatedAt = $processRow->created_at
+                                ? $processRow->created_at->format('d M Y – H:i')
+                                : Carbon::now()->format('d M Y – H:i');
+                                $statusRaw = (string) ($processRow->status ?? 'ready');
+                                $statusLabel = match ($statusRaw) {
+                                'exports_pending' => 'Generating exports',
+                                default => ucfirst(str_replace('_', ' ', $statusRaw)),
+                                };
+                                $badgeColor = match ($statusRaw) {
+                                'failed' => 'danger',
+                                'ready' => 'success',
+                                'exports_pending' => 'warning',
+                                default => 'secondary',
+                                };
+                                $generatorName = $processRow->user?->username ?? $processRow->user_name ?? 'System';
+                                $isContinuable = ! in_array($statusRaw, ['ready', 'failed'], true);
+                                $actionLabel = $statusRaw === 'exports_pending' ? 'View assignments' : ($isContinuable ? 'Continue' : 'View assignments');
                                 @endphp
                                 <tr class="report-row-selectable">
                                     @if(session('user.is_admin'))
@@ -116,8 +137,7 @@
                                             form="bulk-delete-form"
                                             aria-label="Select dataset {{ $datasetLabel }}"
                                             data-dataset-label="{{ $datasetLabel }}"
-                                            data-dataset-status="{{ $statusLabel }}"
-                                        >
+                                            data-dataset-status="{{ $statusLabel }}">
                                     </td>
                                     @endif
                                     <td>{{ $datasetLabel }}</td>
@@ -216,9 +236,9 @@
         const refreshBulkState = () => {
             const selectedCount = checkboxes.filter((entry) => entry.checked).length;
             bulkDeleteButton.disabled = !deleteMode || selectedCount === 0;
-            bulkDeleteButton.textContent = selectedCount > 0
-                ? `Delete selected (${selectedCount})`
-                : 'Delete selected';
+            bulkDeleteButton.textContent = selectedCount > 0 ?
+                `Delete selected (${selectedCount})` :
+                'Delete selected';
 
             if (selectAll) {
                 const allSelected = checkboxes.length > 0 && selectedCount === checkboxes.length;

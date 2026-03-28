@@ -53,6 +53,7 @@ class MasterDatasetUploadController extends Controller
             }
             if ($existing->token) {
                 $disk->deleteDirectory('exports/' . $existing->token);
+                $disk->deleteDirectory('validation-reports/master/' . $existing->token);
             }
 
             $existing->delete();

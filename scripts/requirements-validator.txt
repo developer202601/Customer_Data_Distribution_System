@@ -1,0 +1,7 @@
+# Python validator dependencies for CDDS master XLSX validation
+#
+# Prefer installing in a venv on the web/queue worker host.
+#
+# Polars uses the fast Rust-based `calamine` engine; `fastexcel` provides the bindings.
+polars>=1.20
+fastexcel[polars]>=0.19

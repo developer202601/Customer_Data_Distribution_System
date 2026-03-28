@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessExclusionUpload;
-use App\Jobs\ValidateExclusionWorkbook;
 use App\Models\MasterDatasetProcess;
 use App\Support\ChunkedUploadManager;
 use App\Support\MasterDatasetExportCoordinator;
@@ -34,9 +33,7 @@ class ExclusionUploadController extends Controller
     public function __construct(
         private MasterDatasetWorkflowService $workflowService,
         private MasterDatasetExportCoordinator $exportCoordinator
-    )
-    {
-    }
+    ) {}
 
     public function create(Request $request): View|RedirectResponse|JsonResponse
     {
@@ -207,9 +204,9 @@ class ExclusionUploadController extends Controller
 
         $path = Storage::disk('local')->putFileAs($directory, $file, $storedName);
 
-    // Save latest_exclusion_token to process
-    $process->latest_exclusion_token = $uploadToken;
-    $process->save();
+        // Save latest_exclusion_token to process
+        $process->latest_exclusion_token = $uploadToken;
+        $process->save();
 
         if (! $path) {
             throw ValidationException::withMessages([
@@ -230,36 +227,19 @@ class ExclusionUploadController extends Controller
 
         $cacheKey = self::PROGRESS_CACHE_PREFIX . $uploadToken;
         Cache::put($cacheKey, [
-            'status' => 'processing',
-            'progress' => 0,
-            'message' => 'Queued for validation...',
+            'status' => 'ready',
+            'progress' => 100,
+            'message' => 'Staged (validation deferred until Apply exclusions).',
             'processed_rows' => 0,
             'total_rows' => 0,
-            'stage' => 'queued',
+            'stage' => 'staged',
             'started_at' => time(),
             'last_updated_at' => now()->toIso8601String(),
             'errors' => [],
             'file_name' => $originalName,
         ], now()->addMinutes(30));
 
-        try {
-            ValidateExclusionWorkbook::dispatch(
-                $uploadToken,
-                Storage::disk('local')->path($path),
-                $originalName
-            )->onQueue('exports');
-        } catch (Throwable $exception) {
-            Storage::disk('local')->delete($path);
-            unset($stagedUploads[$uploadToken]);
-            session()->put('master.dataset.staged_exclusions', $stagedUploads);
-            Cache::forget($cacheKey);
-
-            throw ValidationException::withMessages([
-                'exclusions' => 'Unable to queue exclusion validation: ' . $exception->getMessage(),
-            ]);
-        }
-
-        Log::info('Exclusion single upload staged and validation dispatched', [
+        Log::info('Exclusion single upload staged (validation deferred)', [
             'process_id' => $process->id,
             'upload_token' => $uploadToken,
             'path' => $path,
@@ -367,7 +347,7 @@ class ExclusionUploadController extends Controller
 
         /** @var UploadedFile[] $files */
         $files = $request->file('exclusions', []);
-        $stagedIds = array_values(array_filter((array) $request->input('staged_upload_ids', []), static fn ($value) => is_string($value) && $value !== ''));
+        $stagedIds = array_values(array_filter((array) $request->input('staged_upload_ids', []), static fn($value) => is_string($value) && $value !== ''));
 
         if (! is_array($files)) {
             $files = array_filter([$files]);

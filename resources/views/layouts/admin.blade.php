@@ -49,7 +49,7 @@
                 <span>|</span>
                 <span>Powered by</span>
                 <a href="" style="display:inline-flex;align-items:center;gap:.25rem;">
-                    <img src="{{ asset('images/transzent-logo.png') }}" alt="Transzent" style="height:24px;max-height:24px;padding-bottom:1px;" />
+                    <img src="{{ asset('images/Transzent-logo.png') }}" alt="Transzent" style="height:24px;max-height:24px;padding-bottom:1px;" />
                 </a>
             </div>
         </footer>

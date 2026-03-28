@@ -19,6 +19,47 @@ This project ingests very large (800k+ row) Excel workbooks through a hybrid PHP
 
 Set the `PYTHON_BINARY` environment variable if the runtime is not available as `python` on your PATH (on most Linux images, this is usually `python3`).
 
+### Master XLSX fast validation (Polars)
+
+The master upload workflow runs a fast pre-validation step via `scripts/validate_master.py` (Polars + Rust `calamine`) to detect:
+
+- Missing values in `RUN_DATE`, `ACCOUNT_NUM`, `PRODUCT_LABEL`
+- Duplicate `PRODUCT_LABEL` (case-insensitive)
+
+It also writes a downloadable CSV error report under `storage/app/validation-reports/master/{token}/master-validation-errors.csv` when validation fails.
+
+Install the validator dependencies into the same Python environment used by the queue worker/web server:
+
+**Windows (PowerShell)**
+
+`python -m venv .venv`
+
+`./.venv/Scripts/pip install -r scripts/requirements-validator.txt`
+
+Set `.env` so Laravel uses this venv Python:
+
+`PYTHON_BINARY="D:\\path\\to\\repo\\cdds-laravel\\.venv\\Scripts\\python.exe"`
+
+**Linux/macOS (bash)**
+
+`python3 -m venv .venv`
+
+`. .venv/bin/activate && pip install -r scripts/requirements-validator.txt`
+
+Set `.env`:
+
+`PYTHON_BINARY="/absolute/path/to/repo/cdds-laravel/.venv/bin/python"`
+
+Quick dependency smoke test:
+
+**Windows (PowerShell)**
+
+`./.venv/Scripts/python -c "import polars, fastexcel; print('ok')"`
+
+**Linux/macOS (bash)**
+
+`./.venv/bin/python -c "import polars, fastexcel; print('ok')"`
+
 ## Database (single-file schema for DevOps)
 
 If your goal is to help DevOps / new developers spin up the database quickly, the best Laravel-native approach is **Schema Dump** (a single SQL file) + normal migrations for ongoing changes. This avoids maintaining one huge “all tables” migration.

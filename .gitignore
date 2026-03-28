@@ -24,6 +24,22 @@ Homestead.yaml
 Thumbs.db
 /testfiles
 
+# Python (local venvs + caches)
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# Laravel runtime caches (generated per-machine/deploy)
+/bootstrap/cache/*.php
+
 # Local training/report notes
 NAITA_*.md
 

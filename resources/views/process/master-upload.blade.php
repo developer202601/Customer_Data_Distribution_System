@@ -55,6 +55,14 @@
                         <div class="alert alert-danger" role="alert">
                             <p class="mb-2 fw-semibold">Previous processing failed. Please fix and re-upload.</p>
 
+                            @if(!empty($processFailurePayload['token']))
+                            <p class="mb-3">
+                                <a class="btn btn-sm btn-outline-light" href="{{ route('master.validation.report.download', ['token' => $processFailurePayload['token']], false) }}" target="_blank" rel="noopener" data-loader-off="1">
+                                    Download validation error report (CSV)
+                                </a>
+                            </p>
+                            @endif
+
                             @if(!empty($processFailurePayload['master_errors']))
                             <p class="mb-1 fw-semibold">Master file errors ({{ $processFailurePayload['master_file'] ?? 'master archive' }})</p>
                             <ul class="mb-2">
@@ -805,8 +813,7 @@
                 if (!response.ok) {
                     const validationMessages = json?.errors ? Object.values(json.errors).flat() : [];
                     throw validationMessages.length ?
-                        validationMessages :
-                        [json?.message || 'Unable to submit uploaded file.'];
+                        validationMessages : [json?.message || 'Unable to submit uploaded file.'];
                 }
 
                 window.location.href = json?.redirect_url || @json(route('process.exclusions.create'));

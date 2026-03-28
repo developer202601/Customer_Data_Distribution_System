@@ -365,7 +365,7 @@
                         'Uploaded';
                     if (file.validationStatus) {
                         const statusLabel = file.validationStatus === 'ready' ?
-                            'Validated' :
+                            (file.validationDeferred ? 'Staged (validation deferred)' : 'Validated') :
                             (file.validationStatus === 'failed' ? 'Validation failed' : 'Validating');
                         const heartbeat = file.validationHeartbeat ? ` • ${file.validationHeartbeat}` : '';
                         state.textContent = `${baseLabel} • ${statusLabel}${heartbeat}`;
@@ -639,10 +639,12 @@
             entry.stagedId = finishJson.file.id;
             entry.excelCount = Number(finishJson?.file?.excel_count || 0);
             entry.file = null;
-            entry.validationStatus = 'validating';
+            // Defer exclusion workbook validation until the user clicks "Apply exclusions".
+            entry.validationStatus = 'ready';
+            entry.validationDeferred = true;
             entry.validationHeartbeat = '';
             renderList();
-            startValidationStream(entry);
+            toggleSubmitState();
         };
 
         const startValidationStream = (entry) => {

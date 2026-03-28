@@ -469,11 +469,11 @@ def _connect_mysql_from_env():
     except Exception as exc:  # pragma: no cover
         raise RuntimeError(f"Missing dependency pymysql: {exc}")
 
-    host = os.environ.get("CDDS_DB_HOST") or ""
+    host = os.environ.get("CDDS_DB_HOST") or "127.0.0.1"
     port_raw = os.environ.get("CDDS_DB_PORT") or "3306"
-    user = os.environ.get("CDDS_DB_USERNAME") or ""
-    password = os.environ.get("CDDS_DB_PASSWORD") or ""
-    database = os.environ.get("CDDS_DB_DATABASE") or ""
+    user = os.environ.get("CDDS_DB_USERNAME") or "root"
+    password = os.environ.get("CDDS_DB_PASSWORD") or "0000"
+    database = os.environ.get("CDDS_DB_DATABASE") or "cdds"
 
     if not host or not user or not database:
         raise RuntimeError("Database environment variables are missing (CDDS_DB_HOST/USERNAME/DATABASE).")

@@ -128,6 +128,11 @@ jobs:
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
             git fetch origin main
             git reset --hard origin/main
+
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r scripts/requirements-ingest.txt
+            python3 -m pip install -r scripts/requirements-validator.txt
+            
             composer install --no-interaction --prefer-dist --optimize-autoloader
             npm ci
             npm run build

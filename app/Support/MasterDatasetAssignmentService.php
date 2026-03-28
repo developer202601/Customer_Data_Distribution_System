@@ -146,7 +146,7 @@ class MasterDatasetAssignmentService
         $staffIds = $selection->slice($offset, $staffQuota)->pluck('id')->all();
 
         if (! empty($callCenterStaffIds)) {
-            foreach (array_chunk($callCenterStaffIds, 5000) as $chunk) {
+            foreach (array_chunk($callCenterStaffIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
                     ->update(['assigned_to' => self::CALL_CENTER_STAFF_LABEL]);
@@ -154,7 +154,7 @@ class MasterDatasetAssignmentService
         }
 
         if (! empty($callCenterIds)) {
-            foreach (array_chunk($callCenterIds, 5000) as $chunk) {
+            foreach (array_chunk($callCenterIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
                     ->update(['assigned_to' => self::CALL_CENTER_LABEL]);
@@ -162,7 +162,7 @@ class MasterDatasetAssignmentService
         }
 
         if (! empty($staffIds)) {
-            foreach (array_chunk($staffIds, 5000) as $chunk) {
+            foreach (array_chunk($staffIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
                     ->update(['assigned_to' => self::STAFF_LABEL]);
@@ -200,7 +200,7 @@ class MasterDatasetAssignmentService
         }
 
         if (! empty($enterpriseIds)) {
-            foreach (array_chunk($enterpriseIds, 5000) as $chunk) {
+            foreach (array_chunk($enterpriseIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
                     ->update(['assigned_to' => self::ENTERPRISE_LABEL]);
@@ -208,7 +208,7 @@ class MasterDatasetAssignmentService
         }
 
         if (! empty($smeIds)) {
-            foreach (array_chunk($smeIds, 5000) as $chunk) {
+            foreach (array_chunk($smeIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
                     ->update(['assigned_to' => self::SME_LABEL]);
@@ -216,7 +216,7 @@ class MasterDatasetAssignmentService
         }
 
         if (! empty($regionIds)) {
-            foreach (array_chunk($regionIds, 5000) as $chunk) {
+            foreach (array_chunk($regionIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
                     ->update(['assigned_to' => self::REGION_LABEL]);

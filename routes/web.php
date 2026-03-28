@@ -9,6 +9,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\MasterDatasetUploadController;
+use App\Http\Controllers\MasterValidationReportController;
 use App\Http\Controllers\ProcessFileController;
 use App\Http\Controllers\ProcessRunningController;
 use App\Http\Controllers\ProcessStatusController;
@@ -27,6 +28,7 @@ Route::middleware('session.auth')->group(function () {
     Route::delete('/master/upload/chunks/upload/{token}', [MasterDatasetUploadController::class, 'cancelChunkUpload'])->name('master.upload.chunks.cancel');
     Route::delete('/master/upload/chunks/staged/{token}', [MasterDatasetUploadController::class, 'destroyStagedUpload'])->name('master.upload.chunks.staged.destroy');
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
+    Route::get('/master/upload/validation-report/{token}', [MasterValidationReportController::class, 'download'])->name('master.validation.report.download');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');

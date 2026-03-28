@@ -14,13 +14,14 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use RuntimeException;
 use Throwable;
 use ZipArchive;
+use Symfony\Component\Process\Process;
 
 class MasterDatasetImporter
 {
@@ -55,6 +56,7 @@ class MasterDatasetImporter
     private const DUPLICATE_ROW_CONSTRAINT = 'mdr_process_run_product_unique';
     private const PROCESS_UPLOAD_CACHE_PREFIX = 'process:upload:';
     private const VALIDATION_PROGRESS_UPDATE_EVERY = 200;
+    private const VALIDATION_REPORT_BASE_DIRECTORY = 'validation-reports/master';
 
     private Filesystem $disk;
 
@@ -107,28 +109,32 @@ class MasterDatasetImporter
 
     private function buildManifestPayload(
         MasterDatasetProcess $process,
-        array $headers,
-        array $headerMap,
-        string $arrearsLetter,
-        string $arrearsColumnName,
-        ?Carbon $arrearsDate,
         ?array $userContext,
         string $workbookAbsolutePath
     ): array {
+        $token = (string) ($process->token ?? '');
+        $diskName = (string) ($process->storage_disk ?: config('filesystems.default', 'local'));
+        $disk = Storage::disk($diskName);
+
+        $reportRelative = $token !== '' ? $this->validationReportRelativePath($token) : null;
+        $reportAbsolute = $reportRelative ? $disk->path($reportRelative) : null;
+
         return [
             'process_id' => $process->id,
             'token' => $process->token,
             'storage_disk' => $process->storage_disk,
             'master_archive_path' => $process->master_archive_path,
-            'master_archive_full_path' => $this->disk->path($process->master_archive_path),
+            'master_archive_full_path' => $process->master_archive_path ? $this->disk->path($process->master_archive_path) : null,
             'master_workbook_path' => $this->workbookPlaceholderPath($process->token),
             'master_workbook_full_path' => $workbookAbsolutePath,
-            'headers' => $headers,
-            'header_map' => $headerMap,
-            'arrears_column_letter' => $arrearsLetter,
-            'arrears_column_name' => $arrearsColumnName,
-            'arrears_date' => $arrearsDate?->format('Y-m-d'),
             'required_columns' => self::REQUIRED_COLUMNS,
+            'required_row_columns' => self::REQUIRED_ROW_COLUMNS,
+            'dedupe_column' => 'PRODUCT_LABEL',
+            'arrears_prefix' => self::NEW_ARREARS_PREFIX,
+            'validation_report_relative_path' => $reportRelative,
+            'validation_report_full_path' => $reportAbsolute,
+            'max_ui_errors' => self::MAX_ROW_ERRORS,
+            'max_report_rows' => 50000,
             'user_context' => $userContext,
             'generated_at' => now()->toIso8601String(),
         ];
@@ -288,25 +294,13 @@ class MasterDatasetImporter
         bool $skipAssignment
     ): MasterDatasetProcess
     {
-        // Use PhpSpreadsheet disk cache for large workbook processing to reduce peak memory.
-        if (class_exists(\PhpOffice\PhpSpreadsheet\CachedObjectStorageFactory::class)) {
-            try {
-                \PhpOffice\PhpSpreadsheet\Settings::setCacheStorageMethod(
-                    \PhpOffice\PhpSpreadsheet\CachedObjectStorageFactory::cache_to_discISAM,
-                    ['dir' => storage_path('app/tmp')]
-                );
-            } catch (\Throwable $e) {
-                // ignore; fallback in-memory
-            }
-        }
-
         $token = (string) ($process->token ?? '');
         $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
         if ($cacheKey) {
             Cache::put($cacheKey, [
                 'status' => 'processing',
                 'progress' => 6,
-                'message' => 'Reading master workbook into memory (this may take a minute(s) depending on the uploaded file size and row count)...',
+                'message' => 'Preparing master dataset ingestion…',
                 'stage' => 'loading',
                 'processed_rows' => 0,
                 'total_rows' => 0,
@@ -316,83 +310,53 @@ class MasterDatasetImporter
             ], now()->addMinutes(120));
         }
 
-        $reader = IOFactory::createReader('Xlsx');
-        $reader->setReadDataOnly(true);
-        $spreadsheet = $reader->load($workbookAbsolutePath);
+        // Validation now runs inside the Python ingestion script (single XLSX read).
+        // We still keep the abort/cancel check here so users can stop quickly.
+        if ($cacheKey && (bool) Cache::get($cacheKey . ':abort', false)) {
+            Cache::put($cacheKey, [
+                'status' => 'canceled',
+                'progress' => 0,
+                'message' => 'Validation canceled by user.',
+                'stage' => 'validation',
+                'processed_rows' => 0,
+                'total_rows' => 0,
+                'started_at' => time(),
+                'last_updated_at' => now()->toIso8601String(),
+                'errors' => [],
+            ], now()->addMinutes(120));
 
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows = $sheet->toArray(null, true, true, true);
-        $spreadsheet->disconnectWorksheets();
-        unset($spreadsheet);
-
-        if (count($rows) < 2) {
             throw ValidationException::withMessages([
-                'upload' => 'The spreadsheet must include a header row and at least one data row.',
+                'upload' => ['Validation canceled by user.'],
             ]);
         }
-
-        [$headers, $dataRows] = $this->separateHeaderAndRows($rows);
-        $headerMap = $this->buildHeaderMap($headers);
-        $this->assertRequiredColumns($headers);
-        $arrearsLetter = $this->findHeaderColumnByPrefix($headerMap, self::NEW_ARREARS_PREFIX);
-
-        if ($arrearsLetter === null) {
-            throw ValidationException::withMessages([
-                'upload' => 'The spreadsheet must include a NEW_ARREARS_YYYYMMDD column.',
-            ]);
-        }
-
-        $arrearsColumnName = $headers[$arrearsLetter]['normalised'] ?? 'NEW_ARREARS';
-        $arrearsDate = $this->extractArrearsDate($arrearsColumnName);
-        $datasetMonth = $arrearsDate ? $arrearsDate->format('Ym') : now()->format('Ym');
-
-        // Run row integrity checks while status is still "validating" so
-        // the UI can display live master-validation row progress.
-        $this->assertRowIntegrity($process, $dataRows, $headerMap, $arrearsLetter);
 
         $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VALIDATED);
-
-        DB::beginTransaction();
-
-        try {
-            $process->update([
-                'dataset_month' => $datasetMonth,
-                'arrears_date' => $arrearsDate,
-                'run_date_raw' => null,
-                'master_archive_path' => $zipPath,
-                'master_workbook_path' => $this->workbookPlaceholderPath($process->token),
-                'storage_disk' => $process->storage_disk ?: config('filesystems.default', 'local'),
-                'master_filesize' => $process->master_filesize ?: $this->disk->size($zipPath),
-                'user_id' => $userContext['id'] ?? $process->user_id,
-                'failure_reason' => null,
-            ]);
-
-            DB::commit();
-        } catch (Throwable $exception) {
-            DB::rollBack();
-            throw $exception;
-        }
+        $process->update([
+            'run_date_raw' => null,
+            'master_archive_path' => $zipPath,
+            'master_workbook_path' => $this->workbookPlaceholderPath($process->token),
+            'storage_disk' => $process->storage_disk ?: config('filesystems.default', 'local'),
+            'master_filesize' => $process->master_filesize ?: $this->disk->size($zipPath),
+            'user_id' => $userContext['id'] ?? $process->user_id,
+            'failure_reason' => null,
+        ]);
 
         $process->refresh();
 
         $python = app(PythonIngestionService::class);
-        $manifestPayload = $this->buildManifestPayload(
-            $process,
-            $headers,
-            $headerMap,
-            $arrearsLetter,
-            $arrearsColumnName,
-            $arrearsDate,
-            $userContext,
-            $workbookAbsolutePath
-        );
+        $manifestPayload = $this->buildManifestPayload($process, $userContext, $workbookAbsolutePath);
         $python->writeManifest($process, $manifestPayload);
         $python->ensureStatusFile($process);
 
         try {
             $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::PYTHON_RUNNING);
             $python->run($process);
+
+            $this->assertPythonValidationPassed($process);
+
             $process = MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::PYTHON_COMPLETE);
+
+            $this->applyPythonWorkbookMetadata($process);
 
             // Allow safe re-processing of the same process by clearing stale rows first.
             MasterDatasetRow::query()->where('process_id', $process->id)->delete();
@@ -400,11 +364,7 @@ class MasterDatasetImporter
             $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::RECORDS_INSERTING);
             $promoted = app(MasterDatasetStagingPromoter::class)->promote($process);
 
-            if (($promoted['promoted'] ?? 0) === 0) {
-                $statistics = $this->importRows($process, $dataRows, $headers, $headerMap, $arrearsLetter, $arrearsColumnName);
-            } else {
-                $statistics = $this->databaseStatistics($process);
-            }
+            $statistics = $this->databaseStatistics($process);
 
             $process->refresh();
 
@@ -459,6 +419,242 @@ class MasterDatasetImporter
                 'upload' => $this->uploadErrorMessage($exception),
             ]);
         }
+    }
+
+    private function assertPythonValidationPassed(MasterDatasetProcess $process): void
+    {
+        $diskName = (string) ($process->storage_disk ?: config('filesystems.default', 'local'));
+        $disk = Storage::disk($diskName);
+        $statusPath = (string) ($process->python_status_path ?? '');
+        if ($statusPath === '' || ! $disk->exists($statusPath)) {
+            return;
+        }
+
+        try {
+            $raw = (string) $disk->get($statusPath);
+        } catch (Throwable) {
+            return;
+        }
+
+        $payload = json_decode($raw, true);
+        if (! is_array($payload)) {
+            return;
+        }
+
+        $status = (string) ($payload['status'] ?? '');
+        if (! in_array($status, ['failed_validation', 'validation_failed', 'failed'], true)) {
+            return;
+        }
+
+        $errors = $payload['errors'] ?? [];
+        $errors = is_array($errors) ? array_values(array_filter($errors, 'is_string')) : [];
+
+        $token = (string) ($process->token ?? '');
+        if ($token !== '') {
+            $cacheKey = self::PROCESS_UPLOAD_CACHE_PREFIX . $token;
+            $reportRelative = $this->validationReportRelativePath($token);
+
+            Cache::put($cacheKey, [
+                'status' => 'failed',
+                'progress' => 6,
+                'message' => 'Master dataset validation failed.',
+                'stage' => 'validation',
+                'processed_rows' => (int) ($payload['row_count'] ?? 0),
+                'total_rows' => (int) ($payload['row_count'] ?? 0),
+                'started_at' => time(),
+                'last_updated_at' => now()->toIso8601String(),
+                'errors' => $errors,
+                'validation_report_path' => $reportRelative,
+                'validation_report_disk' => $diskName,
+            ], now()->addMinutes(120));
+        }
+
+        throw ValidationException::withMessages([
+            'upload' => ! empty($errors) ? $errors : ['Master dataset validation failed.'],
+        ]);
+    }
+
+    private function validationReportRelativePath(string $token): string
+    {
+        return self::VALIDATION_REPORT_BASE_DIRECTORY . '/' . $token . '/master-validation-errors.csv';
+    }
+
+    private function applyPythonWorkbookMetadata(MasterDatasetProcess $process): void
+    {
+        $diskName = (string) ($process->storage_disk ?: config('filesystems.default', 'local'));
+        $disk = Storage::disk($diskName);
+        $statusPath = (string) ($process->python_status_path ?? '');
+        if ($statusPath === '' || ! $disk->exists($statusPath)) {
+            return;
+        }
+
+        try {
+            $raw = (string) $disk->get($statusPath);
+        } catch (Throwable) {
+            return;
+        }
+
+        $payload = json_decode($raw, true);
+        if (! is_array($payload)) {
+            return;
+        }
+
+        $workbook = $payload['workbook'] ?? null;
+        if (! is_array($workbook)) {
+            return;
+        }
+
+        $updates = [];
+
+        $datasetMonth = trim((string) ($workbook['dataset_month'] ?? ''));
+        if ($datasetMonth !== '' && preg_match('/^\d{6}$/', $datasetMonth)) {
+            $updates['dataset_month'] = $datasetMonth;
+        }
+
+        $arrearsDateRaw = trim((string) ($workbook['arrears_date'] ?? ''));
+        if ($arrearsDateRaw !== '') {
+            try {
+                $updates['arrears_date'] = Carbon::createFromFormat('Y-m-d', $arrearsDateRaw)->toDateString();
+            } catch (Throwable) {
+                // ignore
+            }
+        }
+
+        if (! empty($updates)) {
+            $process->update($updates);
+        }
+    }
+
+    /**
+     * @deprecated Legacy standalone validator.
+     * Validation is now performed inside scripts/ingest_master.py to avoid reading the XLSX twice.
+     */
+    private function validateWithPolars(MasterDatasetProcess $process, string $workbookAbsolutePath): void
+    {
+        $token = (string) ($process->token ?? '');
+        if ($token === '') {
+            return;
+        }
+
+        $cacheKey = self::PROCESS_UPLOAD_CACHE_PREFIX . $token;
+        $abortKey = $cacheKey . ':abort';
+        $diskName = $process->storage_disk ?: config('filesystems.default', 'local');
+        $disk = Storage::disk($diskName);
+
+        $reportRelative = $this->validationReportRelativePath($token);
+        $disk->makeDirectory(dirname($reportRelative));
+        $reportAbsolute = $disk->path($reportRelative);
+
+        Cache::put($cacheKey, [
+            'status' => 'processing',
+            'progress' => 6,
+            'message' => 'Fast-validating master dataset (required fields + duplicates + arrears format)…',
+            'stage' => 'validation',
+            'processed_rows' => 0,
+            'total_rows' => 0,
+            'started_at' => time(),
+            'last_updated_at' => now()->toIso8601String(),
+            'errors' => [],
+        ], now()->addMinutes(120));
+
+        if ((bool) Cache::get($abortKey, false)) {
+            Cache::put($cacheKey, [
+                'status' => 'canceled',
+                'progress' => 0,
+                'message' => 'Validation canceled by user.',
+                'stage' => 'validation',
+                'processed_rows' => 0,
+                'total_rows' => 0,
+                'started_at' => time(),
+                'last_updated_at' => now()->toIso8601String(),
+                'errors' => [],
+            ], now()->addMinutes(120));
+
+            throw ValidationException::withMessages([
+                'upload' => ['Validation canceled by user.'],
+            ]);
+        }
+
+        $python = app(PythonIngestionService::class);
+        $command = [
+            $python->pythonBinary(),
+            base_path('scripts/validate_master.py'),
+            '--input',
+            $workbookAbsolutePath,
+            '--report-out',
+            $reportAbsolute,
+            '--required',
+            implode(',', self::REQUIRED_ROW_COLUMNS),
+            '--required-columns',
+            implode(',', self::REQUIRED_COLUMNS),
+            '--dedupe',
+            'PRODUCT_LABEL',
+            '--arrears-prefix',
+            'NEW_ARREARS_',
+            '--max-ui-errors',
+            (string) self::MAX_ROW_ERRORS,
+        ];
+
+        $proc = new Process($command, base_path());
+        $proc->setTimeout(null);
+        $proc->run();
+
+        $stdout = trim($proc->getOutput());
+        $stderr = trim($proc->getErrorOutput());
+
+        $payload = json_decode($stdout, true);
+        if (! is_array($payload)) {
+            $message = $stderr !== '' ? $stderr : ($stdout !== '' ? $stdout : 'Python validator produced no output.');
+            throw new RuntimeException('Python validator failed: ' . $message);
+        }
+
+        $status = (string) ($payload['status'] ?? 'error');
+        $rowCount = (int) ($payload['row_count'] ?? 0);
+        $errors = $payload['errors'] ?? [];
+        $errors = is_array($errors) ? array_values(array_filter($errors, 'is_string')) : [];
+
+        if ($status === 'pass') {
+            Cache::put($cacheKey, [
+                'status' => 'processing',
+                'progress' => 6,
+                'message' => 'Master dataset fast-validation passed.',
+                'stage' => 'validation',
+                'processed_rows' => $rowCount,
+                'total_rows' => $rowCount,
+                'started_at' => time(),
+                'last_updated_at' => now()->toIso8601String(),
+                'errors' => [],
+            ], now()->addMinutes(120));
+
+            return;
+        }
+
+        if ($status === 'fail') {
+            Cache::put($cacheKey, [
+                'status' => 'failed',
+                'progress' => 6,
+                'message' => 'Master dataset validation failed.',
+                'stage' => 'validation',
+                'processed_rows' => $rowCount,
+                'total_rows' => $rowCount,
+                'started_at' => time(),
+                'last_updated_at' => now()->toIso8601String(),
+                'errors' => $errors,
+                'validation_report_path' => $reportRelative,
+                'validation_report_disk' => $diskName,
+            ], now()->addMinutes(120));
+
+            throw ValidationException::withMessages([
+                'upload' => ! empty($errors) ? $errors : ['Master dataset validation failed.'],
+            ]);
+        }
+
+        $message = (string) ($payload['message'] ?? 'Python validator error.');
+        if ($stderr !== '') {
+            $message .= ' ' . $stderr;
+        }
+
+        throw new RuntimeException('Python validator error: ' . trim($message));
     }
 
     private function importRows(MasterDatasetProcess $process, array $dataRows, array $headers, array $headerMap, string $arrearsLetter, string $arrearsColumnName): array
@@ -554,14 +750,21 @@ class MasterDatasetImporter
         return $statistics;
     }
 
-    private function assertRowIntegrity(MasterDatasetProcess $process, array $dataRows, array $headerMap, string $arrearsLetter): void
+    private function assertArrearsColumnIntegrity(MasterDatasetProcess $process, array $dataRows, string $arrearsLetter): void
     {
         $errors = [];
-        $seenCompositeKey = [];
         $maxReached = false;
+
+        $reportRows = [];
+        $maxReportRows = 50000;
 
         $token = (string) ($process->token ?? '');
         $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
+
+        $diskName = (string) ($process->storage_disk ?: config('filesystems.default', 'local'));
+        $disk = Storage::disk($diskName);
+        $reportRelativePath = $token !== '' ? $this->validationReportRelativePath($token) : null;
+
         $totalRows = 0;
         foreach ($dataRows as $columns) {
             if (is_array($columns) && $this->rowHasData($columns)) {
@@ -574,7 +777,7 @@ class MasterDatasetImporter
             Cache::put($cacheKey, [
                 'status' => 'processing',
                 'progress' => 6,
-                'message' => 'Validating master dataset...',
+                'message' => 'Validating arrears column format…',
                 'stage' => 'validation',
                 'processed_rows' => 0,
                 'total_rows' => $totalRows,
@@ -585,19 +788,18 @@ class MasterDatasetImporter
         }
 
         $processed = 0;
-        $rowSleepMicros = $this->validationLoopSleepMicros();
-
         foreach ($dataRows as $excelRow => $columns) {
             if (! is_array($columns) || ! $this->rowHasData($columns)) {
                 continue;
             }
 
             $processed++;
+
             if ($cacheKey && (($processed % self::VALIDATION_PROGRESS_UPDATE_EVERY === 0) || $processed === $totalRows)) {
                 Cache::put($cacheKey, [
                     'status' => 'processing',
                     'progress' => 6,
-                    'message' => 'Validating master dataset...',
+                    'message' => 'Validating arrears column format…',
                     'stage' => 'validation',
                     'processed_rows' => $processed,
                     'total_rows' => $totalRows,
@@ -607,60 +809,62 @@ class MasterDatasetImporter
                 ], now()->addMinutes(120));
             }
 
-            // Optional local-only throttle for UI/demo validation progress visibility.
-            if ($rowSleepMicros > 0) {
-                usleep($rowSleepMicros);
-            }
-
-            foreach (self::REQUIRED_ROW_COLUMNS as $requiredColumn) {
-                $value = trim($this->getColumnValue($columns, $headerMap, $requiredColumn));
-                if ($value === '') {
-                    $errors[] = sprintf('Row %d, column %s: value is required.', (int) $excelRow, $requiredColumn);
-                    if (count($errors) >= self::MAX_ROW_ERRORS) {
-                        $maxReached = true;
-                        break 2;
-                    }
-                }
-            }
-
             $arrearsRaw = trim((string) ($columns[$arrearsLetter] ?? ''));
             if ($arrearsRaw !== '' && $arrearsRaw !== '-') {
                 $normalized = str_replace([',', ' '], '', $arrearsRaw);
                 if (! is_numeric($normalized)) {
-                    $errors[] = sprintf('Row %d, column %s: expected numeric value or "-".', (int) $excelRow, self::NEW_ARREARS_PREFIX . '*');
+                    if (count($errors) < self::MAX_ROW_ERRORS) {
+                        $errors[] = sprintf(
+                            'Row %d, column %s: expected numeric value or "-".',
+                            (int) $excelRow,
+                            self::NEW_ARREARS_PREFIX . '*'
+                        );
+                    }
+
+                    if (count($reportRows) < $maxReportRows) {
+                        $reportRows[] = [
+                            (int) $excelRow,
+                            self::NEW_ARREARS_PREFIX . '*',
+                            'INVALID_NUMBER',
+                            $arrearsRaw,
+                            '',
+                        ];
+                    }
+
                     if (count($errors) >= self::MAX_ROW_ERRORS) {
                         $maxReached = true;
-                        break;
+                        if (count($reportRows) >= $maxReportRows) {
+                            break;
+                        }
                     }
                 }
-            }
-
-            $productLabel = trim($this->getColumnValue($columns, $headerMap, 'PRODUCT_LABEL'));
-
-            if ($productLabel !== '') {
-                $key = strtolower($productLabel);
-                if (isset($seenCompositeKey[$key])) {
-                    $errors[] = sprintf(
-                        'Row %d, column PRODUCT_LABEL: duplicate value already found at row %d.',
-                        (int) $excelRow,
-                        (int) $seenCompositeKey[$key]
-                    );
-
-                    if (count($errors) >= self::MAX_ROW_ERRORS) {
-                        $maxReached = true;
-                        break;
-                    }
-                } else {
-                    $seenCompositeKey[$key] = (int) $excelRow;
-                }
-            }
-
-            if ($maxReached) {
-                break;
             }
         }
 
         if (! empty($errors)) {
+            if ($reportRelativePath) {
+                try {
+                    $disk->makeDirectory(dirname($reportRelativePath));
+
+                    $fh = fopen('php://temp', 'w+');
+                    if ($fh !== false) {
+                        fputcsv($fh, ['excel_row', 'column', 'error_code', 'value', 'first_seen_row']);
+                        foreach ($reportRows as $row) {
+                            fputcsv($fh, $row);
+                        }
+                        rewind($fh);
+                        $csv = stream_get_contents($fh);
+                        fclose($fh);
+
+                        if (is_string($csv)) {
+                            $disk->put($reportRelativePath, $csv);
+                        }
+                    }
+                } catch (Throwable) {
+                    // ignore report-writing failures; validation errors still surface
+                }
+            }
+
             if ($cacheKey) {
                 Cache::put($cacheKey, [
                     'status' => 'failed',
@@ -672,6 +876,8 @@ class MasterDatasetImporter
                     'started_at' => time(),
                     'last_updated_at' => now()->toIso8601String(),
                     'errors' => $errors,
+                    'validation_report_path' => $reportRelativePath,
+                    'validation_report_disk' => $diskName,
                 ], now()->addMinutes(120));
             }
 
@@ -683,20 +889,6 @@ class MasterDatasetImporter
                 'upload' => $errors,
             ]);
         }
-    }
-
-    private function validationLoopSleepMicros(): int
-    {
-        if (! app()->environment('local')) {
-            return 0;
-        }
-
-        $value = (int) env('MASTER_VALIDATION_ROW_SLEEP_US', 0);
-        if ($value <= 0) {
-            return 0;
-        }
-
-        return min($value, 1_000_000);
     }
 
     private function databaseStatistics(MasterDatasetProcess $process): array

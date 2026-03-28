@@ -23,6 +23,7 @@ class ProcessExclusionUpload implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     private const FAILURE_CACHE_TTL_SECONDS = 7200;
+    private const VALIDATION_REPORT_CACHE_PREFIX = 'master.dataset.validation_report.';
     public int $timeout = 3600;
     public int $tries = 1;
 
@@ -130,11 +131,37 @@ class ProcessExclusionUpload implements ShouldQueue
             }
         }
 
+        $token = (string) ($process->token ?? '');
+        $disk = (string) ($process->storage_disk ?: config('filesystems.default', 'local'));
+        $reportRelativePath = $token !== ''
+            ? 'validation-reports/master/' . $token . '/master-validation-errors.csv'
+            : null;
+
+        $reportExists = false;
+        if ($reportRelativePath) {
+            try {
+                $reportExists = Storage::disk($disk)->exists($reportRelativePath);
+            } catch (Throwable) {
+                $reportExists = false;
+            }
+        }
+
+        // Use a relative URL so it works regardless of APP_URL/port.
+        $reportDownloadUrl = ($token !== '' && $reportExists)
+            ? route('master.validation.report.download', ['token' => $token], false)
+            : null;
+
         return [
             'master_file' => basename((string) ($process->master_archive_path ?: 'master archive')),
             'master_errors' => array_slice($masterErrors, 0, 20),
             'exclusion_errors' => array_slice($exclusionErrors, 0, 20),
             'general_errors' => array_slice($generalErrors, 0, 20),
+            'token' => $token,
+            'validation_report' => $reportRelativePath && $reportDownloadUrl ? [
+                'disk' => $disk,
+                'path' => $reportRelativePath,
+                'download_url' => $reportDownloadUrl,
+            ] : null,
             'created_at' => now()->toIso8601String(),
         ];
     }
@@ -151,6 +178,21 @@ class ProcessExclusionUpload implements ShouldQueue
             $payload,
             now()->addSeconds(self::FAILURE_CACHE_TTL_SECONDS)
         );
+
+        $token = (string) ($payload['token'] ?? '');
+        $report = $payload['validation_report'] ?? null;
+
+        if ($token !== '' && is_array($report) && ! empty($report['path']) && ! empty($report['disk'])) {
+            Cache::put(
+                self::VALIDATION_REPORT_CACHE_PREFIX . $token,
+                [
+                    'user_id' => $userId,
+                    'disk' => (string) $report['disk'],
+                    'path' => (string) $report['path'],
+                ],
+                now()->addSeconds(self::FAILURE_CACHE_TTL_SECONDS)
+            );
+        }
     }
 
     private function purgeFailedProcess(MasterDatasetProcess $process): void

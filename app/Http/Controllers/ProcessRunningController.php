@@ -30,6 +30,10 @@ class ProcessRunningController extends Controller
             return redirect()->route('process.assignments.index');
         }
 
+        if ($process->status === MasterDatasetProcessStatus::EXPORTS_PENDING) {
+            return redirect()->route('process.assignments.index');
+        }
+
         if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
             return redirect()->route('process.confirm.create');
         }

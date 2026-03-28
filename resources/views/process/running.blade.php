@@ -75,7 +75,7 @@
                     return;
                 }
 
-                if (payload.status === 'ready') {
+                if (payload.status === 'ready' || payload.status === 'exports_pending') {
                     redirecting = true;
                     if (elapsedTimer) {
                         window.clearInterval(elapsedTimer);

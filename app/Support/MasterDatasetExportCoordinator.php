@@ -8,6 +8,7 @@ use App\Models\DatasetExport;
 use App\Models\MasterDatasetProcess;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\QueryException;
 use Throwable;
 use App\Support\MasterDatasetProcessStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -49,19 +50,32 @@ class MasterDatasetExportCoordinator
             $record = $existing->get($bucket);
 
             if (! $record) {
-                $record = DatasetExport::create([
-                    'token' => $process->token,
-                    'group' => $meta['group'],
-                    'bucket' => $bucket,
-                    'label' => $label,
-                    'filename' => $filename,
-                    'file_path' => $path,
-                    'file_disk' => $diskName,
-                    'status' => 'processing',
-                    'user_id' => $context['id'],
-                    'user_name' => $context['name'],
-                    'meta' => [],
-                ]);
+                try {
+                    $record = DatasetExport::create([
+                        'token' => $process->token,
+                        'group' => $meta['group'],
+                        'bucket' => $bucket,
+                        'label' => $label,
+                        'filename' => $filename,
+                        'file_path' => $path,
+                        'file_disk' => $diskName,
+                        'status' => 'processing',
+                        'user_id' => $context['id'],
+                        'user_name' => $context['name'],
+                        'meta' => [],
+                    ]);
+                } catch (QueryException $exception) {
+                    // Another request may have created the row concurrently.
+                    $record = DatasetExport::query()
+                        ->where('token', $process->token)
+                        ->where('bucket', $bucket)
+                        ->orderByDesc('id')
+                        ->first();
+
+                    if (! $record) {
+                        throw $exception;
+                    }
+                }
                 $shouldDispatch = true;
             } else {
                 $updates = [];

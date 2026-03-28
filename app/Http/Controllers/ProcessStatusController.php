@@ -8,6 +8,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProcessStatusController extends Controller
@@ -109,7 +111,7 @@ class ProcessStatusController extends Controller
         $process = $this->resolveTrackedProcess($request);
 
         if (! $process) {
-            \Log::warning("STATUS CONTROLLER: No process_id in session");
+            Log::warning('STATUS CONTROLLER: No process_id in session');
             return [[
                 'status' => null,
                 'stages' => [],
@@ -146,7 +148,7 @@ class ProcessStatusController extends Controller
         }
 
         if (! $freshStatus) {
-            \Log::warning("STATUS CONTROLLER: Process {$processId} has no status");
+            Log::warning("STATUS CONTROLLER: Process {$processId} has no status");
             return [[
                 'status' => null,
             ], 404];
@@ -181,7 +183,7 @@ class ProcessStatusController extends Controller
             }
         }
 
-        \Log::info("STATUS RESPONSE: Process {$processId} => {$freshStatus} => {$percentage}% (last={$last})");
+        Log::info("STATUS RESPONSE: Process {$processId} => {$freshStatus} => {$percentage}% (last={$last})");
 
         $message = MasterDatasetProcessStatus::getFriendlyName($freshStatus);
         if ($freshStatus === MasterDatasetProcessStatus::FAILED && ! empty($process->failure_reason)) {
@@ -195,6 +197,26 @@ class ProcessStatusController extends Controller
         $processedRows = null;
         $totalRows = null;
         $token = (string) ($process->token ?? '');
+
+        if ($freshStatus === MasterDatasetProcessStatus::PYTHON_RUNNING) {
+            $pythonState = $this->readPythonStatus($process);
+            if (is_array($pythonState)) {
+                $pythonMessage = $pythonState['message'] ?? null;
+                if (is_string($pythonMessage) && trim($pythonMessage) !== '') {
+                    $message = trim($pythonMessage);
+                }
+
+                $progress = $pythonState['progress'] ?? null;
+                if (is_array($progress)) {
+                    $p = $progress['processed_rows'] ?? null;
+                    $t = $progress['total_rows'] ?? null;
+                    if (is_numeric($p) && is_numeric($t)) {
+                        $processedRows = (int) $p;
+                        $totalRows = (int) $t;
+                    }
+                }
+            }
+        }
 
         // Use stage-aware token selection:
         // - Master pipeline phases read progress from master token
@@ -233,15 +255,21 @@ class ProcessStatusController extends Controller
                 $message = trim($cacheState['message']);
             }
 
-            [$processedRows, $totalRows] = $this->resolveRowProgress($token);
+            // For python_running we prefer python-status.json above; otherwise use cache.
+            if (! ($freshStatus === MasterDatasetProcessStatus::PYTHON_RUNNING && $processedRows !== null && $totalRows !== null)) {
+                [$processedRows, $totalRows] = $this->resolveRowProgress($token);
+            }
 
             if ($processedRows !== null && $totalRows !== null && $totalRows > 0) {
-                $currentMessage = ($freshStatus === MasterDatasetProcessStatus::VALIDATING)
-                    ? 'Validating master dataset…'
-                    : $message;
+                $currentMessage = $message;
 
                 if (in_array($freshStatus, $rowAwareStatuses, true)) {
-                    $message = sprintf('%s (%d/%d rows checked...)', $currentMessage, $processedRows, $totalRows);
+                    $suffix = 'rows checked...';
+                    if ($freshStatus === MasterDatasetProcessStatus::PYTHON_RUNNING) {
+                        $suffix = 'rows processed...';
+                    }
+
+                    $message = sprintf('%s (%d/%d %s)', $currentMessage, $processedRows, $totalRows, $suffix);
                 }
             }
         }
@@ -252,7 +280,7 @@ class ProcessStatusController extends Controller
         }
 
         $debugInfo['cache_state'] = $cacheState;
-        \Log::info('ProcessStatusController DEBUG', $debugInfo);
+        Log::info('ProcessStatusController DEBUG', $debugInfo);
 
         $redirectUrl = null;
         if ($freshStatus === MasterDatasetProcessStatus::READY) {
@@ -269,6 +297,29 @@ class ProcessStatusController extends Controller
             'started_at' => $startedAt,
             'last_updated_at' => $process->updated_at?->toIso8601String(),
         ], 200];
+    }
+
+    private function readPythonStatus(MasterDatasetProcess $process): ?array
+    {
+        $path = (string) ($process->python_status_path ?? '');
+        if ($path === '') {
+            return null;
+        }
+
+        $diskName = (string) ($process->storage_disk ?: config('filesystems.default', 'local'));
+
+        try {
+            if (! Storage::disk($diskName)->exists($path)) {
+                return null;
+            }
+
+            $raw = Storage::disk($diskName)->get($path);
+            $decoded = json_decode((string) $raw, true);
+
+            return is_array($decoded) ? $decoded : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

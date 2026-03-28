@@ -46,7 +46,11 @@ class AssignmentController extends Controller
             return redirect()->route('process.confirm.create');
         }
 
-        if ($process->status !== MasterDatasetProcessStatus::READY && $process->status !== MasterDatasetProcessStatus::FAILED) {
+        if (! in_array($process->status, [
+            MasterDatasetProcessStatus::EXPORTS_PENDING,
+            MasterDatasetProcessStatus::READY,
+            MasterDatasetProcessStatus::FAILED,
+        ], true)) {
             return redirect()->route('process.running.show');
         }
 
@@ -262,6 +266,7 @@ class AssignmentController extends Controller
                 }
 
                 Storage::disk($disk)->deleteDirectory('exports/' . $token);
+                Storage::disk($disk)->deleteDirectory('validation-reports/master/' . $token);
                 Storage::disk($disk)->deleteDirectory('exclusions/' . $process->id);
 
                 if ($process->master_archive_path) {
@@ -330,6 +335,7 @@ class AssignmentController extends Controller
                     }
 
                     Storage::disk($disk)->deleteDirectory('exports/' . $token);
+                    Storage::disk($disk)->deleteDirectory('validation-reports/master/' . $token);
                     Storage::disk($disk)->deleteDirectory('exclusions/' . $process->id);
 
                     if ($process->master_archive_path) {
@@ -451,21 +457,38 @@ class AssignmentController extends Controller
     private function reportGroups(): Collection
     {
         $items = MasterDatasetProcess::with(['exports', 'user'])
-            ->where('status', MasterDatasetProcessStatus::READY)
+            ->whereIn('status', [
+                MasterDatasetProcessStatus::EXPORTS_PENDING,
+                MasterDatasetProcessStatus::READY,
+                MasterDatasetProcessStatus::FAILED,
+            ])
             ->get();
 
-        // Sort each process by its run date (or created_at) descending so newest appear first
+        // Sort by process creation time so the most recently generated runs appear first.
+        // Note: run_date represents a workbook/business timestamp and can be older than the
+        // actual processing time, which would incorrectly push new runs to the bottom.
         $sorted = $items->sortByDesc(function (MasterDatasetProcess $item) {
-            $reference = $item->run_date ?? $item->created_at ?? now();
+            $reference = $item->created_at ?? now();
             return Carbon::parse($reference)->getTimestamp();
         });
 
         // Group by month label (e.g. "December 2025")
         $grouped = $sorted->groupBy(function (MasterDatasetProcess $item) {
-            $reference = $item->run_date ?? $item->dataset_month ?? $item->created_at ?? now();
-            $date = Carbon::parse($reference)->startOfMonth();
+            if ($item->run_date) {
+                $date = Carbon::parse($item->run_date);
+            } elseif ($item->dataset_month) {
+                // dataset_month is stored as YYYYMM; Carbon::parse('202601') resolves to "now".
+                // Parse explicitly to keep grouping/filtering correct.
+                try {
+                    $date = Carbon::createFromFormat('Ym', (string) $item->dataset_month);
+                } catch (\Throwable) {
+                    $date = Carbon::parse($item->created_at ?? now());
+                }
+            } else {
+                $date = Carbon::parse($item->created_at ?? now());
+            }
 
-            return $date->format('F Y');
+            return $date->startOfMonth()->format('F Y');
         });
 
         // Ensure the month groups themselves are ordered newest-first

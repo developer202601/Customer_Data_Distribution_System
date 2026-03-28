@@ -97,13 +97,34 @@
                             <tbody>
                                 @forelse($filteredProcesses as $processRow)
                                 @php
-                                    $datasetLabel = $processRow->dataset_month ? Carbon::parse($processRow->dataset_month . '-01')->format('M Y') : 'Manual upload';
-                                    $generatedAt = $processRow->run_date ? Carbon::parse($processRow->run_date)->format('d M Y – H:i') : $processRow->created_at->format('d M Y – H:i');
-                                    $statusLabel = ucfirst($processRow->status ?? 'ready');
-                                    $badgeColor = $processRow->status === 'failed' ? 'danger' : 'success';
+                                    $datasetLabel = 'Manual upload';
+                                    if ($processRow->dataset_month) {
+                                        try {
+                                            $datasetLabel = Carbon::createFromFormat('Ym', (string) $processRow->dataset_month)->format('M Y');
+                                        } catch (\Throwable) {
+                                            $datasetLabel = (string) $processRow->dataset_month;
+                                        }
+                                    }
+
+                                    // "Generated at" represents when this run was created in CDDS,
+                                    // not the workbook's internal run_date.
+                                    $generatedAt = $processRow->created_at
+                                        ? $processRow->created_at->format('d M Y – H:i')
+                                        : Carbon::now()->format('d M Y – H:i');
+                                    $statusRaw = (string) ($processRow->status ?? 'ready');
+                                    $statusLabel = match ($statusRaw) {
+                                        'exports_pending' => 'Generating exports',
+                                        default => ucfirst(str_replace('_', ' ', $statusRaw)),
+                                    };
+                                    $badgeColor = match ($statusRaw) {
+                                        'failed' => 'danger',
+                                        'ready' => 'success',
+                                        'exports_pending' => 'warning',
+                                        default => 'secondary',
+                                    };
                                     $generatorName = $processRow->user?->username ?? $processRow->user_name ?? 'System';
-                                    $isContinuable = ! in_array(($processRow->status ?? 'ready'), ['ready', 'failed'], true);
-                                    $actionLabel = $isContinuable ? 'Continue' : 'View assignments';
+                                    $isContinuable = ! in_array($statusRaw, ['ready', 'failed'], true);
+                                    $actionLabel = $statusRaw === 'exports_pending' ? 'View assignments' : ($isContinuable ? 'Continue' : 'View assignments');
                                 @endphp
                                 <tr class="report-row-selectable">
                                     @if(session('user.is_admin'))

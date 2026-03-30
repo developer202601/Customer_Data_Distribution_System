@@ -125,18 +125,16 @@ jobs:
             fi
 
             ORIGINAL_REMOTE_URL="$(git remote get-url origin)"
+            trap 'git remote set-url origin "$ORIGINAL_REMOTE_URL"' EXIT
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
             git fetch origin main
             git reset --hard origin/main
 
-            if ! python3 -m pip --version >/dev/null 2>&1; then
-              echo "pip not found, installing..."
-              sudo apt update && sudo apt install -y python3-pip
-            fi
-
-            python3 -m pip install --upgrade pip
-            python3 -m pip install -r scripts/requirements-ingest.txt
-            python3 -m pip install -r scripts/requirements-validator.txt
+            python3 -m venv .venv-deploy
+            . .venv-deploy/bin/activate
+            python -m pip install --upgrade pip
+            pip install -r scripts/requirements-ingest.txt
+            pip install -r scripts/requirements-validator.txt
             
             composer install --no-interaction --prefer-dist --optimize-autoloader
             npm ci
@@ -149,4 +147,3 @@ jobs:
             sudo -n /usr/bin/systemctl is-active php-fpm
             sudo -n /usr/bin/systemctl is-active nginx
             sudo -n /usr/bin/systemctl is-active cdds-queue-exports.service
-            git remote set-url origin "$ORIGINAL_REMOTE_URL"

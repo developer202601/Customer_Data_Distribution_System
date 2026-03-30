@@ -155,7 +155,12 @@ jobs:
             php artisan optimize:clear
             sudo -n /usr/bin/systemctl restart php-fpm
             sudo -n /usr/bin/systemctl restart nginx
-            sudo -n /usr/bin/systemctl restart cdds-queue-exports.service
+            if ! sudo -n /usr/bin/systemctl restart cdds-queue-exports.service; then
+              echo "WARNING: Could not restart cdds-queue-exports.service on target host."
+              echo "WARNING: Verify queue service name/sudo policy on server."
+            fi
             sudo -n /usr/bin/systemctl is-active php-fpm
             sudo -n /usr/bin/systemctl is-active nginx
-            sudo -n /usr/bin/systemctl is-active cdds-queue-exports.service
+            if ! sudo -n /usr/bin/systemctl is-active cdds-queue-exports.service; then
+              echo "WARNING: cdds-queue-exports.service is not active after deploy."
+            fi

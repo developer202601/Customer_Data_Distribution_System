@@ -131,14 +131,12 @@ jobs:
             git reset --hard origin/main
 
             if python3 -m venv .venv-deploy >/dev/null 2>&1; then
-              set +e
               . .venv-deploy/bin/activate
-              python -m pip install --upgrade pip
-              pip install -r scripts/requirements-ingest.txt
-              PIP_INGEST_STATUS=$?
-              pip install -r scripts/requirements-validator.txt
-              PIP_VALIDATOR_STATUS=$?
-              set -e
+              python -m pip install --upgrade pip || true
+              PIP_INGEST_STATUS=0
+              pip install -r scripts/requirements-ingest.txt || PIP_INGEST_STATUS=1
+              PIP_VALIDATOR_STATUS=0
+              pip install -r scripts/requirements-validator.txt || PIP_VALIDATOR_STATUS=1
 
               if [ "$PIP_INGEST_STATUS" -ne 0 ] || [ "$PIP_VALIDATOR_STATUS" -ne 0 ]; then
                 echo "WARNING: Python dependency install failed (likely Python version mismatch)."

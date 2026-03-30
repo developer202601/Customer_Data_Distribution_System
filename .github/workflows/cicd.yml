@@ -136,6 +136,7 @@ jobs:
               PYTHON_BIN="python3"
             fi
 
+            rm -rf .venv-deploy
             if $PYTHON_BIN -m venv .venv-deploy >/dev/null 2>&1; then
               . .venv-deploy/bin/activate
               python -m pip install --upgrade pip || true

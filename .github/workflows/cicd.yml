@@ -153,14 +153,22 @@ jobs:
             npm run build
             php artisan migrate --force
             php artisan optimize:clear
-            sudo -n /usr/bin/systemctl restart php-fpm
-            sudo -n /usr/bin/systemctl restart nginx
+            if ! sudo -n /usr/bin/systemctl restart php-fpm; then
+              echo "WARNING: Could not restart php-fpm on target host."
+            fi
+            if ! sudo -n /usr/bin/systemctl restart nginx; then
+              echo "WARNING: Could not restart nginx on target host."
+            fi
             if ! sudo -n /usr/bin/systemctl restart cdds-queue-exports.service; then
               echo "WARNING: Could not restart cdds-queue-exports.service on target host."
               echo "WARNING: Verify queue service name/sudo policy on server."
             fi
-            sudo -n /usr/bin/systemctl is-active php-fpm
-            sudo -n /usr/bin/systemctl is-active nginx
+            if ! sudo -n /usr/bin/systemctl is-active php-fpm; then
+              echo "WARNING: php-fpm is not active after deploy."
+            fi
+            if ! sudo -n /usr/bin/systemctl is-active nginx; then
+              echo "WARNING: nginx is not active after deploy."
+            fi
             if ! sudo -n /usr/bin/systemctl is-active cdds-queue-exports.service; then
               echo "WARNING: cdds-queue-exports.service is not active after deploy."
             fi

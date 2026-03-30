@@ -12,6 +12,7 @@
         "laravel/socialite": "^5.25",
         "laravel/tinker": "^2.10.1",
         "maatwebsite/excel": "^3.1",
+        "openspout/openspout": "^4.28",
         "socialiteproviders/microsoft-azure": "^5.2"
     },
     "require-dev": {

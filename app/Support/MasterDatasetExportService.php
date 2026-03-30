@@ -2,6 +2,11 @@
 
 namespace App\Support;
 
+use OpenSpout\Writer\XLSX\Writer as SpoutXlsxWriter;
+use OpenSpout\Writer\CSV\Writer as SpoutCsvWriter;
+use OpenSpout\Writer\WriterInterface as SpoutWriterInterface;
+use OpenSpout\Common\Entity\Row as SpoutRow;
+use OpenSpout\Common\Entity\Cell as SpoutCell;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -13,6 +18,138 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MasterDatasetExportService
 {
+        /**
+     * Store export to disk using Spout for large datasets (XLSX or CSV).
+     *
+     * @param MasterDatasetProcess $process
+     * @param string $label
+     * @param Builder $query
+     * @param Filesystem $disk
+     * @param string $path
+     * @param string $format 'xlsx' or 'csv'
+     */
+    public function storeToDiskWithSpout(
+        MasterDatasetProcess $process,
+        string $label,
+        Builder $query,
+        Filesystem $disk,
+        string $path,
+        string $format = 'xlsx'
+    ): void {
+        $columns = $this->exportColumnsWithArrearsLabel($query);
+        $headerRow = array_values($columns);
+        $activeColumns = array_keys($columns);
+        $selectColumns = array_filter($activeColumns, fn ($column) => $column !== 'dataset_month');
+        if (!in_array('id', $selectColumns, true)) {
+            $selectColumns[] = 'id';
+        }
+        $chunkSize = 2000;
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'export_');
+        if ($tempFile === false) {
+            throw new RuntimeException('Unable to allocate temporary storage while generating the export workbook.');
+        }
+
+        /** @var SpoutWriterInterface $writer */
+        if ($format === 'csv') {
+            $writer = new SpoutCsvWriter();
+        } else {
+            $writer = new SpoutXlsxWriter();
+        }
+        $writer->openToFile($tempFile);
+        $writer->addRow(SpoutRow::fromValues($headerRow));
+
+        $dataQuery = (clone $query);
+        if (!empty($selectColumns)) {
+            $dataQuery = $dataQuery->select($selectColumns);
+        }
+
+        $dataQuery->chunkById($chunkSize, function ($rows) use ($writer, $process, $activeColumns) {
+            foreach ($rows as $row) {
+                $rowData = [];
+                foreach ($activeColumns as $attribute) {
+                    $rowData[] = $this->formatValue($process, $row, $attribute);
+                }
+                $writer->addRow(SpoutRow::fromValues($rowData));
+            }
+        });
+
+        $writer->close();
+
+        $directory = trim(dirname($path), '/');
+        if ($directory !== '' && $directory !== '.') {
+            $disk->makeDirectory($directory);
+        }
+
+        $stream = fopen($tempFile, 'rb');
+        if ($stream === false) {
+            @unlink($tempFile);
+            throw new RuntimeException('Unable to read the temporary export workbook.');
+        }
+
+        try {
+            if (! $disk->put($path, $stream)) {
+                throw new RuntimeException('Failed to persist the export workbook to storage.');
+            }
+        } finally {
+            fclose($stream);
+            @unlink($tempFile);
+        }
+    }
+    /**
+     * Stream export using Spout for large datasets (XLSX or CSV).
+     *
+     * @param MasterDatasetProcess $process
+     * @param string $filename
+     * @param Builder $query
+     * @param string $format 'xlsx' or 'csv'
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse
+     */
+    public function streamWithSpout(MasterDatasetProcess $process, string $filename, Builder $query, string $format = 'xlsx'): StreamedResponse
+    {
+        $columns = $this->exportColumnsWithArrearsLabel($query);
+        $headerRow = array_values($columns);
+        $activeColumns = array_keys($columns);
+        $selectColumns = array_filter($activeColumns, fn ($column) => $column !== 'dataset_month');
+        if (!in_array('id', $selectColumns, true)) {
+            $selectColumns[] = 'id';
+        }
+
+        $chunkSize = 2000;
+
+        return response()->streamDownload(function () use ($process, $query, $selectColumns, $headerRow, $activeColumns, $chunkSize, $format) {
+            /** @var SpoutWriterInterface $writer */
+            if ($format === 'csv') {
+                $writer = new SpoutCsvWriter();
+            } else {
+                $writer = new SpoutXlsxWriter();
+            }
+            $writer->openToOutput();
+            $writer->addRow(SpoutRow::fromValues($headerRow));
+
+            $dataQuery = (clone $query);
+            if (!empty($selectColumns)) {
+                $dataQuery = $dataQuery->select($selectColumns);
+            }
+
+            $dataQuery->chunkById($chunkSize, function ($rows) use ($writer, $process, $activeColumns) {
+                foreach ($rows as $row) {
+                    $rowData = [];
+                    foreach ($activeColumns as $attribute) {
+                        $rowData[] = $this->formatValue($process, $row, $attribute);
+                    }
+                    $writer->addRow(SpoutRow::fromValues($rowData));
+                }
+            });
+
+            $writer->close();
+        }, $filename, [
+            'Content-Type' => $format === 'csv'
+                ? 'text/csv'
+                : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+    
     private const EXPORT_COLUMNS = [
         'run_date_raw' => 'RUN_DATE',
         'dataset_month' => 'DATASET_MONTH',

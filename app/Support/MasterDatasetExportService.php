@@ -7,6 +7,7 @@ use OpenSpout\Writer\CSV\Writer as SpoutCsvWriter;
 use OpenSpout\Writer\WriterInterface as SpoutWriterInterface;
 use OpenSpout\Common\Entity\Row as SpoutRow;
 use OpenSpout\Common\Entity\Cell as SpoutCell;
+use OpenSpout\Reader\CSV\Reader as SpoutCsvReader;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -124,7 +125,7 @@ class MasterDatasetExportService
             } else {
                 $writer = new SpoutXlsxWriter();
             }
-            $writer->openToOutput();
+            $writer->openToFile('php://output');
             $writer->addRow(SpoutRow::fromValues($headerRow));
 
             $dataQuery = (clone $query);
@@ -148,6 +149,73 @@ class MasterDatasetExportService
                 ? 'text/csv'
                 : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
+    }
+
+    public function streamCsvAsXlsx(
+        Filesystem $disk,
+        string $csvPath,
+        string $downloadName
+    ): StreamedResponse {
+        [$localPath, $cleanup] = $this->resolveLocalCsvPath($disk, $csvPath);
+
+        return response()->streamDownload(function () use ($localPath, $cleanup) {
+            $reader = new SpoutCsvReader();
+            $writer = new SpoutXlsxWriter();
+
+            $reader->open($localPath);
+            $writer->openToFile('php://output');
+
+            try {
+                foreach ($reader->getSheetIterator() as $sheet) {
+                    foreach ($sheet->getRowIterator() as $row) {
+                        $writer->addRow($row);
+                    }
+                }
+            } finally {
+                $writer->close();
+                $reader->close();
+
+                if ($cleanup && is_file($localPath)) {
+                    @unlink($localPath);
+                }
+            }
+        }, $downloadName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    private function resolveLocalCsvPath(Filesystem $disk, string $csvPath): array
+    {
+        if (method_exists($disk, 'path')) {
+            $candidate = $disk->path($csvPath);
+            if (is_string($candidate) && is_file($candidate)) {
+                return [$candidate, false];
+            }
+        }
+
+        $stream = $disk->readStream($csvPath);
+        if ($stream === false) {
+            throw new RuntimeException('Unable to read the CSV export from storage.');
+        }
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'export_csv_');
+        if ($tempFile === false) {
+            fclose($stream);
+            throw new RuntimeException('Unable to allocate a temporary CSV export file.');
+        }
+
+        $tempHandle = fopen($tempFile, 'wb');
+        if ($tempHandle === false) {
+            fclose($stream);
+            @unlink($tempFile);
+            throw new RuntimeException('Unable to prepare a temporary CSV export file.');
+        }
+
+        stream_copy_to_stream($stream, $tempHandle);
+        fclose($stream);
+        fclose($tempHandle);
+
+        return [$tempFile, true];
     }
     
     private const EXPORT_COLUMNS = [

@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class MasterDatasetExportCoordinator
 {
+    private const STORAGE_FORMAT = 'csv';
     private const EXPORT_BUCKETS = [
         'call-center-staff' => ['group' => 'group-a'],
         'call-center' => ['group' => 'group-a'],
@@ -43,7 +44,7 @@ class MasterDatasetExportCoordinator
 
         foreach (self::EXPORT_BUCKETS as $bucket => $meta) {
             $label = $this->viewService->bucketLabel($bucket);
-            $filename = $this->viewService->bucketFilename($bucket);
+            $filename = $this->viewService->bucketFilename($bucket, self::STORAGE_FORMAT);
             $path = $this->exportPath($process->token, $filename);
 
             $record = $existing->get($bucket);
@@ -155,7 +156,7 @@ class MasterDatasetExportCoordinator
             }
 
             $label = $this->viewService->bucketLabel($bucket);
-            $filename = $this->viewService->bucketFilename($bucket);
+            $filename = $this->viewService->bucketFilename($bucket, self::STORAGE_FORMAT);
             $path = $this->exportPath($process->token, $filename);
             $query = $this->viewService->bucketQuery($freshProcess, $bucket);
 
@@ -168,7 +169,7 @@ class MasterDatasetExportCoordinator
 
             try {
                 // Use Spout for memory-efficient export
-                $this->exportService->storeToDiskWithSpout($freshProcess, $label, $query, $disk, $path, 'xlsx');
+                $this->exportService->storeToDiskWithSpout($freshProcess, $label, $query, $disk, $path, self::STORAGE_FORMAT);
 
                 $size = $disk->size($path);
                 $hash = null;

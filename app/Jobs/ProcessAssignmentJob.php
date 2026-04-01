@@ -72,10 +72,20 @@ class ProcessAssignmentJob implements ShouldQueue
 
             MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::FAILED);
             $process->update([
-                'failure_reason' => $exception->getMessage(),
+                'failure_reason' => $this->limitFailureReason($exception->getMessage()),
             ]);
             
             throw $exception;
         }
+    }
+
+    private function limitFailureReason(string $message): string
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return 'Assignment job failed.';
+        }
+
+        return substr($message, 0, 255);
     }
 }

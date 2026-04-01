@@ -9,6 +9,7 @@ use App\Models\CallCenterReport;
 use App\Models\CallCenter\CallCenterUser;
 use App\Models\DatasetExport;
 use App\Models\User;
+use App\Support\MasterDatasetExportService;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -232,7 +233,7 @@ class ReportController extends Controller
         ]);
     }
 
-    public function download($id): StreamedResponse
+    public function download(Request $request, int $id, MasterDatasetExportService $exportService): StreamedResponse
     {
         $report = CallCenterReport::findOrFail($id);
 
@@ -242,13 +243,39 @@ class ReportController extends Controller
 
         $disk = $export->file_disk ?: config('filesystems.default', 'local');
         $path = $export->file_path;
+        $format = strtolower((string) $request->query('format', 'xlsx'));
 
-        // If file exists on disk, stream a download of the existing export file.
-        if (Storage::disk($disk)->exists($path)) {
-            return Storage::disk($disk)->download($path, $export->filename);
+        if (! in_array($format, ['csv', 'xlsx'], true)) {
+            abort(400, 'Invalid download format.');
         }
 
-        abort(404, 'Export file not found on disk.');
+        if (! Storage::disk($disk)->exists($path)) {
+            abort(404, 'Export file not found on disk.');
+        }
+
+        $storedExtension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+
+        if ($format === 'csv') {
+            if ($storedExtension === 'csv') {
+                return Storage::disk($disk)->download($path, $export->filename, [
+                    'Content-Type' => 'text/csv',
+                ]);
+            }
+
+            return Storage::disk($disk)->download($path, $export->filename, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]);
+        }
+
+        if ($storedExtension === 'csv') {
+            $downloadName = preg_replace('/\.csv$/i', '.xlsx', $export->filename) ?: 'call_center.xlsx';
+
+            return $exportService->streamCsvAsXlsx(Storage::disk($disk), $path, $downloadName);
+        }
+
+        return Storage::disk($disk)->download($path, $export->filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     public function history(): View

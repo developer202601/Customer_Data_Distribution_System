@@ -12,6 +12,7 @@ use App\Support\MasterDatasetExportCoordinator;
 use App\Support\MasterDatasetExportService;
 use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetViewService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -372,6 +373,42 @@ class AssignmentController extends Controller
         return redirect()->route('process.assignments.index');
     }
 
+    public function exportStatus(Request $request): JsonResponse
+    {
+        $process = $this->resolveProcessOrRedirect('Upload the master dataset before reviewing assignments.');
+
+        if ($process instanceof RedirectResponse) {
+            return response()->json([
+                'status' => 'missing-process',
+                'redirect_url' => route('master.upload.create'),
+            ], 409);
+        }
+
+        if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+            return response()->json([
+                'status' => MasterDatasetProcessStatus::WAITING_CONFIRMATION,
+                'redirect_url' => route('process.confirm.create'),
+            ], 409);
+        }
+
+        if (! in_array($process->status, [
+            MasterDatasetProcessStatus::EXPORTS_PENDING,
+            MasterDatasetProcessStatus::READY,
+            MasterDatasetProcessStatus::FAILED,
+        ], true)) {
+            return response()->json([
+                'status' => $process->status,
+            ], 202);
+        }
+
+        $exports = $this->exportCoordinator->ensureFresh($process);
+
+        return response()->json([
+            'status' => $process->status,
+            'exports' => $exports,
+        ]);
+    }
+
     public function download(Request $request, string $group, string $bucket): RedirectResponse|StreamedResponse
     {
         $process = $this->resolveProcessOrRedirect('Upload the master dataset before downloading assignments.');
@@ -417,12 +454,40 @@ class AssignmentController extends Controller
         $disk = Storage::disk($export->file_disk);
 
         if (! $disk->exists($export->file_path)) {
-            $export->update(['status' => 'pending']);
             $this->exportCoordinator->ensureFresh($process);
 
             return redirect()->route('process.assignments.index')->withErrors([
                 'assignments' => 'The export file is being regenerated. Please try again once it finishes.',
             ]);
+        }
+
+        $storedExtension = strtolower((string) pathinfo($export->file_path, PATHINFO_EXTENSION));
+        $defaultFormat = $storedExtension === 'csv' ? 'csv' : 'xlsx';
+        $format = strtolower((string) $request->query('format', $defaultFormat));
+
+        if (! in_array($format, ['csv', 'xlsx'], true)) {
+            return redirect()->route('process.assignments.index')->withErrors([
+                'assignments' => 'The requested download format is not supported.',
+            ]);
+        }
+
+        if ($format === 'csv') {
+            if ($storedExtension === 'csv') {
+                return $disk->download($export->file_path, $export->filename, [
+                    'Content-Type' => 'text/csv',
+                ]);
+            }
+
+            $downloadName = $this->viewService->bucketFilename($bucket, 'csv');
+            $query = $this->viewService->bucketQuery($process, $bucket);
+
+            return $this->exportService->streamWithSpout($process, $downloadName, $query, 'csv');
+        }
+
+        if ($storedExtension === 'csv') {
+            $downloadName = $this->viewService->bucketFilename($bucket, 'xlsx');
+
+            return $this->exportService->streamCsvAsXlsx($disk, $export->file_path, $downloadName);
         }
 
         return $disk->download($export->file_path, $export->filename, [

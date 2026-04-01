@@ -608,6 +608,15 @@ def main() -> int:
         write_status(args.status, status_payload)
         return 0
 
+    csv_path = str(manifest.get("master_csv_full_path") or "").strip()
+    if csv_path:
+        try:
+            Path(csv_path).parent.mkdir(parents=True, exist_ok=True)
+            df.write_csv(csv_path)
+            status_base["workbook"]["csv_path"] = csv_path
+        except Exception:
+            pass
+
     # Determine arrears + payments columns (now guaranteed present).
     arrears_candidates = [c for c in df.columns if str(c).startswith(_norm_header(arrears_prefix or "NEW_ARREARS_"))]
     arrears_col = arrears_candidates[0]

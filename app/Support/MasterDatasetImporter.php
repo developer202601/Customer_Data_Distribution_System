@@ -70,7 +70,8 @@ class MasterDatasetImporter
         if ($exception instanceof ValidationException) {
             $messages = collect($exception->errors())->flatten()->filter()->values()->all();
             if (! empty($messages)) {
-                return implode(' | ', array_slice($messages, 0, self::MAX_ROW_ERRORS));
+                $summary = implode(' | ', array_slice($messages, 0, self::MAX_ROW_ERRORS));
+                return substr($summary, 0, 255);
             }
         }
 
@@ -78,7 +79,7 @@ class MasterDatasetImporter
             return 'Duplicate PRODUCT_LABEL found. Please remove duplicates and re-upload the master file.';
         }
 
-        return $exception->getMessage();
+        return substr((string) $exception->getMessage(), 0, 255);
     }
 
     private function uploadErrorMessage(Throwable $exception): string
@@ -127,6 +128,8 @@ class MasterDatasetImporter
             'master_archive_full_path' => $process->master_archive_path ? $this->disk->path($process->master_archive_path) : null,
             'master_workbook_path' => $this->workbookPlaceholderPath($process->token),
             'master_workbook_full_path' => $workbookAbsolutePath,
+            'master_csv_path' => $this->csvPlaceholderPath($process->token),
+            'master_csv_full_path' => $disk->path($this->csvPlaceholderPath($process->token)),
             'required_columns' => self::REQUIRED_COLUMNS,
             'required_row_columns' => self::REQUIRED_ROW_COLUMNS,
             'dedupe_column' => 'PRODUCT_LABEL',
@@ -148,6 +151,11 @@ class MasterDatasetImporter
     private function workbookPlaceholderPath(string $token): string
     {
         return $this->masterSourceDirectory($token) . '/master.xlsx';
+    }
+
+    private function csvPlaceholderPath(string $token): string
+    {
+        return $this->masterSourceDirectory($token) . '/master.csv';
     }
 
     private function temporaryWorkbookPath(string $token): string

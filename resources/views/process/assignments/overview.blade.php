@@ -161,7 +161,10 @@
                 } elseif (! $ready) {
                     echo '<button type="button" class="btn btn-dark" disabled>Generating…</button>';
                 } else {
-                    echo '<a href="' . route('process.assignments.download', ['group' => $groupKey, 'bucket' => $bucket]) . '" class="btn btn-dark" data-loader-off="1">Download</a>';
+                    $csvUrl = route('process.assignments.download', ['group' => $groupKey, 'bucket' => $bucket]) . '?format=csv';
+                    $xlsxUrl = route('process.assignments.download', ['group' => $groupKey, 'bucket' => $bucket]) . '?format=xlsx';
+                    echo '<a href="' . $csvUrl . '" class="btn btn-outline-secondary" data-loader-off="1">Download CSV</a>';
+                    echo '<a href="' . $xlsxUrl . '" class="btn btn-dark" data-loader-off="1">Download XLSX</a>';
                 }
 
                 // Removed live download option per new requirement.
@@ -417,89 +420,147 @@
 @push('scripts')
 <script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('JavaScript loaded and DOMContentLoaded event fired.');
+    console.log('JavaScript loaded and DOMContentLoaded event fired.');
 
-  const container = document.getElementById('overview-results');
-  const form = document.getElementById('overview-search-form');
-  const loadingIndicator = document.getElementById('loading-indicator');
+    const container = document.getElementById('overview-results');
+    const form = document.getElementById('overview-search-form');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const exportStatusUrl = @json(route('process.assignments.exports.status'));
+    let exportButtonBlocks = Array.from(document.querySelectorAll('[data-export-buttons]'));
 
-  if (!container) {
-    console.error('Container #overview-results not found.');
-    return;
-  }
+    if (!container) {
+        console.error('Container #overview-results not found.');
+        return;
+    }
 
-  if (!form) {
-    console.error('Form #overview-search-form not found.');
-    return;
-  }
+    if (!form) {
+        console.error('Form #overview-search-form not found.');
+        return;
+    }
 
-  if (!loadingIndicator) {
-    console.error('Loading indicator #loading-indicator not found.');
-    return;
-  }
+    if (!loadingIndicator) {
+        console.error('Loading indicator #loading-indicator not found.');
+        return;
+    }
 
-  console.log('Event listeners are being attached.');
+    console.log('Event listeners are being attached.');
 
-  const fetchAndReplace = (url) => {
-    const target = new URL(url, window.location.origin);
-    console.log('Initiating AJAX request to:', target.toString());
+    const refreshExportBlocks = () => {
+        exportButtonBlocks = Array.from(document.querySelectorAll('[data-export-buttons]'));
+    };
 
-    loadingIndicator.style.display = 'block';
+    const renderButtons = (target, state) => {
+        const count = Number(target.dataset.exportCount || '0');
+        const group = target.dataset.exportGroup;
+        const bucket = target.dataset.exportBucket;
+        const csvUrl = `/process/assignments/download/${group}/${bucket}?format=csv`;
+        const xlsxUrl = `/process/assignments/download/${group}/${bucket}?format=xlsx`;
 
-    fetch(target.toString(), {
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'text/html',
-      },
-      cache: 'no-store',
-      credentials: 'same-origin',
-    })
-      .then((response) => {
-        console.log('AJAX response status:', response.status);
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
+        if (count === 0) {
+            target.innerHTML = '<span class="btn btn-outline-secondary disabled" aria-disabled="true">No export</span>';
+            return;
         }
-        return response.text();
-      })
-      .then((html) => {
-        console.log('AJAX request successful. Updating container content.');
-        container.innerHTML = html;
-        window.history.replaceState({}, '', target.toString());
-        container.scrollIntoView({ behavior: 'smooth' });
 
-        // Debugging: Log the updated container content
-        console.log('Updated container content:', container.innerHTML);
-      })
-      .catch((error) => {
-        console.error('Error during AJAX request:', error);
-      })
-      .finally(() => {
-        console.log('Hiding loading indicator.');
-        loadingIndicator.style.display = 'none';
-      });
-  };
+        if (state === 'failed') {
+            target.innerHTML = '<button type="button" class="btn btn-outline-danger" disabled>Generation failed</button>';
+            return;
+        }
 
-  container.addEventListener('click', (e) => {
-    const link = e.target.closest('a.page-link');
-    if (!link) return;
-    const href = link.getAttribute('href');
-    if (!href || href.startsWith('#')) return;
-    e.preventDefault();
-    console.log('Pagination link clicked:', href);
-    fetchAndReplace(href);
-  });
+        if (state !== 'ready') {
+            target.innerHTML = '<button type="button" class="btn btn-dark" disabled>Generating…</button>';
+            return;
+        }
 
-  form.addEventListener('submit', (e) => {
-    console.log('Form submission intercepted.');
-    e.preventDefault();
+        target.innerHTML =
+            '<a href="' + csvUrl + '" class="btn btn-outline-secondary" data-loader-off="1">Download CSV</a>' +
+            '<a href="' + xlsxUrl + '" class="btn btn-dark" data-loader-off="1">Download XLSX</a>';
+    };
 
-    const data = new FormData(form);
-    const params = new URLSearchParams(data);
-    const url = form.action + '?' + params.toString();
+    const pollExportStatus = () => {
+        if (exportButtonBlocks.length === 0) return;
 
-    console.log('Form submitted. AJAX request URL:', url);
-    fetchAndReplace(url);
-  });
+        fetch(exportStatusUrl, {
+            headers: {
+                'Accept': 'application/json',
+            },
+            cache: 'no-store',
+            credentials: 'same-origin',
+        })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((payload) => {
+                if (!payload || !payload.exports) return;
+
+                exportButtonBlocks.forEach((block) => {
+                    const bucket = block.dataset.exportBucket;
+                    const status = payload.exports[bucket] || {};
+                    const state = status.status || 'processing';
+                    renderButtons(block, state);
+                });
+            })
+            .catch(() => {});
+    };
+
+    const fetchAndReplace = (url) => {
+        const target = new URL(url, window.location.origin);
+        console.log('Initiating AJAX request to:', target.toString());
+
+        loadingIndicator.style.display = 'block';
+
+        fetch(target.toString(), {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'text/html',
+            },
+            cache: 'no-store',
+            credentials: 'same-origin',
+        })
+            .then((response) => {
+                console.log('AJAX response status:', response.status);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text();
+            })
+            .then((html) => {
+                console.log('AJAX request successful. Updating container content.');
+                container.innerHTML = html;
+                window.history.replaceState({}, '', target.toString());
+                container.scrollIntoView({ behavior: 'smooth' });
+                refreshExportBlocks();
+            })
+            .catch((error) => {
+                console.error('Error during AJAX request:', error);
+            })
+            .finally(() => {
+                console.log('Hiding loading indicator.');
+                loadingIndicator.style.display = 'none';
+            });
+    };
+
+    container.addEventListener('click', (e) => {
+        const link = e.target.closest('a.page-link');
+        if (!link) return;
+        const href = link.getAttribute('href');
+        if (!href || href.startsWith('#')) return;
+        e.preventDefault();
+        console.log('Pagination link clicked:', href);
+        fetchAndReplace(href);
+    });
+
+    form.addEventListener('submit', (e) => {
+        console.log('Form submission intercepted.');
+        e.preventDefault();
+
+        const data = new FormData(form);
+        const params = new URLSearchParams(data);
+        const url = form.action + '?' + params.toString();
+
+        console.log('Form submitted. AJAX request URL:', url);
+        fetchAndReplace(url);
+    });
+
+    pollExportStatus();
+    window.setInterval(pollExportStatus, 3000);
 });
 </script>
 @endpush

@@ -58,6 +58,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments', [AssignmentController::class, 'index'])->name('process.assignments.index');
     Route::get('/process/assignments/reports', [AssignmentController::class, 'reports'])->name('process.assignments.reports');
     Route::get('/process/assignments/report/{process}', [AssignmentController::class, 'report'])->name('process.assignments.report');
+    Route::get('/process/assignments/exports/status', [AssignmentController::class, 'exportStatus'])->name('process.assignments.exports.status');
     Route::delete('/process/assignments/reports/bulk', [AssignmentController::class, 'destroyBulk'])->name('process.assignments.destroyBulk');
     Route::delete('/process/assignments/reports/{process}', [AssignmentController::class, 'destroy'])->name('process.assignments.destroy');
     // Consolidated into overview; group-specific pages removed

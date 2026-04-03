@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\ProcessCanceledException;
 use App\Models\MasterDatasetProcess;
 use App\Support\MasterDatasetExportCoordinator;
 use App\Support\MasterDatasetProcessStatus;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile as IlluminateUploadedFile;
@@ -24,8 +26,14 @@ class ProcessExclusionUpload implements ShouldQueue
 
     private const FAILURE_CACHE_TTL_SECONDS = 7200;
     private const VALIDATION_REPORT_CACHE_PREFIX = 'master.dataset.validation_report.';
+    private const QUEUE_STATUS_CACHE_PREFIX = 'master:ingest:queue:';
+    private const DURATION_CACHE_KEY = 'master:ingest:durations';
+    private const DURATION_CACHE_MAX = 20;
+    private const MAX_CONCURRENT_INGESTS = 2;
+    private const QUEUE_RETRY_DELAY = 30;
+    private const LOCK_TTL_SECONDS = 10800;
     public int $timeout = 3600;
-    public int $tries = 1;
+    public int $tries = 10;
 
     /**
      * @param array<int, array{name: string, path: string, mime: string|null}> $files
@@ -43,12 +51,29 @@ class ProcessExclusionUpload implements ShouldQueue
         ini_set('max_execution_time', 0);
         $process = MasterDatasetProcess::find($this->processId);
 
+        $queueName = $this->queue ?: config('queue.exports_queue', 'exports');
+        $lock = null;
+        $startedAt = null;
+        $shouldCleanup = true;
+
         if (! $process) {
             Log::warning("Process {$this->processId} no longer exists when running exclusions job.");
             $this->cleanup();
 
             return;
         }
+
+        $slot = $this->acquireIngestLock();
+        if (! $slot) {
+            $this->publishQueueStatus($process->id, $queueName);
+            $shouldCleanup = false;
+            $this->release(self::QUEUE_RETRY_DELAY);
+            return;
+        }
+
+        [$lock] = $slot;
+        $this->clearQueueStatus($process->id);
+        $startedAt = microtime(true);
 
         $uploadedFiles = [];
 
@@ -81,6 +106,18 @@ class ProcessExclusionUpload implements ShouldQueue
             } else {
                 Log::warning('No exclusion files remained by the time the job ran.');
             }
+        } catch (ProcessCanceledException $exception) {
+            Log::info('Exclusion job canceled by user.', [
+                'process_id' => $this->processId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            if ($process) {
+                MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::CANCELED);
+                $process->update([
+                    'failure_reason' => $exception->getMessage() ?: 'Dataset processing canceled by user.',
+                ]);
+            }
         } catch (Throwable $exception) {
             Log::error('Exclusion job failed: ' . $exception->getMessage(), [
                 'process_id' => $this->processId,
@@ -95,8 +132,90 @@ class ProcessExclusionUpload implements ShouldQueue
 
             throw $exception;
         } finally {
-            $this->cleanup();
+            if ($lock) {
+                $lock->release();
+            }
+
+            if ($startedAt !== null) {
+                $this->recordIngestDuration($startedAt);
+            }
+
+            if ($shouldCleanup) {
+                $this->cleanup();
+            }
         }
+    }
+
+    private function acquireIngestLock(): ?array
+    {
+        for ($slot = 1; $slot <= self::MAX_CONCURRENT_INGESTS; $slot++) {
+            $lock = Cache::lock('master:ingest:slot:' . $slot, self::LOCK_TTL_SECONDS);
+            if ($lock->get()) {
+                return [$lock, $slot];
+            }
+        }
+
+        return null;
+    }
+
+    private function publishQueueStatus(int $processId, string $queueName): void
+    {
+        $pending = DB::table('jobs')
+            ->where('queue', $queueName)
+            ->whereNull('reserved_at')
+            ->where('available_at', '<=', time())
+            ->where('payload', 'like', '%ProcessExclusionUpload%')
+            ->count();
+
+        $position = max(1, (int) $pending + 1);
+        $avgDuration = $this->averageIngestDuration();
+        $etaSeconds = $avgDuration ? (int) (ceil($position / self::MAX_CONCURRENT_INGESTS) * $avgDuration) : null;
+
+        Cache::put(self::QUEUE_STATUS_CACHE_PREFIX . $processId, [
+            'position' => $position,
+            'eta_seconds' => $etaSeconds,
+            'updated_at' => now()->toIso8601String(),
+        ], now()->addMinutes(30));
+    }
+
+    private function clearQueueStatus(int $processId): void
+    {
+        Cache::forget(self::QUEUE_STATUS_CACHE_PREFIX . $processId);
+    }
+
+    private function averageIngestDuration(): ?int
+    {
+        $durations = Cache::get(self::DURATION_CACHE_KEY, []);
+        if (! is_array($durations) || empty($durations)) {
+            return null;
+        }
+
+        $values = array_filter($durations, static fn($value) => is_numeric($value) && (int) $value > 0);
+        if (empty($values)) {
+            return null;
+        }
+
+        return (int) round(array_sum($values) / count($values));
+    }
+
+    private function recordIngestDuration(float $startedAt): void
+    {
+        $duration = (int) round(microtime(true) - $startedAt);
+        if ($duration <= 0) {
+            return;
+        }
+
+        $durations = Cache::get(self::DURATION_CACHE_KEY, []);
+        if (! is_array($durations)) {
+            $durations = [];
+        }
+
+        $durations[] = $duration;
+        if (count($durations) > self::DURATION_CACHE_MAX) {
+            $durations = array_slice($durations, -self::DURATION_CACHE_MAX);
+        }
+
+        Cache::put(self::DURATION_CACHE_KEY, $durations, now()->addDays(7));
     }
 
     private function buildFailurePayload(MasterDatasetProcess $process, Throwable $exception): array
@@ -231,7 +350,17 @@ class ProcessExclusionUpload implements ShouldQueue
             return;
         }
 
-        $message = trim((string) ($exception?->getMessage() ?? 'Exclusion processing failed.'));
+        if ($process->status === MasterDatasetProcessStatus::CANCELED) {
+            $this->cleanup();
+            return;
+        }
+
+        if ($process->status === MasterDatasetProcessStatus::CANCELED) {
+            $this->cleanup();
+            return;
+        }
+
+        $message = $this->limitFailureReason((string) ($exception?->getMessage() ?? 'Exclusion processing failed.'));
         $wrapped = ValidationException::withMessages([
             'exclusions' => [$message],
         ]);
@@ -251,5 +380,15 @@ class ProcessExclusionUpload implements ShouldQueue
         ]);
 
         $this->cleanup();
+    }
+
+    private function limitFailureReason(string $message): string
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return 'Exclusion processing failed.';
+        }
+
+        return substr($message, 0, 255);
     }
 }

@@ -17,6 +17,14 @@
 'message' => 'Please wait while the system applies the confirmed configuration and generates the filtered outputs.',
 ])
 <div class="task-loader-meta text-muted text-center" id="process-running-elapsed" aria-live="polite"></div>
+
+<div class="d-flex justify-content-center mt-3" data-loader-off="1">
+    <form method="post" action="{{ route('process.assignments.cancel', ['process' => $process]) }}" class="d-inline" onsubmit="return confirm('Cancel this dataset process?');">
+        @csrf
+        @method('delete')
+        <button type="submit" class="btn btn-outline-danger">Cancel process</button>
+    </form>
+</div>
 @endsection
 
 @push('scripts')
@@ -87,6 +95,14 @@
                     }
 
                     if (payload.status === 'failed') {
+                        redirecting = true;
+                        if (elapsedTimer) {
+                            window.clearInterval(elapsedTimer);
+                        }
+                        window.location.href = @json(route('master.upload.create'));
+                    }
+
+                    if (payload.status === 'canceled') {
                         redirecting = true;
                         if (elapsedTimer) {
                             window.clearInterval(elapsedTimer);

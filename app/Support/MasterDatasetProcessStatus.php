@@ -3,9 +3,11 @@
 namespace App\Support;
 
 use App\Models\MasterDatasetProcess;
+use Illuminate\Support\Facades\Log;
 
 class MasterDatasetProcessStatus
 {
+    public const CANCELED = 'canceled';
     public const AWAITING_EXCLUSIONS = 'awaiting_exclusions';
     public const VALIDATING = 'validating';
     public const VALIDATED = 'validated';
@@ -106,14 +108,33 @@ class MasterDatasetProcessStatus
      */
     public static function set(MasterDatasetProcess $process, string $status): MasterDatasetProcess
     {
+        // Never allow overwriting a canceled process (unless we are setting it to canceled again).
+        if ($process->status === self::CANCELED && $status !== self::CANCELED) {
+            return $process;
+        }
+
+        // Avoid moving away from FAILED unless explicitly canceling.
+        if ($process->status === self::FAILED && $status !== self::FAILED && $status !== self::CANCELED) {
+            return $process;
+        }
+
         if ($process->status === $status) {
             return $process;
         }
 
-        \Log::info("STATUS UPDATE: {$process->id} => {$status}");
+        Log::info("STATUS UPDATE: {$process->id} => {$status}");
 
-        // Update via Eloquent on the default connection to ensure proper transaction handling
-        $process->update([
+        // Update via a guarded query so late-running jobs can't overwrite terminal states.
+        $query = MasterDatasetProcess::query()->whereKey($process->getKey());
+
+        if ($status !== self::CANCELED) {
+            $query->whereNotIn('status', [self::CANCELED, self::FAILED]);
+        } else {
+            // Do not allow canceling a completed dataset.
+            $query->where('status', '!=', self::READY);
+        }
+
+        $query->update([
             'status' => $status,
             'updated_at' => now(),
         ]);
@@ -231,6 +252,7 @@ class MasterDatasetProcessStatus
         self::RETAIL_MICRO_READY => 'Retail & Micro segments ready.',
         self::EXPORTS_PENDING => 'Generating exports…',
         self::READY => 'Exports ready.',
+        self::CANCELED => 'Processing canceled.',
         self::FAILED => 'Processing failed.',
     ];
 

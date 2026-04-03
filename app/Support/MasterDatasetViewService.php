@@ -258,9 +258,18 @@ class MasterDatasetViewService
         return $this->bucketConfig($bucket)['label'];
     }
 
-    public function bucketFilename(string $bucket): string
+    public function bucketFilename(string $bucket, string $format = 'xlsx'): string
     {
-        return $this->bucketConfig($bucket)['filename'];
+        $filename = $this->bucketConfig($bucket)['filename'];
+        $format = strtolower(trim($format));
+
+        if ($format === '' || $format === 'xlsx') {
+            return $filename;
+        }
+
+        $base = pathinfo($filename, PATHINFO_FILENAME);
+
+        return $base . '.' . $format;
     }
 
     public function bucketQuery(MasterDatasetProcess $process, string $bucket): Builder

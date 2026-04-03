@@ -53,6 +53,16 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-ingest.txt
+
       - name: Run tests
         env:
           APP_ENV: testing
@@ -118,6 +128,16 @@ jobs:
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
             git fetch origin main
             git reset --hard origin/main
+
+            if ! python3 -m pip --version >/dev/null 2>&1; then
+              echo "pip not found, installing..."
+              sudo apt update && sudo apt install -y python3-pip
+            fi
+
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r scripts/requirements-ingest.txt
+            python3 -m pip install -r scripts/requirements-validator.txt
+            
             composer install --no-interaction --prefer-dist --optimize-autoloader
             npm ci
             npm run build

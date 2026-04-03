@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Exceptions\ProcessCanceledException;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use App\Support\MasterDatasetAssignmentService;
@@ -37,6 +38,10 @@ class MasterDatasetExclusionService
      */
     public function apply(MasterDatasetProcess $process, array $uploads): array
     {
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         if (empty($uploads)) {
             throw ValidationException::withMessages([
                 'exclusions' => 'Please upload at least one exclusion workbook.',
@@ -54,6 +59,10 @@ class MasterDatasetExclusionService
 
         try {
             foreach ($uploads as $upload) {
+                if (MasterDatasetCancellation::isAborted($process->fresh())) {
+                    throw new ProcessCanceledException('Dataset processing canceled by user.');
+                }
+
                 if (! $upload instanceof UploadedFile) {
                     continue;
                 }
@@ -63,6 +72,10 @@ class MasterDatasetExclusionService
                 $multipleEntries = count($stored['extracted_paths']) > 1;
 
                 foreach ($stored['extracted_paths'] as $extracted) {
+                    if (MasterDatasetCancellation::isAborted($process->fresh())) {
+                        throw new ProcessCanceledException('Dataset processing canceled by user.');
+                    }
+
                     $fileLabel = $multipleEntries
                         ? sprintf('%s :: %s', $stored['original_name'], $extracted['entry_name'])
                         : $stored['original_name'];
@@ -115,6 +128,10 @@ class MasterDatasetExclusionService
 
     private function applyAccounts(MasterDatasetProcess $process, array $savedArchives, array $accountMap): array
     {
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $matched = 0;
         $alreadyExcluded = 0;
         DB::beginTransaction();
@@ -223,8 +240,7 @@ class MasterDatasetExclusionService
         array &$accountMap,
         array &$rowErrors,
         int &$rowErrorCount
-    ): void
-    {
+    ): void {
         $reader = IOFactory::createReader('Xlsx');
         $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($workbookPath);

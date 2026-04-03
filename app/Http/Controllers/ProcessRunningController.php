@@ -44,6 +44,12 @@ class ProcessRunningController extends Controller
             ]);
         }
 
+        if ($process->status === MasterDatasetProcessStatus::CANCELED) {
+            return redirect()->route('master.upload.create')->withErrors([
+                'upload' => $process->failure_reason ?: 'Dataset processing was canceled.',
+            ]);
+        }
+
         return view('process.running', [
             'process' => $process,
         ]);

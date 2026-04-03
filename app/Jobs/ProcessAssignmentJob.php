@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\ProcessCanceledException;
 use App\Models\MasterDatasetProcess;
 use App\Support\MasterDatasetExportCoordinator;
 use App\Support\MasterDatasetProcessStatus;
@@ -22,8 +23,7 @@ class ProcessAssignmentJob implements ShouldQueue
         private int $processId,
         private array $configOverrides,
         private array $userContext = [],
-    ) {
-    }
+    ) {}
 
     public function handle(
         MasterDatasetWorkflowService $workflowService,
@@ -43,6 +43,10 @@ class ProcessAssignmentJob implements ShouldQueue
         ]);
 
         try {
+            if ($process->status === MasterDatasetProcessStatus::CANCELED) {
+                return;
+            }
+
             // Apply assignment
             $workflowService->finalizeAssignment($process, $this->configOverrides);
 
@@ -52,18 +56,32 @@ class ProcessAssignmentJob implements ShouldQueue
 
             // After assignments
             sleep(2);
-            
+
             $process = $process->fresh();
+
+            if ($process->status === MasterDatasetProcessStatus::CANCELED) {
+                return;
+            }
+
             $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::EXPORTS_PENDING);
-            
+
             sleep(1);
-            
+
             $exportCoordinator->ensureFresh($process, $this->userContext);
 
             Log::info('ProcessAssignmentJob exports triggered.', [
                 'process_id' => $this->processId,
             ]);
+        } catch (ProcessCanceledException $exception) {
+            Log::info('Assignment job canceled by user.', [
+                'process_id' => $this->processId,
+                'message' => $exception->getMessage(),
+            ]);
 
+            MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::CANCELED);
+            $process->update([
+                'failure_reason' => $exception->getMessage() ?: 'Dataset processing canceled by user.',
+            ]);
         } catch (Throwable $exception) {
             Log::error('Assignment job failed: ' . $exception->getMessage(), [
                 'process_id' => $this->processId,
@@ -72,10 +90,20 @@ class ProcessAssignmentJob implements ShouldQueue
 
             MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::FAILED);
             $process->update([
-                'failure_reason' => $exception->getMessage(),
+                'failure_reason' => $this->limitFailureReason($exception->getMessage()),
             ]);
-            
+
             throw $exception;
         }
+    }
+
+    private function limitFailureReason(string $message): string
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return 'Assignment job failed.';
+        }
+
+        return substr($message, 0, 255);
     }
 }

@@ -114,6 +114,7 @@
                                 $statusRaw = (string) ($processRow->status ?? 'ready');
                                 $statusLabel = match ($statusRaw) {
                                 'exports_pending' => 'Generating exports',
+                                'canceled' => 'Canceled',
                                 default => ucfirst(str_replace('_', ' ', $statusRaw)),
                                 };
                                 $badgeColor = match ($statusRaw) {
@@ -123,7 +124,7 @@
                                 default => 'secondary',
                                 };
                                 $generatorName = $processRow->user?->username ?? $processRow->user_name ?? 'System';
-                                $isContinuable = ! in_array($statusRaw, ['ready', 'failed'], true);
+                                $isContinuable = ! in_array($statusRaw, ['ready', 'failed', 'canceled'], true);
                                 $actionLabel = $statusRaw === 'exports_pending' ? 'View assignments' : ($isContinuable ? 'Continue' : 'View assignments');
                                 @endphp
                                 <tr class="report-row-selectable">
@@ -150,6 +151,14 @@
                                     </td>
                                     <td class="text-end d-flex justify-content-end gap-2">
                                         <a href="{{ route('process.assignments.report', ['process' => $processRow]) }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">{{ $actionLabel }}</a>
+
+                                        @if(!in_array($statusRaw, ['ready', 'canceled'], true))
+                                        <form method="post" action="{{ route('process.assignments.cancel', ['process' => $processRow]) }}" class="d-inline" data-loader-off="1" onsubmit="return confirm('Cancel this dataset process?');">
+                                            @csrf
+                                            @method('delete')
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">Cancel</button>
+                                        </form>
+                                        @endif
                                     </td>
                                 </tr>
                                 @empty

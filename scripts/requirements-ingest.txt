@@ -1,6 +1,7 @@
 # Python dependencies for scripts/ingest_master.py
 # Install into the same venv used by PYTHON_BINARY.
 
-polars>=1.20
-fastexcel[polars]>=0.19
+polars-lts-cpu>=1.20
+fastexcel>=0.19
 pymysql>=1.1
+pyarrow>=12

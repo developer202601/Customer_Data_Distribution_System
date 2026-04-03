@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Exceptions\ProcessCanceledException;
 use App\Models\MasterDatasetProcess;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
@@ -13,8 +14,7 @@ class MasterDatasetWorkflowService
         private MasterDatasetImporter $importer,
         private MasterDatasetExclusionService $exclusionService,
         private MasterDatasetAssignmentService $assignmentService,
-    ) {
-    }
+    ) {}
 
     /**
      * Persist the master archive while deferring validation until exclusions are
@@ -33,9 +33,13 @@ class MasterDatasetWorkflowService
         array $exclusionArchives,
         ?array $userContext = null
     ): array {
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $filteredExclusions = array_values(array_filter(
             $exclusionArchives,
-            static fn ($file) => $file instanceof UploadedFile
+            static fn($file) => $file instanceof UploadedFile
         ));
 
         if (empty($filteredExclusions)) {
@@ -46,16 +50,24 @@ class MasterDatasetWorkflowService
 
         $processed = $this->importer->processStoredArchive($process, $userContext, skipAssignment: true)->fresh();
 
+        if (MasterDatasetCancellation::isAborted($processed)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::EXCLUSIONS_APPLYING);
-        sleep(1); 
-        
+        sleep(1);
+
         $exclusionResult = $this->exclusionService->apply($processed, $filteredExclusions);
+
+        if (MasterDatasetCancellation::isAborted($processed->fresh())) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
 
         $processed = MasterDatasetProcessStatus::set($processed->fresh(), MasterDatasetProcessStatus::EXCLUSIONS_APPLIED);
         sleep(1);
 
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::WAITING_CONFIRMATION);
-        
+
         return [
             'process' => $processed->fresh(),
             'exclusions' => $exclusionResult,
@@ -69,18 +81,26 @@ class MasterDatasetWorkflowService
         MasterDatasetProcess $process,
         array $configOverrides
     ): array {
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $processed = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VIP_CHECKING);
-        sleep(1); 
-        
+        sleep(1);
+
         $assignmentResult = $this->assignmentService->assign($processed->fresh(), $configOverrides);
+
+        if (MasterDatasetCancellation::isAborted($processed->fresh())) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
         $processed = MasterDatasetProcessStatus::set($processed->fresh(), MasterDatasetProcessStatus::VIP_READY);
-        sleep(1); 
-        
+        sleep(1);
+
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::RETAIL_MICRO_CHECKING);
-        sleep(1); 
-        
+        sleep(1);
+
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::RETAIL_MICRO_READY);
-        sleep(1); 
+        sleep(1);
 
         return [
             'process' => $processed->fresh(),
@@ -97,9 +117,13 @@ class MasterDatasetWorkflowService
         array $exclusionArchives,
         ?array $userContext = null
     ): array {
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $filteredExclusions = array_values(array_filter(
             $exclusionArchives,
-            static fn ($file) => $file instanceof UploadedFile
+            static fn($file) => $file instanceof UploadedFile
         ));
 
         if (empty($filteredExclusions)) {
@@ -110,23 +134,31 @@ class MasterDatasetWorkflowService
 
         $processed = $this->importer->processStoredArchive($process, $userContext)->fresh();
 
+        if (MasterDatasetCancellation::isAborted($processed)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::EXCLUSIONS_APPLYING);
         sleep(1); // Allow polling to capture this status
-        
+
         $exclusionResult = $this->exclusionService->apply($processed, $filteredExclusions);
+
+        if (MasterDatasetCancellation::isAborted($processed->fresh())) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
         $processed = MasterDatasetProcessStatus::set($processed->fresh(), MasterDatasetProcessStatus::EXCLUSIONS_APPLIED);
         sleep(1); // Allow polling to capture this status
 
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::VIP_CHECKING);
         sleep(1); // Allow polling to capture this status
-        
+
         $assignmentResult = $this->assignmentService->assign($processed->fresh());
         $processed = MasterDatasetProcessStatus::set($processed->fresh(), MasterDatasetProcessStatus::VIP_READY);
         sleep(1); // Allow polling to capture this status
-        
+
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::RETAIL_MICRO_CHECKING);
         sleep(1); // Allow polling to capture this status
-        
+
         $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::RETAIL_MICRO_READY);
         sleep(1); // Allow polling to capture this status
 

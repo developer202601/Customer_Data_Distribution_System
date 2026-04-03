@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class MasterDatasetExportCoordinator
 {
+    private const STORAGE_FORMAT = 'csv';
     private const EXPORT_BUCKETS = [
         'call-center-staff' => ['group' => 'group-a'],
         'call-center' => ['group' => 'group-a'],
@@ -38,12 +39,27 @@ class MasterDatasetExportCoordinator
         $existing = DatasetExport::where('token', $process->token)->get()->keyBy('bucket');
         $context = $this->resolveUserContext($userContext);
 
+        $freshProcess = $process->fresh();
+        if ($freshProcess->status === MasterDatasetProcessStatus::CANCELED || MasterDatasetCancellation::isAborted($freshProcess)) {
+            $statuses = [];
+
+            foreach (self::EXPORT_BUCKETS as $bucket => $_meta) {
+                $record = $existing->get($bucket);
+                $statuses[$bucket] = [
+                    'status' => $record?->status,
+                    'generated_at' => optional($record?->generated_at)->toIso8601String(),
+                ];
+            }
+
+            return $statuses;
+        }
+
         $shouldDispatch = false;
         $statuses = [];
 
         foreach (self::EXPORT_BUCKETS as $bucket => $meta) {
             $label = $this->viewService->bucketLabel($bucket);
-            $filename = $this->viewService->bucketFilename($bucket);
+            $filename = $this->viewService->bucketFilename($bucket, self::STORAGE_FORMAT);
             $path = $this->exportPath($process->token, $filename);
 
             $record = $existing->get($bucket);
@@ -142,11 +158,20 @@ class MasterDatasetExportCoordinator
         $disk = Storage::disk($diskName);
         $freshProcess = $process->fresh();
 
+        if ($freshProcess->status === MasterDatasetProcessStatus::CANCELED || MasterDatasetCancellation::isAborted($freshProcess)) {
+            return;
+        }
+
         $records = DatasetExport::where('token', $process->token)
             ->where('status', 'processing')
             ->get();
 
         foreach ($records as $record) {
+            $freshProcess->refresh();
+            if ($freshProcess->status === MasterDatasetProcessStatus::CANCELED || MasterDatasetCancellation::isAborted($freshProcess)) {
+                return;
+            }
+
             $bucket = $record->bucket;
 
             if (! array_key_exists($bucket, self::EXPORT_BUCKETS)) {
@@ -155,7 +180,7 @@ class MasterDatasetExportCoordinator
             }
 
             $label = $this->viewService->bucketLabel($bucket);
-            $filename = $this->viewService->bucketFilename($bucket);
+            $filename = $this->viewService->bucketFilename($bucket, self::STORAGE_FORMAT);
             $path = $this->exportPath($process->token, $filename);
             $query = $this->viewService->bucketQuery($freshProcess, $bucket);
 
@@ -167,7 +192,8 @@ class MasterDatasetExportCoordinator
             ])->save();
 
             try {
-                $this->exportService->storeToDisk($freshProcess, $label, $query, $disk, $path);
+                // Use Spout for memory-efficient export
+                $this->exportService->storeToDiskWithSpout($freshProcess, $label, $query, $disk, $path, self::STORAGE_FORMAT);
 
                 $size = $disk->size($path);
                 $hash = null;

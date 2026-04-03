@@ -17,6 +17,7 @@ class ProcessStatusController extends Controller
     private const FAILURE_CACHE_PREFIX = 'master.dataset.failure.user.';
     private const PROCESS_UPLOAD_CACHE_PREFIX = 'process:upload:';
     private const EXCLUSION_UPLOAD_CACHE_PREFIX = 'process:exclusion:upload:';
+    private const QUEUE_STATUS_CACHE_PREFIX = 'master:ingest:queue:';
 
     public function show(Request $request): JsonResponse|RedirectResponse
     {
@@ -65,7 +66,7 @@ class ProcessStatusController extends Controller
                 }
 
                 $status = $payload['status'] ?? null;
-                if (in_array($status, ['ready', 'failed', 'waiting_confirmation'], true)) {
+                if (in_array($status, ['ready', 'failed', 'canceled', 'waiting_confirmation'], true)) {
                     break;
                 }
 
@@ -125,6 +126,7 @@ class ProcessStatusController extends Controller
 
         $process->refresh();
         $freshStatus = $process->status;
+        $queueState = $this->resolveQueueState($process->id);
 
         if ($freshStatus === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
             // Try to show last known row progress if available
@@ -164,6 +166,16 @@ class ProcessStatusController extends Controller
             ], 200];
         }
 
+        if ($freshStatus === MasterDatasetProcessStatus::CANCELED) {
+            return [[
+                'status' => $freshStatus,
+                'progress' => 100,
+                'message' => (string) ($process->failure_reason ?: MasterDatasetProcessStatus::getFriendlyName($freshStatus)),
+                'redirect_url' => route('master.upload.create'),
+                'last_updated_at' => $process->updated_at?->toIso8601String(),
+            ], 200];
+        }
+
         $percentage = MasterDatasetProcessStatus::getProgressPercentage($freshStatus);
 
         $progressKey = 'process.progress.' . $processId . '.last';
@@ -192,6 +204,30 @@ class ProcessStatusController extends Controller
 
         if ($freshStatus === MasterDatasetProcessStatus::VALIDATING) {
             $message = 'Validating master dataset…';
+        }
+
+        $queuePosition = null;
+        $queueEtaSeconds = null;
+        if (
+            $queueState
+            && in_array($freshStatus, [
+                MasterDatasetProcessStatus::AWAITING_EXCLUSIONS,
+                MasterDatasetProcessStatus::VALIDATING,
+            ], true)
+        ) {
+            $queuePosition = is_numeric($queueState['position'] ?? null) ? (int) $queueState['position'] : null;
+            $queueEtaSeconds = is_numeric($queueState['eta_seconds'] ?? null) ? (int) $queueState['eta_seconds'] : null;
+
+            $queueMessage = 'Queued for processing';
+            if ($queuePosition !== null) {
+                $queueMessage .= ' (position ' . $queuePosition . ')';
+            }
+
+            if ($queueEtaSeconds !== null && $queueEtaSeconds > 0) {
+                $queueMessage .= '. Estimated wait ' . $this->formatEta($queueEtaSeconds) . '.';
+            }
+
+            $message = $queueMessage;
         }
 
         $processedRows = null;
@@ -294,9 +330,37 @@ class ProcessStatusController extends Controller
             'redirect_url' => $redirectUrl,
             'processed_rows' => $processedRows,
             'total_rows' => $totalRows,
+            'queue_position' => $queuePosition,
+            'queue_eta_seconds' => $queueEtaSeconds,
             'started_at' => $startedAt,
             'last_updated_at' => $process->updated_at?->toIso8601String(),
         ], 200];
+    }
+
+    private function resolveQueueState(int $processId): ?array
+    {
+        $state = Cache::get(self::QUEUE_STATUS_CACHE_PREFIX . $processId);
+
+        return is_array($state) ? $state : null;
+    }
+
+    private function formatEta(int $seconds): string
+    {
+        if ($seconds < 60) {
+            return $seconds . 's';
+        }
+
+        $minutes = (int) floor($seconds / 60);
+        $remaining = $seconds % 60;
+
+        if ($minutes < 60) {
+            return sprintf('%dm %02ds', $minutes, $remaining);
+        }
+
+        $hours = (int) floor($minutes / 60);
+        $minutes = $minutes % 60;
+
+        return sprintf('%dh %02dm', $hours, $minutes);
     }
 
     private function readPythonStatus(MasterDatasetProcess $process): ?array

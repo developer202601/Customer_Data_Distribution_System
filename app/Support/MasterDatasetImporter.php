@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Exceptions\ProcessCanceledException;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use App\Support\MasterDatasetAssignmentService;
@@ -241,6 +242,15 @@ class MasterDatasetImporter
         ?array $userContext = null,
         bool $skipAssignment = false
     ): MasterDatasetProcess {
+        $process->refresh();
+        if ($process->status === MasterDatasetProcessStatus::CANCELED) {
+            return $process;
+        }
+
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         if ($process->status === MasterDatasetProcessStatus::READY) {
             return $process->fresh();
         }
@@ -274,6 +284,12 @@ class MasterDatasetImporter
             }
 
             return $this->ingestWorkbook($process, $process->master_archive_path, $workbookAbsolute, $userContext, $skipAssignment);
+        } catch (ProcessCanceledException $exception) {
+            MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::CANCELED);
+            $process->update([
+                'failure_reason' => $exception->getMessage() ?: 'Dataset processing canceled by user.',
+            ]);
+            throw $exception;
         } catch (Throwable $exception) {
             $process->update([
                 'status' => 'failed',
@@ -301,6 +317,10 @@ class MasterDatasetImporter
         ?array $userContext,
         bool $skipAssignment
     ): MasterDatasetProcess {
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $token = (string) ($process->token ?? '');
         $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
         if ($cacheKey) {
@@ -337,6 +357,10 @@ class MasterDatasetImporter
             ]);
         }
 
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
         $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::VALIDATED);
         $process->update([
             'run_date_raw' => null,
@@ -357,7 +381,15 @@ class MasterDatasetImporter
 
         try {
             $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::PYTHON_RUNNING);
-            $python->run($process);
+            $exitCode = $python->run($process);
+
+            if ($exitCode === 130) {
+                throw new ProcessCanceledException('Python ingestion canceled by user.');
+            }
+
+            if (MasterDatasetCancellation::isAborted($process->fresh())) {
+                throw new ProcessCanceledException('Dataset processing canceled by user.');
+            }
 
             $this->assertPythonValidationPassed($process);
 
@@ -368,8 +400,16 @@ class MasterDatasetImporter
             // Allow safe re-processing of the same process by clearing stale rows first.
             MasterDatasetRow::query()->where('process_id', $process->id)->delete();
 
+            if (MasterDatasetCancellation::isAborted($process->fresh())) {
+                throw new ProcessCanceledException('Dataset processing canceled by user.');
+            }
+
             $process = MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::RECORDS_INSERTING);
             $promoted = app(MasterDatasetStagingPromoter::class)->promote($process);
+
+            if (MasterDatasetCancellation::isAborted($process->fresh())) {
+                throw new ProcessCanceledException('Dataset processing canceled by user.');
+            }
 
             $statistics = $this->databaseStatistics($process);
 
@@ -410,6 +450,12 @@ class MasterDatasetImporter
             $process = MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::RECORDS_INSERTED);
 
             return $process->fresh();
+        } catch (ProcessCanceledException $exception) {
+            MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::CANCELED);
+            $process->update([
+                'failure_reason' => $exception->getMessage() ?: 'Dataset processing canceled by user.',
+            ]);
+            throw $exception;
         } catch (Throwable $exception) {
             if ($process) {
                 MasterDatasetProcessStatus::set($process, 'failed');

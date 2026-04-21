@@ -53,6 +53,7 @@ class PythonIngestionService
             '--process=' . $process->id,
             '--manifest=' . $this->absolutePath($process, $process->python_manifest_path),
             '--status=' . $this->absolutePath($process, $process->python_status_path),
+            '--abort-flag=' . $this->abortFlagAbsolutePath($process),
         ];
 
         $env = $this->buildPythonEnv();
@@ -72,6 +73,11 @@ class PythonIngestionService
             'stdout' => $python->getOutput(),
             'stderr' => $python->getErrorOutput(),
         ]);
+
+        if ($exitCode === 130) {
+            // User cancellation signaled by abort flag.
+            return $exitCode;
+        }
 
         if ($exitCode !== 0) {
             throw new RuntimeException($this->formatPythonFailureMessage($process, $pythonBinary, $python));
@@ -215,6 +221,14 @@ class PythonIngestionService
 
     private function absolutePath(MasterDatasetProcess $process, string $relative): string
     {
+        return $this->disk($process)->path($relative);
+    }
+
+    private function abortFlagAbsolutePath(MasterDatasetProcess $process): string
+    {
+        $token = (string) ($process->token ?? '');
+        $relative = 'exports/' . $token . '/source/abort.flag';
+
         return $this->disk($process)->path($relative);
     }
 

@@ -66,7 +66,7 @@ class ProcessStatusController extends Controller
                 }
 
                 $status = $payload['status'] ?? null;
-                if (in_array($status, ['ready', 'failed', 'waiting_confirmation'], true)) {
+                if (in_array($status, ['ready', 'failed', 'canceled', 'waiting_confirmation'], true)) {
                     break;
                 }
 
@@ -157,6 +157,16 @@ class ProcessStatusController extends Controller
         }
 
         if ($freshStatus === MasterDatasetProcessStatus::FAILED) {
+            return [[
+                'status' => $freshStatus,
+                'progress' => 100,
+                'message' => (string) ($process->failure_reason ?: MasterDatasetProcessStatus::getFriendlyName($freshStatus)),
+                'redirect_url' => route('master.upload.create'),
+                'last_updated_at' => $process->updated_at?->toIso8601String(),
+            ], 200];
+        }
+
+        if ($freshStatus === MasterDatasetProcessStatus::CANCELED) {
             return [[
                 'status' => $freshStatus,
                 'progress' => 100,

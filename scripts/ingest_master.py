@@ -500,6 +500,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--process", required=True, type=int, help="Process ID")
     parser.add_argument("--manifest", required=True, help="Path to manifest JSON")
     parser.add_argument("--status", required=True, help="Path to status JSON")
+    parser.add_argument(
+        "--abort-flag",
+        required=False,
+        default="",
+        help="Path to an abort flag file. If present, the script cancels gracefully.",
+    )
     return parser.parse_args()
 
 
@@ -522,6 +528,26 @@ def write_status(path: str, payload: dict) -> None:
 def main() -> int:
     args = parse_args()
     manifest = load_manifest(args.manifest)
+
+    abort_flag = str(getattr(args, "abort_flag", "") or "").strip()
+
+    def _abort_requested() -> bool:
+        return bool(abort_flag) and os.path.exists(abort_flag)
+
+    def _cancel(stage: str, *, processed_rows: int = 0, total_rows: int = 0) -> int:
+        payload = {
+            "status": "canceled",
+            "message": f"Canceled by user ({stage}).",
+            "process_id": int(manifest.get("process_id") or args.process),
+            "manifest_path": args.manifest,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "progress": {"processed_rows": int(processed_rows), "total_rows": int(total_rows)},
+        }
+        try:
+            write_status(args.status, payload)
+        except Exception:
+            pass
+        return 130
 
     workbook_path = str(manifest.get("master_workbook_full_path") or "").strip()
     if not workbook_path:
@@ -554,12 +580,18 @@ def main() -> int:
     }
     write_status(args.status, status_base)
 
+    if _abort_requested():
+        return _cancel("startup")
+
     try:
         import polars as pl
     except Exception as exc:
         raise RuntimeError(f"Missing dependency polars/fastexcel: {exc}")
 
     df = _read_excel(workbook_path)
+
+    if _abort_requested():
+        return _cancel("workbook_read")
 
     # Normalize headers to match PHP behaviour.
     original_cols = list(df.columns)
@@ -608,6 +640,10 @@ def main() -> int:
         write_status(args.status, status_payload)
         return 0
 
+<<<<<<< HEAD
+    if _abort_requested():
+        return _cancel("validation", processed_rows=int(validation.get("row_count") or 0), total_rows=int(validation.get("row_count") or 0))
+=======
     csv_path = str(manifest.get("master_csv_full_path") or "").strip()
     if csv_path:
         try:
@@ -616,6 +652,7 @@ def main() -> int:
             status_base["workbook"]["csv_path"] = csv_path
         except Exception:
             pass
+>>>>>>> 9f8f1c89d253f00daee6080d04751d48b116d696
 
     # Determine arrears + payments columns (now guaranteed present).
     arrears_candidates = [c for c in df.columns if str(c).startswith(_norm_header(arrears_prefix or "NEW_ARREARS_"))]
@@ -646,6 +683,9 @@ def main() -> int:
     # Prepare DB connection (only after validation passes).
     conn = _connect_mysql_from_env()
     try:
+        if _abort_requested():
+            return _cancel("before_db")
+
         with conn.cursor() as cur:
             cur.execute("DELETE FROM master_dataset_rows_staging WHERE process_id=%s", (process_id,))
         conn.commit()
@@ -852,6 +892,9 @@ def main() -> int:
                 staged_inserted += len(batch)
                 batch = []
 
+                if _abort_requested():
+                    return _cancel("staging_insert", processed_rows=staged_inserted, total_rows=total_rows)
+
                 status_base["message"] = "Ingesting master dataset (Python)…"
                 status_base["progress"] = {"processed_rows": staged_inserted, "total_rows": total_rows}
                 status_base["row_counts"] = {"staging_inserted": staged_inserted, "excluded": excluded_count}
@@ -867,6 +910,9 @@ def main() -> int:
                 cur.executemany(sql, batch)
             conn.commit()
             staged_inserted += len(batch)
+
+        if _abort_requested():
+            return _cancel("staging_insert", processed_rows=staged_inserted, total_rows=total_rows)
 
         status_payload = {
             "status": "completed",

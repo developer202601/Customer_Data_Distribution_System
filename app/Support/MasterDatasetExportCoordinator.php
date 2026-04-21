@@ -39,6 +39,21 @@ class MasterDatasetExportCoordinator
         $existing = DatasetExport::where('token', $process->token)->get()->keyBy('bucket');
         $context = $this->resolveUserContext($userContext);
 
+        $freshProcess = $process->fresh();
+        if ($freshProcess->status === MasterDatasetProcessStatus::CANCELED || MasterDatasetCancellation::isAborted($freshProcess)) {
+            $statuses = [];
+
+            foreach (self::EXPORT_BUCKETS as $bucket => $_meta) {
+                $record = $existing->get($bucket);
+                $statuses[$bucket] = [
+                    'status' => $record?->status,
+                    'generated_at' => optional($record?->generated_at)->toIso8601String(),
+                ];
+            }
+
+            return $statuses;
+        }
+
         $shouldDispatch = false;
         $statuses = [];
 
@@ -143,11 +158,20 @@ class MasterDatasetExportCoordinator
         $disk = Storage::disk($diskName);
         $freshProcess = $process->fresh();
 
+        if ($freshProcess->status === MasterDatasetProcessStatus::CANCELED || MasterDatasetCancellation::isAborted($freshProcess)) {
+            return;
+        }
+
         $records = DatasetExport::where('token', $process->token)
             ->where('status', 'processing')
             ->get();
 
         foreach ($records as $record) {
+            $freshProcess->refresh();
+            if ($freshProcess->status === MasterDatasetProcessStatus::CANCELED || MasterDatasetCancellation::isAborted($freshProcess)) {
+                return;
+            }
+
             $bucket = $record->bucket;
 
             if (! array_key_exists($bucket, self::EXPORT_BUCKETS)) {

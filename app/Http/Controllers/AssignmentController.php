@@ -10,6 +10,7 @@ use App\Models\MasterDatasetRow;
 use App\Support\MasterDatasetAssignmentConfiguration;
 use App\Support\MasterDatasetExportCoordinator;
 use App\Support\MasterDatasetExportService;
+use App\Support\MasterDatasetCancellation;
 use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetViewService;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,12 @@ class AssignmentController extends Controller
         // user has confirmed configuration and processing has completed.
         if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
             return redirect()->route('process.confirm.create');
+        }
+
+        if ($process->status === MasterDatasetProcessStatus::CANCELED) {
+            return redirect()->route('master.upload.create')->withErrors([
+                'upload' => $process->failure_reason ?: 'Dataset processing was canceled.',
+            ]);
         }
 
         if (! in_array($process->status, [
@@ -199,7 +206,7 @@ class AssignmentController extends Controller
 
     public function reports(Request $request): View
     {
-        $reportGroups = $this->reportGroups();
+        $reportGroups = $this->reportArchiveGroups();
         $monthOptions = $reportGroups->keys();
         $selectedMonth = null;
 
@@ -289,6 +296,48 @@ class AssignmentController extends Controller
         }
 
         return redirect()->route('process.assignments.reports')->with('status', 'Dataset and exports deleted.');
+    }
+
+    public function cancel(Request $request, MasterDatasetProcess $process): RedirectResponse
+    {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        $sessionUserId = (int) data_get($request->session()->get('user'), 'id', 0);
+
+        if (! $isAdmin) {
+            $ownerId = (int) ($process->user_id ?? 0);
+            if ($ownerId > 0 && $sessionUserId > 0 && $ownerId !== $sessionUserId) {
+                return redirect()->route('process.assignments.reports')->withErrors([
+                    'reports' => 'You can only cancel dataset processes you generated.',
+                ]);
+            }
+        }
+
+        $process->refresh();
+        $status = (string) ($process->status ?? '');
+
+        if ($status === MasterDatasetProcessStatus::READY) {
+            return redirect()->route('process.assignments.reports')->withErrors([
+                'reports' => 'Completed datasets cannot be canceled.',
+            ]);
+        }
+
+        if ($status === MasterDatasetProcessStatus::CANCELED) {
+            return redirect()->route('process.assignments.reports')->with('status', 'Dataset process is already canceled.');
+        }
+
+        MasterDatasetProcessStatus::set($process, MasterDatasetProcessStatus::CANCELED);
+        $process->update([
+            'failure_reason' => 'Canceled by user.',
+        ]);
+
+        MasterDatasetCancellation::signalAbort($process);
+
+        if ((int) $request->session()->get('master.dataset.process_id') === (int) $process->id) {
+            $request->session()->forget('master.dataset.process_id');
+            $request->session()->forget('master.dataset.staged_exclusions');
+        }
+
+        return redirect()->route('process.assignments.reports')->with('status', 'Dataset process canceled.');
     }
 
     public function destroyBulk(Request $request): RedirectResponse
@@ -558,6 +607,40 @@ class AssignmentController extends Controller
         // Ensure the month groups themselves are ordered newest-first
         $grouped = $grouped->sortByDesc(function ($group, $key) {
             // Parse the key (e.g. "December 2025") back to a date for reliable sorting
+            return Carbon::parse($key)->getTimestamp();
+        });
+
+        return $grouped;
+    }
+
+    private function reportArchiveGroups(): Collection
+    {
+        $items = MasterDatasetProcess::with(['exports', 'user'])
+            ->whereNotNull('status')
+            ->get();
+
+        $sorted = $items->sortByDesc(function (MasterDatasetProcess $item) {
+            $reference = $item->created_at ?? now();
+            return Carbon::parse($reference)->getTimestamp();
+        });
+
+        $grouped = $sorted->groupBy(function (MasterDatasetProcess $item) {
+            if ($item->run_date) {
+                $date = Carbon::parse($item->run_date);
+            } elseif ($item->dataset_month) {
+                try {
+                    $date = Carbon::createFromFormat('Ym', (string) $item->dataset_month);
+                } catch (\Throwable) {
+                    $date = Carbon::parse($item->created_at ?? now());
+                }
+            } else {
+                $date = Carbon::parse($item->created_at ?? now());
+            }
+
+            return $date->startOfMonth()->format('F Y');
+        });
+
+        $grouped = $grouped->sortByDesc(function ($group, $key) {
             return Carbon::parse($key)->getTimestamp();
         });
 

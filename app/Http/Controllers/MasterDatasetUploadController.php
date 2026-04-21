@@ -41,7 +41,11 @@ class MasterDatasetUploadController extends Controller
         }
 
         // Keep completed datasets for archive/reports, but clean up unfinished runs.
-        if (($existing->status ?? null) !== MasterDatasetProcessStatus::READY) {
+        if (! in_array((string) ($existing->status ?? ''), [
+            MasterDatasetProcessStatus::READY,
+            MasterDatasetProcessStatus::FAILED,
+            MasterDatasetProcessStatus::CANCELED,
+        ], true)) {
             $diskName = $existing->storage_disk ?: config('filesystems.default', 'local');
             $disk = Storage::disk($diskName);
 
@@ -78,7 +82,7 @@ class MasterDatasetUploadController extends Controller
             } else {
                 $status = (string) ($process->status ?? '');
 
-                if (in_array($status, [MasterDatasetProcessStatus::READY, MasterDatasetProcessStatus::FAILED], true)) {
+                if (in_array($status, [MasterDatasetProcessStatus::READY, MasterDatasetProcessStatus::FAILED, MasterDatasetProcessStatus::CANCELED], true)) {
                     // Completed/failed processes should not block a fresh upload flow.
                     $request->session()->forget('master.dataset.process_id');
                     $request->session()->forget('master.dataset.staged_exclusions');
@@ -186,7 +190,7 @@ class MasterDatasetUploadController extends Controller
             ]);
 
             // Initialize progress in cache so polling knows about this upload
-            \Cache::put('process:upload:' . $token, [
+            Cache::put('process:upload:' . $token, [
                 'status' => 'awaiting_exclusions',
                 'progress' => 100,
                 'message' => 'Upload complete. Please upload exclusions to begin processing.',

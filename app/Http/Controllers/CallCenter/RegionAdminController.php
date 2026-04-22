@@ -368,14 +368,14 @@ class RegionAdminController extends Controller
         }
 
         // Get latest report data (most recent report with assignments)
-        $latestReport = CallCenterReport::whereHas('assignments', function($q) use ($region) {
+        $latestReport = CallCenterReport::callCenter()->whereHas('assignments', function($q) use ($region) {
             $q->whereHas('row', function($rq) use ($region) {
                 $rq->where('region', $region);
             });
         })->latest('created_at')->first();
 
         // Latest report data
-        $latestBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+        $latestBase = CallCenterAssignment::callCenter()->with(['row', 'agent', 'interactions'])
             ->where('call_center_report_id', $latestReport?->id)
             ->whereHas('row', function($q) use ($region) {
                 $q->where('region', $region);
@@ -401,7 +401,7 @@ class RegionAdminController extends Controller
             $supervisorProfits = [];
             foreach ($supervisors as $supervisor) {
                 // Sum paid_amount from assignments of users supervised by this supervisor
-                $profit = CallCenterAssignment::where('call_center_report_id', $latestReport?->id)
+                $profit = CallCenterAssignment::callCenter()->where('call_center_report_id', $latestReport?->id)
                     ->whereHas('row', function($q) use ($region, $rtom) {
                         $q->where('region', $region)->where('rtom', $rtom);
                     })->whereHas('agent', function($q) use ($supervisor) {
@@ -425,7 +425,7 @@ class RegionAdminController extends Controller
         })->values();
 
         // All-time data
-        $allTimeBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+        $allTimeBase = CallCenterAssignment::callCenter()->with(['row', 'agent', 'interactions'])
             ->whereHas('row', function($q) use ($region) {
                 $q->where('region', $region);
             });
@@ -450,7 +450,7 @@ class RegionAdminController extends Controller
             $supervisorProfits = [];
             foreach ($supervisors as $supervisor) {
                 // Sum paid_amount from assignments of users supervised by this supervisor
-                $profit = CallCenterAssignment::whereHas('row', function($q) use ($region, $rtom) {
+                $profit = CallCenterAssignment::callCenter()->whereHas('row', function($q) use ($region, $rtom) {
                     $q->where('region', $region)->where('rtom', $rtom);
                 })->whereHas('agent', function($q) use ($supervisor) {
                     $q->where('supervisor', $supervisor->id);
@@ -523,7 +523,7 @@ class RegionAdminController extends Controller
 
         $reports = collect();
         if ($reviewOptIn && $reviewEnabledAt) {
-            $reports = CallCenterReport::with('process')
+            $reports = CallCenterReport::callCenter()->with('process')
                 ->where('created_at', '>=', $reviewEnabledAt)
                 ->orderByDesc('created_at')
                 ->limit(20)
@@ -572,38 +572,50 @@ class RegionAdminController extends Controller
                     $hiddenRowIds = $this->getDraftHiddenRowIds($selectedReport->id, $normalizedRegion);
                 }
 
-                $counts['total'] = count($rowIds);
-                $counts['hidden'] = count(array_intersect($rowIds, $hiddenRowIds));
+                $regionRowIds = MasterDatasetRow::query()
+                    ->whereIn('id', $rowIds)
+                    ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion])
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
+                    ->all();
+
+                $hiddenRowIds = array_values(array_intersect($hiddenRowIds, $regionRowIds));
+
+                $counts['total'] = count($regionRowIds);
+                $counts['hidden'] = count($hiddenRowIds);
                 $counts['visible'] = max(0, $counts['total'] - $counts['hidden']);
 
-                $query = MasterDatasetRow::query()
-                    ->whereIn('id', $rowIds)
-                    ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion]);
+                if (empty($regionRowIds)) {
+                    $reportRows = null;
+                } else {
+                    $query = MasterDatasetRow::query()
+                        ->whereIn('id', $regionRowIds);
 
-                if ($showHiddenOnly) {
-                    if (! empty($hiddenRowIds)) {
-                        $query->whereIn('id', $hiddenRowIds);
-                    } else {
-                        $query->whereRaw('1 = 0');
+                    if ($showHiddenOnly) {
+                        if (! empty($hiddenRowIds)) {
+                            $query->whereIn('id', $hiddenRowIds);
+                        } else {
+                            $query->whereRaw('1 = 0');
+                        }
+                    } elseif (! $showHidden) {
+                        $query->whereNotIn('id', $hiddenRowIds);
                     }
-                } elseif (! $showHidden) {
-                    $query->whereNotIn('id', $hiddenRowIds);
-                }
 
-                if ($search !== '') {
-                    $query->where(function ($q) use ($search) {
-                        $q->where('account_num', 'like', '%' . $search . '%')
-                            ->orWhere('customer_ref', 'like', '%' . $search . '%')
-                            ->orWhere('mobile_contact_tel', 'like', '%' . $search . '%')
-                            ->orWhere('new_arrears_value', 'like', '%' . $search . '%');
+                    if ($search !== '') {
+                        $query->where(function ($q) use ($search) {
+                            $q->where('account_num', 'like', '%' . $search . '%')
+                                ->orWhere('customer_ref', 'like', '%' . $search . '%')
+                                ->orWhere('mobile_contact_tel', 'like', '%' . $search . '%')
+                                ->orWhere('new_arrears_value', 'like', '%' . $search . '%');
+                        });
+                    }
+
+                    $reportRows = $query->orderBy('id')->paginate(10)->withQueryString();
+                    $reportRows->getCollection()->transform(function ($row) use ($hiddenRowIds) {
+                        $row->is_hidden_for_distribution = in_array((int) $row->id, $hiddenRowIds, true);
+                        return $row;
                     });
                 }
-
-                $reportRows = $query->orderBy('id')->paginate(10)->withQueryString();
-                $reportRows->getCollection()->transform(function ($row) use ($hiddenRowIds) {
-                    $row->is_hidden_for_distribution = in_array((int) $row->id, $hiddenRowIds, true);
-                    return $row;
-                });
             }
         }
 
@@ -644,7 +656,7 @@ class RegionAdminController extends Controller
     {
         $region = $this->ensureRegionAdmin();
         $normalizedRegion = $this->normalizeRegionName($region);
-        $report = CallCenterReport::findOrFail((int) $reportId);
+        $report = CallCenterReport::callCenter()->findOrFail((int) $reportId);
 
         $respondError = function (string $message, int $status = 422) use ($request) {
             if ($request->ajax() || $request->wantsJson()) {
@@ -720,7 +732,7 @@ class RegionAdminController extends Controller
     {
         $region = $this->ensureRegionAdmin();
         $normalizedRegion = $this->normalizeRegionName($region);
-        $report = CallCenterReport::findOrFail((int) $reportId);
+        $report = CallCenterReport::callCenter()->findOrFail((int) $reportId);
 
         $gate = $this->currentRegionAdminReviewGate();
         $reviewOptIn = (bool) ($gate['opt_in'] ?? false);
@@ -759,7 +771,9 @@ class RegionAdminController extends Controller
             $regionReportRowIds
         ));
 
-        DB::transaction(function () use ($report, $region, $normalizedRegion, $sessionUserId, $regionReportRowIds, $draftHiddenIds) {
+        $reportType = $report->report_type ?? CallCenterReport::REPORT_TYPE_CALL_CENTER;
+
+        DB::transaction(function () use ($report, $region, $normalizedRegion, $sessionUserId, $regionReportRowIds, $draftHiddenIds, $reportType) {
             if (! empty($regionReportRowIds)) {
                 CallCenterReportHiddenRow::where('call_center_report_id', $report->id)
                     ->whereIn('master_dataset_row_id', $regionReportRowIds)
@@ -770,6 +784,7 @@ class RegionAdminController extends Controller
             foreach ($draftHiddenIds as $rowId) {
                 CallCenterReportHiddenRow::create([
                     'call_center_report_id' => $report->id,
+                    'report_type' => $reportType,
                     'master_dataset_row_id' => (int) $rowId,
                     'hidden_by_user_id' => $sessionUserId > 0 ? $sessionUserId : null,
                     'hidden_at' => $now,
@@ -780,6 +795,7 @@ class RegionAdminController extends Controller
                 $auditRows = array_map(function (int $rowId) use ($report, $sessionUserId, $now) {
                     return [
                         'call_center_report_id' => $report->id,
+                        'report_type' => $reportType,
                         'master_dataset_row_id' => $rowId,
                         'action' => 'hide',
                         'acted_by_user_id' => $sessionUserId > 0 ? $sessionUserId : null,
@@ -796,6 +812,7 @@ class RegionAdminController extends Controller
                 'region_name' => $region,
             ]);
 
+            $review->report_type = $reportType;
             $review->reviewed_by_user_id = $sessionUserId > 0 ? $sessionUserId : null;
             $review->reviewed_at = $now;
             $review->save();
@@ -966,14 +983,14 @@ class RegionAdminController extends Controller
         $supervisorId = session('user')['id'];
 
         // Get latest report data (most recent report with assignments for this RTOM)
-        $latestReport = CallCenterReport::whereHas('assignments', function($q) use ($rtom) {
+        $latestReport = CallCenterReport::callCenter()->whereHas('assignments', function($q) use ($rtom) {
             $q->whereHas('row', function($rq) use ($rtom) {
                 $rq->where('rtom', $rtom);
             });
         })->latest('created_at')->first();
 
         // Latest report data for this supervisor's RTOM
-        $latestBase = CallCenterAssignment::with(['row', 'agent.supervisorUser', 'interactions'])
+        $latestBase = CallCenterAssignment::callCenter()->with(['row', 'agent.supervisorUser', 'interactions'])
             ->where('call_center_report_id', $latestReport?->id)
             ->whereHas('row', function($q) use ($rtom) {
                 $q->where('rtom', $rtom);
@@ -1007,7 +1024,7 @@ class RegionAdminController extends Controller
         })->values();
 
         // All-time data
-        $allTimeBase = CallCenterAssignment::with(['row', 'agent.supervisorUser', 'interactions'])
+        $allTimeBase = CallCenterAssignment::callCenter()->with(['row', 'agent.supervisorUser', 'interactions'])
             ->whereHas('row', function($q) use ($rtom) {
                 $q->where('rtom', $rtom);
             });
@@ -1078,14 +1095,14 @@ class RegionAdminController extends Controller
         $rtomAdminId = session('user')['id'];
 
         // Get latest report data (most recent report with assignments for this RTOM)
-        $latestReport = CallCenterReport::whereHas('assignments', function($q) use ($rtom) {
+        $latestReport = CallCenterReport::callCenter()->whereHas('assignments', function($q) use ($rtom) {
             $q->whereHas('row', function($rq) use ($rtom) {
                 $rq->where('rtom', $rtom);
             });
         })->latest('created_at')->first();
 
         // Latest report data for this RTOM
-        $latestBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+        $latestBase = CallCenterAssignment::callCenter()->with(['row', 'agent', 'interactions'])
             ->where('call_center_report_id', $latestReport?->id)
             ->whereHas('row', function($q) use ($rtom) {
                 $q->where('rtom', $rtom);
@@ -1104,7 +1121,7 @@ class RegionAdminController extends Controller
             ->get()
             ->map(function($supervisor) use ($latestReport, $rtom) {
                 // Sum assignments handled by callers under this supervisor
-                $assignments = CallCenterAssignment::where('call_center_report_id', $latestReport?->id)
+                $assignments = CallCenterAssignment::callCenter()->where('call_center_report_id', $latestReport?->id)
                     ->whereHas('row', function($q) use ($rtom) {
                         $q->where('rtom', $rtom);
                     })
@@ -1137,7 +1154,7 @@ class RegionAdminController extends Controller
             })->values();
 
         // All-time data
-        $allTimeBase = CallCenterAssignment::with(['row', 'agent', 'interactions'])
+        $allTimeBase = CallCenterAssignment::callCenter()->with(['row', 'agent', 'interactions'])
             ->whereHas('row', function($q) use ($rtom) {
                 $q->where('rtom', $rtom);
             });
@@ -1154,7 +1171,7 @@ class RegionAdminController extends Controller
             ->get()
             ->map(function($supervisor) use ($rtom) {
                 // Sum assignments handled by callers under this supervisor
-                $assignments = CallCenterAssignment::whereHas('row', function($q) use ($rtom) {
+                $assignments = CallCenterAssignment::callCenter()->whereHas('row', function($q) use ($rtom) {
                     $q->where('rtom', $rtom);
                 })
                 ->whereHas('agent', function($q) use ($supervisor) {

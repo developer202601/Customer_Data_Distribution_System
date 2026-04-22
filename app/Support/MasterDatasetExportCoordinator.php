@@ -212,8 +212,12 @@ class MasterDatasetExportCoordinator
                     'file_hash' => $hash,
                 ]);
 
-                if ($bucket === 'call-center') {
-                    $this->recordCallCenterReport($freshProcess, $query);
+                if ($bucket === 'call-center-staff') {
+                    $this->recordReport($freshProcess, $query, CallCenterReport::REPORT_TYPE_CALL_CENTER);
+                }
+
+                if ($bucket === 'region-billing') {
+                    $this->recordReport($freshProcess, $query, CallCenterReport::REPORT_TYPE_REGIONAL_BILLING);
                 }
             } catch (Throwable $exception) {
                 $meta = $record->meta ?? [];
@@ -295,7 +299,7 @@ class MasterDatasetExportCoordinator
         return array_keys(self::EXPORT_BUCKETS);
     }
 
-    private function recordCallCenterReport(MasterDatasetProcess $process, Builder $query): void
+    private function recordReport(MasterDatasetProcess $process, Builder $query, string $reportType): void
     {
         $rowIds = (clone $query)->pluck('id')->map(function ($value) {
             return is_numeric($value) ? (int) $value : $value;
@@ -303,9 +307,11 @@ class MasterDatasetExportCoordinator
 
         CallCenterReport::updateOrCreate([
             'master_dataset_process_id' => $process->id,
+            'report_type' => $reportType,
         ], [
             'token' => $process->token,
             'dataset_month' => $process->dataset_month,
+            'report_type' => $reportType,
             'row_count' => count($rowIds),
             'row_ids' => $rowIds,
         ]);

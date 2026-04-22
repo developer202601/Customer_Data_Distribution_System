@@ -14,9 +14,11 @@ class AuthController extends Controller
         if ($request->session()->has('user')) {
             $sessionUser = $request->session()->get('user');
 
-            $targetRoute = ($sessionUser['system'] ?? null) === 'cc'
-                ? $this->getCCLoginRedirect($sessionUser)
-                : 'dashboard';
+            $targetRoute = match ($sessionUser['system'] ?? null) {
+                'cc' => $this->getCCLoginRedirect($sessionUser),
+                'rb' => $this->getRBLoginRedirect($sessionUser),
+                default => 'dashboard',
+            };
 
             return redirect()->route($targetRoute);
         }
@@ -59,6 +61,10 @@ class AuthController extends Controller
                 'is_admin' => (bool) $user->admin_prev,
                 'assignment' => $user->assignment ?? null,
             ]),
+            'rb' => $this->getRBLoginRedirect([
+                'is_admin' => (bool) $user->admin_prev,
+                'assignment' => $user->assignment ?? null,
+            ]),
             default => 'dashboard',
         };
 
@@ -97,6 +103,34 @@ class AuthController extends Controller
 
         // Regular callers go to assignments
         return 'cc.assignments.manage';
+    }
+
+    private function getRBLoginRedirect(array $user): string
+    {
+        $assignment = $user['assignment'] ?? null;
+        $isAdmin = $user['is_admin'] ?? false;
+
+        if ($assignment === 'super') {
+            return 'rb.dashboard';
+        }
+
+        if ($assignment && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
+            return 'rb.region.dashboard';
+        }
+
+        if (str_starts_with($assignment, 'rtom_')) {
+            return 'rb.rtom.dashboard';
+        }
+
+        if (str_starts_with($assignment, 'supervisor_')) {
+            return 'rb.supervisor.dashboard';
+        }
+
+        if ($isAdmin) {
+            return 'rb.users.index';
+        }
+
+        return 'rb.assignments.manage';
     }
 
     public function logout(Request $request): RedirectResponse

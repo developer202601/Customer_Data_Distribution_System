@@ -117,6 +117,7 @@ class SuperAdminController extends Controller
         }
 
         $roles = ['region' => 'Region Admin'];
+        $systems = ['cc' => 'Call Center', 'rb' => 'Regional Billing Centre'];
 
         $lastTwoProcessIds = MasterDatasetRow::select('process_id')
             ->distinct()
@@ -134,7 +135,7 @@ class SuperAdminController extends Controller
                 ->values();
         }
 
-        return view('cc.super.create', compact('roles', 'regions'));
+        return view('cc.super.create', compact('roles', 'regions', 'systems'));
     }
 
     public function storeUser(Request $request)
@@ -148,6 +149,7 @@ class SuperAdminController extends Controller
             'username' => 'required|string|size:6|unique:users,username',
             'name' => 'nullable|string|max:255',
             'region' => 'required|string|max:45',
+            'system' => 'required|in:cc,rb',
         ]);
 
         $lastTwoProcessIds = MasterDatasetRow::select('process_id')
@@ -172,10 +174,12 @@ class SuperAdminController extends Controller
             return back()->withErrors(['region' => 'Selected region is not available from the last two reports.']);
         }
 
+        $system = $request->input('system');
+        
         $user = new User();
         $user->username = $request->input('username');
         $user->name = $request->input('name');
-        $user->system = 'cc';
+        $user->system = $system;
         $user->admin_prev = 1;
         $user->assignment = $region;
         $user->status = 1;
@@ -185,7 +189,8 @@ class SuperAdminController extends Controller
         $user->created_at = now();
         $user->save();
 
-        return redirect()->route('cc.super.regions')->with('status', 'User created and assigned');
+        $systemLabel = $system === 'cc' ? 'Call Center' : 'Regional Billing Centre';
+        return redirect()->route('cc.super.regions')->with('status', "User created as {$systemLabel} region admin");
     }
 
     public function indexRegions()
@@ -209,8 +214,9 @@ class SuperAdminController extends Controller
 
         $q = request()->query('q');
         $selectedRegion = request()->query('region');
+        $selectedSystem = request()->query('system');
 
-        $query = User::where('system', 'cc');
+        $query = User::whereIn('system', ['cc', 'rb']);
         if (! $allRegions->isEmpty()) {
             $query->whereIn('assignment', $allRegions->toArray());
         } else {
@@ -228,6 +234,10 @@ class SuperAdminController extends Controller
             $query->where('assignment', $selectedRegion);
         }
 
+        if (! empty($selectedSystem)) {
+            $query->where('system', $selectedSystem);
+        }
+
         $regionAdmins = $query->get();
 
         $regions = $regionAdmins->pluck('assignment')
@@ -236,7 +246,7 @@ class SuperAdminController extends Controller
             ->sort()
             ->values();
 
-        return view('cc.super.regions', compact('regions', 'regionAdmins', 'q', 'selectedRegion'));
+        return view('cc.super.regions', compact('regions', 'regionAdmins', 'q', 'selectedRegion', 'selectedSystem'));
     }
 
     public function searchRegions(Request $request)
@@ -251,7 +261,7 @@ class SuperAdminController extends Controller
             ->pluck('region')
             ->values();
 
-        $query = User::where('system', 'cc');
+        $query = User::whereIn('system', ['cc', 'rb']);
         if (! $allRegions->isEmpty()) {
             $query->whereIn('assignment', $allRegions->toArray());
         } else {
@@ -260,6 +270,7 @@ class SuperAdminController extends Controller
 
         $q = $request->query('q');
         $selectedRegion = $request->query('region');
+        $selectedSystem = $request->query('system');
 
         if (! empty($q)) {
             $query->where(function($w) use ($q) {
@@ -270,6 +281,10 @@ class SuperAdminController extends Controller
 
         if (! empty($selectedRegion)) {
             $query->where('assignment', $selectedRegion);
+        }
+
+        if (! empty($selectedSystem)) {
+            $query->where('system', $selectedSystem);
         }
 
         $regionAdmins = $query->get();

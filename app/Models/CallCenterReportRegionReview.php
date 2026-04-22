@@ -11,6 +11,7 @@ class CallCenterReportRegionReview extends Model
 
     protected $fillable = [
         'call_center_report_id',
+        'report_type',
         'region_name',
         'reviewed_by_user_id',
         'reviewed_at',

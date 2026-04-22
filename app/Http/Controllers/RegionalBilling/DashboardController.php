@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Http\Controllers\CallCenter;
+namespace App\Http\Controllers\RegionalBilling;
 
 use App\Http\Controllers\Controller;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterInteraction;
-use App\Models\CallCenter\CallCenterUser;
+use App\Models\CallCenterReport;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -22,38 +23,40 @@ class DashboardController extends Controller
         // Redirect non-super users to their respective dashboards
         if ($assignment !== 'super') {
             if ($assignment && str_starts_with($assignment, 'caller_')) {
-                return redirect()->route('cc.assignments.list');
+                return redirect()->route('rb.assignments.list');
             }
             if ($assignment && str_starts_with($assignment, 'supervisor_')) {
-                return redirect()->route('cc.supervisor.dashboard');
+                return redirect()->route('rb.supervisor.dashboard');
             }
             if ($assignment && str_starts_with($assignment, 'rtom_')) {
-                return redirect()->route('cc.rtom.dashboard');
+                return redirect()->route('rb.rtom.dashboard');
             }
             if ($assignment) {
-                return redirect()->route('cc.region.dashboard');
+                return redirect()->route('rb.region.dashboard');
             }
             abort(403, 'Only super admins can access the overview dashboard.');
         }
 
         $monthStart = Carbon::now()->startOfMonth();
         $monthEnd = Carbon::now()->endOfMonth();
-        $totalAssignedRows = CallCenterAssignment::callCenter()->whereNotNull('assigned_user_id')->count();
+        $totalAssignedRows = CallCenterAssignment::where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+            ->whereNotNull('assigned_user_id')->count();
 
         $distinctExpr = DB::raw("DISTINCT COALESCE(account_number, CONCAT('assignment:', assignment_id))");
 
-        $userStats = CallCenterUser::active()
+        $userStats = User::where('system', 'rb')
             ->where('assignment', 'like', 'caller_%')
+            ->active()
             ->orderBy('name')
             ->get()
-            ->map(function (CallCenterUser $user) use ($monthStart, $totalAssignedRows, $distinctExpr) {
+            ->map(function (User $user) use ($monthStart, $totalAssignedRows, $distinctExpr) {
                 $base = CallCenterInteraction::where('agent_id', $user->id);
                 $monthly = (clone $base)->where('created_at', '>=', $monthStart);
-                $assignmentBase = CallCenterAssignment::callCenter()->where('assigned_user_id', $user->id);
+                $assignmentBase = CallCenterAssignment::where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+                    ->where('assigned_user_id', $user->id);
 
                 $callsMonth = (clone $monthly)->count();
                 $customersMonth = (clone $monthly)->count($distinctExpr);
-                // Count payments by payment_date so "payments gathered this month" reflects actual payment dates
                 $monthlyPaymentsByDate = (clone $base)->where('paid', true)->where('payment_date', '>=', $monthStart);
                     $paymentsMonth = (clone $monthlyPaymentsByDate)->count();
                     $customersWithPaymentsMonth = (clone $monthlyPaymentsByDate)->count($distinctExpr);
@@ -97,7 +100,7 @@ class DashboardController extends Controller
         // callers with zero assigned rows this month
         $unassignedThisMonth = $userStats->filter(fn($s) => ($s['assigned_rows_month'] ?? 0) == 0)->values();
 
-        return view('callcenter.dashboard', [
+        return view('regionalbilling.dashboard', [
             'userStats' => $userStats,
             'totalAssignedRows' => $totalAssignedRows,
             'monthLabel' => $monthStart->format('F Y'),
@@ -113,77 +116,5 @@ class DashboardController extends Controller
             'unassigned_callers_month' => $unassignedThisMonth,
             'unassigned_callers_month_count' => $unassignedThisMonth->count(),
         ]);
-    }
-
-    /**
-     * Return last 7 days of calls taken by a caller (agent).
-     */
-    public function callerCalls7(Request $request, $id)
-    {
-        // Optionally restrict to admins or cc users; session.cc_user middleware applied to group
-        $end = Carbon::now()->endOfDay();
-        $start = Carbon::now()->subDays(6)->startOfDay();
-
-        $rows = CallCenterInteraction::where('agent_id', (int) $id)
-            ->whereBetween('created_at', [$start, $end])
-            ->select(DB::raw('DATE(created_at) as day'), DB::raw('count(*) as cnt'))
-            ->groupBy('day')
-            ->orderBy('day')
-            ->get()
-            ->pluck('cnt', 'day')
-            ->toArray();
-
-        // Build ordered array for the 7 days
-        $labels = [];
-        $data = [];
-        $d = clone $start;
-        while ($d->lte($end)) {
-            $key = $d->format('Y-m-d');
-            $labels[] = $d->format('M j');
-            $data[] = isset($rows[$key]) ? (int) $rows[$key] : 0;
-            $d->addDay();
-        }
-
-        return response()->json(['labels' => $labels, 'data' => $data]);
-    }
-
-    /**
-     * Return a JSON list of pending or overdue payment customers.
-     * Query param: type=pending|overdue
-     */
-    public function paymentList(Request $request)
-    {
-        $type = $request->query('type', 'pending');
-        $monthStart = Carbon::now()->startOfMonth();
-        $monthEnd = Carbon::now()->endOfMonth();
-
-        $q = CallCenterInteraction::with(['assignment.agent'])
-            ->where('paid', false)
-            ->whereNotNull('payment_expected_at');
-
-        if ($type === 'pending') {
-            $q->whereBetween('payment_expected_at', [$monthStart->toDateString(), $monthEnd->toDateString()]);
-        } elseif ($type === 'overdue') {
-            $q->where('payment_expected_at', '<', Carbon::now());
-        } else {
-            return response()->json(['error' => 'Invalid type'], 400);
-        }
-
-        $items = $q->orderBy('payment_expected_at')->orderBy('created_at', 'desc')->get()
-            ->groupBy(function (CallCenterInteraction $i) {
-                return $i->account_number ? $i->account_number : ('assignment:'.$i->assignment_id);
-            })->map(function ($group) {
-                /** @var CallCenterInteraction $i */
-                $i = $group->first();
-                return [
-                    'account' => $i->account_number ?? null,
-                    'assignment_id' => $i->assignment_id,
-                    'payment_expected_at' => $i->payment_expected_at ? $i->payment_expected_at->toDateString() : null,
-                    'assigned_user_id' => optional($i->assignment)->assigned_user_id,
-                    'assigned_user_name' => optional($i->assignment->agent)->name ?? optional($i->assignment->agent)->username ?? null,
-                ];
-            })->values();
-
-        return response()->json(['items' => $items]);
     }
 }

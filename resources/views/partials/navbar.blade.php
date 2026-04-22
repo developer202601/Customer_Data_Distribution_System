@@ -1,6 +1,6 @@
 <nav class="main-header navbar navbar-expand navbar-white navbar-light shadow-sm">
     <div class="container-fluid d-flex align-items-center" style="padding: 0px 20px;">
-        <a href="{{ (session('user.system') == 'cc' || request()->is('cc/*')) ? route('cc.dashboard') : url('/') }}" class="navbar-brand d-flex align-items-center mb-0" style="padding: 12px 0px;">
+        <a href="{{ session('user.system') === 'rb' ? route('rb.dashboard') : (session('user.system') === 'cc' ? route('cc.dashboard') : url('/')) }}" class="navbar-brand d-flex align-items-center mb-0" style="padding: 12px 0px;">
             <img src="{{ asset('images/slt-logo.svg') }}" alt="SLT Logo" style="height:48px; margin-right: 1rem;">
         </a>
         @php

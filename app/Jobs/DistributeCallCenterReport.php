@@ -64,6 +64,7 @@ class DistributeCallCenterReport implements ShouldQueue
         }
 
         $rowIds = $report->row_ids ?? [];
+        $reportType = $report->report_type ?? CallCenterReport::REPORT_TYPE_CALL_CENTER;
         if (empty($rowIds)) {
             return;
         }
@@ -154,6 +155,7 @@ class DistributeCallCenterReport implements ShouldQueue
             for ($i = 0; $i < $take && $pos < $total; $i++, $pos++) {
                 $batch[] = [
                     'call_center_report_id' => $report->id,
+                    'report_type' => $reportType,
                     'master_dataset_row_id' => $rowIds[$pos],
                     'assigned_user_id' => $uid,
                     'status' => 'pending',

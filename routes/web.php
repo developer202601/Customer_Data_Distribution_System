@@ -157,6 +157,65 @@ Route::middleware('session.auth')->group(function () {
             Route::get('/reports/{report}/download', [CallCenterReportController::class, 'download'])->name('reports.download');
         });
     });
+
+    Route::prefix('rb')->name('rb.')->middleware('session.rb_user')->group(function () {
+        // Regional billing staff assignment endpoints (mirror of call-center)
+        Route::get('/', [\App\Http\Controllers\RegionalBilling\DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/assignments', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'index'])->name('assignments.list');
+        Route::get('/assignments/manage', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'manage'])->name('assignments.manage');
+        Route::post('/assignments/{user}/accept-all', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'acceptAll'])->name('assignments.acceptAll');
+        Route::post('/assignments/{user}/reject-all', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'rejectAll'])->name('assignments.rejectAll');
+        Route::get('/assignments/{user}/rows', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'userRows'])->name('assignments.userRows');
+        Route::get('/assignments/{assignment}/details', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'assignmentDetails'])->name('assignments.details');
+        Route::post('/assignments/{id}/claim', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'claim'])->name('assignments.claim');
+        Route::post('/assignments/{id}/complete', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'complete'])->name('assignments.complete');
+        Route::post('/assignments/{id}/interactions', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'storeInteraction'])->name('assignments.interactions.store');
+        Route::post('/assignments/{id}/accept', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'accept'])->name('assignments.accept');
+        Route::post('/assignments/{id}/reject', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'reject'])->name('assignments.reject');
+        Route::get('/supervisor/dashboard', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'supervisorDashboard'])->name('supervisor.dashboard');
+        Route::get('/rtom/dashboard', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'rtomDashboard'])->name('rtom.dashboard');
+
+        Route::middleware('session.rb_user')->group(function () {
+            Route::get('/users', [\App\Http\Controllers\RegionalBilling\UserController::class, 'index'])->name('users.index');
+            Route::get('/users/create', [\App\Http\Controllers\RegionalBilling\SuperAdminController::class, 'createUserForm'])->name('users.create');
+            Route::post('/users/super', [\App\Http\Controllers\RegionalBilling\SuperAdminController::class, 'storeUser'])->name('super.store_user');
+            Route::post('/users', [\App\Http\Controllers\RegionalBilling\UserController::class, 'store'])->name('users.store');
+            Route::get('/users/assign', [\App\Http\Controllers\RegionalBilling\SuperAdminController::class, 'indexAssign'])->name('users.assign.index');
+            Route::get('/users/{user}/edit', [\App\Http\Controllers\RegionalBilling\UserController::class, 'edit'])->name('users.edit');
+            Route::put('/users/{user}', [\App\Http\Controllers\RegionalBilling\UserController::class, 'update'])->name('users.update');
+            Route::put('/users/{user}/disable', [\App\Http\Controllers\RegionalBilling\UserController::class, 'disable'])->name('users.disable');
+            Route::put('/users/{user}/enable', [\App\Http\Controllers\RegionalBilling\UserController::class, 'enable'])->name('users.enable');
+            Route::get('/users/{user}/assign', [\App\Http\Controllers\RegionalBilling\SuperAdminController::class, 'showAssignForm'])->name('users.assign');
+            Route::post('/users/{user}/assign', [\App\Http\Controllers\RegionalBilling\SuperAdminController::class, 'storeAssignment'])->name('users.assign.store');
+            Route::delete('/users/{user}', [\App\Http\Controllers\RegionalBilling\UserController::class, 'destroy'])->name('users.destroy');
+            Route::get('/reports/history', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'history'])->name('reports.history');
+            Route::get('/reports/{report}/summary', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'summary'])->name('reports.summary');
+            Route::get('/reports', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'index'])->name('reports');
+            Route::get('/reports/agent-details', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'getAgentDetails'])->name('reports.agentDetails');
+            Route::get('/regions', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'indexRegions'])->name('regions.index');
+            Route::get('/regions/{user}/edit', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'editRegionAdminForm'])->name('regions.edit');
+            Route::put('/regions/{user}', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'updateRegionAdmin'])->name('regions.update');
+            Route::get('/regions/search', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'searchRegions'])->name('regions.search');
+            Route::get('/regions/dashboard', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'dashboard'])->name('region.dashboard');
+            Route::get('/rtoms/dashboard', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'index'])->name('region.index');
+            Route::get('/rtoms/search', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'search'])->name('region.search');
+            Route::get('/rtoms/create-admin', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'createAdminForm'])->name('region.create_admin');
+            Route::get('/rtoms/create-supervisor', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'createSupervisorForm'])->name('region.create_supervisor');
+            Route::post('/rtoms/admins', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'storeAdmin'])->name('region.store_admin');
+            Route::post('/rtoms/supervisors', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'storeSupervisor'])->name('region.store_supervisor');
+            Route::get('/rtoms/admins/{user}/edit', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'editAdminForm'])->name('region.edit_admin');
+            Route::put('/rtoms/admins/{user}', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'updateAdmin'])->name('region.update_admin');
+            Route::get('/rtoms/supervisors/{user}/edit', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'editSupervisorForm'])->name('region.edit_supervisor');
+            Route::put('/rtoms/supervisors/{user}', [\App\Http\Controllers\RegionalBilling\RegionAdminController::class, 'updateSupervisor'])->name('region.update_supervisor');
+            Route::post('/reports/{report}/distribute', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'distribute'])->name('reports.distribute');
+            Route::post('/reports/{report}/distribute-supervisor', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'distributeSupervisor'])->name('reports.distribute_supervisor');
+            Route::get('/reports/{report}/distribute/cancel/{token}', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'cancelDistribute'])->name('reports.distribute.cancel');
+            Route::post('/reports/{report}/recall', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'recall'])->name('reports.recall');
+            Route::get('/reports/{report}/recall/preview', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'recallPreview'])->name('reports.recall.preview');
+            Route::post('/reports/{report}/reassign', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'reassign'])->name('reports.reassign');
+            Route::get('/reports/{report}/download', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'download'])->name('reports.download');
+        });
+    });
 });
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');

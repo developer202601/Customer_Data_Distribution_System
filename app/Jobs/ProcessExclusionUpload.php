@@ -14,7 +14,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile as IlluminateUploadedFile;
@@ -33,14 +32,7 @@ class ProcessExclusionUpload implements ShouldQueue
     private const MAX_CONCURRENT_INGESTS = 2;
     private const QUEUE_RETRY_DELAY = 30;
     private const LOCK_TTL_SECONDS = 10800;
-    private const QUEUE_STATUS_CACHE_PREFIX = 'master:ingest:queue:';
-    private const DURATION_CACHE_KEY = 'master:ingest:durations';
-    private const DURATION_CACHE_MAX = 20;
-    private const MAX_CONCURRENT_INGESTS = 2;
-    private const QUEUE_RETRY_DELAY = 30;
-    private const LOCK_TTL_SECONDS = 10800;
     public int $timeout = 3600;
-    public int $tries = 10;
     public int $tries = 10;
 
     /**
@@ -70,18 +62,6 @@ class ProcessExclusionUpload implements ShouldQueue
 
             return;
         }
-
-        $slot = $this->acquireIngestLock();
-        if (! $slot) {
-            $this->publishQueueStatus($process->id, $queueName);
-            $shouldCleanup = false;
-            $this->release(self::QUEUE_RETRY_DELAY);
-            return;
-        }
-
-        [$lock] = $slot;
-        $this->clearQueueStatus($process->id);
-        $startedAt = microtime(true);
 
         $slot = $this->acquireIngestLock();
         if (! $slot) {
@@ -367,11 +347,6 @@ class ProcessExclusionUpload implements ShouldQueue
         if (! $process) {
             $this->cleanup();
 
-            return;
-        }
-
-        if ($process->status === MasterDatasetProcessStatus::CANCELED) {
-            $this->cleanup();
             return;
         }
 

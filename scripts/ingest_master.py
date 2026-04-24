@@ -640,10 +640,9 @@ def main() -> int:
         write_status(args.status, status_payload)
         return 0
 
-<<<<<<< HEAD
     if _abort_requested():
         return _cancel("validation", processed_rows=int(validation.get("row_count") or 0), total_rows=int(validation.get("row_count") or 0))
-=======
+    
     csv_path = str(manifest.get("master_csv_full_path") or "").strip()
     if csv_path:
         try:
@@ -652,7 +651,6 @@ def main() -> int:
             status_base["workbook"]["csv_path"] = csv_path
         except Exception:
             pass
->>>>>>> 9f8f1c89d253f00daee6080d04751d48b116d696
 
     # Determine arrears + payments columns (now guaranteed present).
     arrears_candidates = [c for c in df.columns if str(c).startswith(_norm_header(arrears_prefix or "NEW_ARREARS_"))]

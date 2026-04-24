@@ -11,6 +11,7 @@ class CallCenterReportHiddenRow extends Model
 
     protected $fillable = [
         'call_center_report_id',
+        'report_type',
         'master_dataset_row_id',
         'hidden_by_user_id',
         'hidden_at',

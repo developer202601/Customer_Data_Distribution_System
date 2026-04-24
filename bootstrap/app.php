@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureCallCenterAdmin;
 use App\Http\Middleware\EnsureCallCenterUser;
+use App\Http\Middleware\EnsureRegionalBillingUser;
 use App\Http\Middleware\EnsureUserIsAuthenticated;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\ValidateCsrfToken;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'session.auth' => EnsureUserIsAuthenticated::class,
             'session.cc_user' => EnsureCallCenterUser::class,
+            'session.rb_user' => EnsureRegionalBillingUser::class,
             'session.cc_admin' => EnsureCallCenterAdmin::class,
         ]);
     })

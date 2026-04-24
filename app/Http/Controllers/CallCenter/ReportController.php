@@ -23,7 +23,7 @@ class ReportController extends Controller
 {
     public function index(Request $request): View
     {
-        $reports = CallCenterReport::with('process')
+        $reports = CallCenterReport::callCenter()->with('process')
             ->orderByDesc('created_at')
             ->get();
 
@@ -39,7 +39,7 @@ class ReportController extends Controller
         }
 
         $rejectedAssignments = $selectedReport
-            ? CallCenterAssignment::with(['row', 'rejectedBy', 'interactions.agent'])
+            ? CallCenterAssignment::callCenter()->with(['row', 'rejectedBy', 'interactions.agent'])
             ->where('call_center_report_id', $selectedReport->id)
             ->rejected()
             ->where('status', 'pending')
@@ -54,7 +54,7 @@ class ReportController extends Controller
             : collect();
 
         $acceptedAssignments = $selectedReport
-            ? CallCenterAssignment::with(['row', 'agent', 'interactions.agent'])
+            ? CallCenterAssignment::callCenter()->with(['row', 'agent', 'interactions.agent'])
             ->where('call_center_report_id', $selectedReport->id)
             ->where('accepted', true)
             ->orderByDesc('accepted_at')
@@ -99,7 +99,7 @@ class ReportController extends Controller
             $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
         }
         foreach ($ccUsers as $u) {
-            $query = CallCenterAssignment::where('assigned_user_id', $u->id)
+            $query = CallCenterAssignment::callCenter()->where('assigned_user_id', $u->id)
                 ->where('call_center_report_id', $selectedReport->id)
                 ->pendingApproval();
             if ($isSupervisor && $rtomVal) {
@@ -111,13 +111,13 @@ class ReportController extends Controller
         // Also compute previous-report pending counts for each user so admins can see carry-overs
         $prevPendingCounts = [];
         if ($selectedReport) {
-            $previousReport = CallCenterReport::where('created_at', '<', $selectedReport->created_at)
+            $previousReport = CallCenterReport::callCenter()->where('created_at', '<', $selectedReport->created_at)
                 ->orderByDesc('created_at')
                 ->first();
 
             if (! $previousReport && $selectedReport->dataset_month) {
                 $prevMonth = (string) $selectedReport->dataset_month;
-                $previousReport = CallCenterReport::whereNotNull('dataset_month')
+                $previousReport = CallCenterReport::callCenter()->whereNotNull('dataset_month')
                     ->where('dataset_month', '<', $prevMonth)
                     ->orderByDesc('dataset_month')
                     ->first();
@@ -125,7 +125,7 @@ class ReportController extends Controller
 
             if ($previousReport) {
                 foreach ($ccUsers as $u) {
-                    $prevPendingCounts[$u->id] = CallCenterAssignment::where('assigned_user_id', $u->id)
+                    $prevPendingCounts[$u->id] = CallCenterAssignment::callCenter()->where('assigned_user_id', $u->id)
                         ->where('call_center_report_id', $previousReport->id)
                         ->pendingApproval()
                         ->count();
@@ -147,7 +147,7 @@ class ReportController extends Controller
         $allowedRowIds = [];
         $effectiveRowCount = $selectedReport ? max(0, (int) $selectedReport->row_count - count($hiddenRowIds)) : 0;
         if ($selectedReport) {
-            $allAssignedForReport = CallCenterAssignment::where('call_center_report_id', $selectedReport->id)->whereNotNull('assigned_user_id');
+            $allAssignedForReport = CallCenterAssignment::callCenter()->where('call_center_report_id', $selectedReport->id)->whereNotNull('assigned_user_id');
             // Default behavior: everything
             $assignedCount = $allAssignedForReport->count();
 
@@ -166,7 +166,7 @@ class ReportController extends Controller
                         ->pluck('id');
                 })->values()->all();
 
-                $assignedCount = CallCenterAssignment::where('call_center_report_id', $selectedReport->id)
+                $assignedCount = CallCenterAssignment::callCenter()->where('call_center_report_id', $selectedReport->id)
                     ->whereIn('master_dataset_row_id', $allowedRowIds)
                     ->whereNotNull('assigned_user_id')
                     ->count();
@@ -235,11 +235,17 @@ class ReportController extends Controller
 
     public function download(Request $request, int $id, MasterDatasetExportService $exportService): StreamedResponse
     {
-        $report = CallCenterReport::findOrFail($id);
+        $report = CallCenterReport::callCenter()->findOrFail($id);
 
         $export = DatasetExport::where('token', $report->token)
-            ->where('bucket', 'call-center')
-            ->firstOrFail();
+            ->where('bucket', 'call-center-staff')
+            ->first();
+
+        if (! $export) {
+            $export = DatasetExport::where('token', $report->token)
+                ->where('bucket', 'call-center')
+                ->firstOrFail();
+        }
 
         $disk = $export->file_disk ?: config('filesystems.default', 'local');
         $path = $export->file_path;
@@ -280,7 +286,7 @@ class ReportController extends Controller
 
     public function history(): View
     {
-        $reportsQuery = CallCenterReport::with('process')
+        $reportsQuery = CallCenterReport::callCenter()->with('process')
             ->orderByDesc('created_at');
 
         // Filter for supervisors: only show reports that have assignments to callers in their RTOM
@@ -299,7 +305,7 @@ class ReportController extends Controller
 
         $reports = $reportsQuery->get();
 
-        $assignmentStats = CallCenterAssignment::selectRaw(
+        $assignmentStats = CallCenterAssignment::callCenter()->selectRaw(
             'call_center_report_id,
             SUM(CASE WHEN assigned_user_id IS NOT NULL THEN 1 ELSE 0 END) as assigned_rows,
             SUM(CASE WHEN accepted = 1 THEN 1 ELSE 0 END) as accepted_rows,
@@ -365,7 +371,7 @@ class ReportController extends Controller
     public function summary(CallCenterReport $report): View
     {
         $label = $this->formatReportLabel($report);
-        $assignments = CallCenterAssignment::with(['agent', 'row', 'interactions.agent'])
+        $assignments = CallCenterAssignment::callCenter()->with(['agent', 'row', 'interactions.agent'])
             ->where('call_center_report_id', $report->id)
             ->get();
 
@@ -447,12 +453,12 @@ class ReportController extends Controller
         $earliestAssignment = $assignments->whereNotNull('created_at')->min('created_at');
         $reportStart = Carbon::parse($earliestAssignment ?? $report->created_at ?? Carbon::now())->startOfDay();
 
-        $nextReport = CallCenterReport::where('created_at', '>', $report->created_at)
+        $nextReport = CallCenterReport::callCenter()->where('created_at', '>', $report->created_at)
             ->orderBy('created_at')
             ->first();
 
         $nextAssignmentStart = $nextReport
-            ? CallCenterAssignment::where('call_center_report_id', $nextReport->id)
+            ? CallCenterAssignment::callCenter()->where('call_center_report_id', $nextReport->id)
             ->whereNotNull('created_at')
             ->orderBy('created_at')
             ->value('created_at')
@@ -472,7 +478,7 @@ class ReportController extends Controller
         $callsCalendar = $this->buildDailyCalendar($interactionCounts, $reportStart, $reportEnd);
         $callsPerWeek = $this->summarizeWeeklyFrom($interactionCounts, $reportStart, $reportEnd);
 
-        $nonAcceptedAssignments = CallCenterAssignment::with(['agent', 'row', 'rejectedBy'])
+        $nonAcceptedAssignments = CallCenterAssignment::callCenter()->with(['agent', 'row', 'rejectedBy'])
             ->where('call_center_report_id', $report->id)
             ->whereNotNull('assigned_user_id')
             ->where('accepted', false)
@@ -713,7 +719,7 @@ class ReportController extends Controller
             abort(403);
         }
 
-        $report = CallCenterReport::findOrFail($reportId);
+        $report = CallCenterReport::callCenter()->findOrFail($reportId);
 
         $pendingRegions = $this->pendingRegionalReviews($report);
         if (! empty($pendingRegions)) {
@@ -769,7 +775,7 @@ class ReportController extends Controller
         }
 
         // Exclude rows already assigned for this report
-        $alreadyAssigned = CallCenterAssignment::where('call_center_report_id', $report->id)
+        $alreadyAssigned = CallCenterAssignment::callCenter()->where('call_center_report_id', $report->id)
             ->whereIn('master_dataset_row_id', $allowedRowIds)
             ->whereNotNull('assigned_user_id')
             ->pluck('master_dataset_row_id')
@@ -788,6 +794,7 @@ class ReportController extends Controller
         $remainder = $userCount ? $total % $userCount : 0;
 
         $now = Carbon::now()->toDateTimeString();
+        $reportType = $report->report_type ?? CallCenterReport::REPORT_TYPE_CALL_CENTER;
         $batch = [];
         $pos = 0;
         foreach ($users as $index => $uid) {
@@ -795,6 +802,7 @@ class ReportController extends Controller
             for ($i = 0; $i < $take && $pos < $total; $i++, $pos++) {
                 $batch[] = [
                     'call_center_report_id' => $report->id,
+                    'report_type' => $reportType,
                     'master_dataset_row_id' => $available[$pos],
                     'assigned_user_id' => $uid,
                     'status' => 'pending',

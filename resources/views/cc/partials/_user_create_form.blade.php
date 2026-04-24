@@ -5,6 +5,7 @@
     // $regions: collection/array (for mode 'region')
     // $rtoms: collection/array (for mode 'rtom')
     // $isSupervisor: optional boolean (for RTOM supervisor creation)
+    // $systems: optional collection/array (for region mode system selection)
 @endphp
 
 <form method="POST" action="{{ $action }}">
@@ -23,6 +24,18 @@
     </div>
 
     @if($mode === 'region')
+        @if(isset($systems) && $systems)
+            <div class="form-group mt-3">
+                <label for="system">System <span class="text-danger">*</span></label>
+                <select id="system" name="system" class="form-select" required>
+                    <option value="">-- Select System --</option>
+                    @foreach($systems as $key => $label)
+                        <option value="{{ $key }}" {{ old('system') === $key ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
+
         <div class="form-group position-relative mt-3" id="region-box">
             <label for="region-input">Region (from last 2 reports)</label>
             <input id="region-input" type="text" class="form-control" placeholder="Type 1-2 characters to search..." autocomplete="off" value="{{ old('region') }}">

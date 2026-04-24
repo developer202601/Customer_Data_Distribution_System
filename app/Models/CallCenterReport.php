@@ -12,8 +12,12 @@ class CallCenterReport extends Model
 {
     use HasFactory;
 
+    public const REPORT_TYPE_CALL_CENTER = 'call-center';
+    public const REPORT_TYPE_REGIONAL_BILLING = 'regional-billing';
+
     protected $fillable = [
         'master_dataset_process_id',
+        'report_type',
         'token',
         'dataset_month',
         'row_count',
@@ -24,6 +28,16 @@ class CallCenterReport extends Model
         'row_count' => 'integer',
         'row_ids' => 'array',
     ];
+
+    public function scopeCallCenter($query)
+    {
+        return $query->where('report_type', self::REPORT_TYPE_CALL_CENTER);
+    }
+
+    public function scopeRegionalBilling($query)
+    {
+        return $query->where('report_type', self::REPORT_TYPE_REGIONAL_BILLING);
+    }
 
     public function process(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

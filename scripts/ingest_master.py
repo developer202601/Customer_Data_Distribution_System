@@ -642,7 +642,7 @@ def main() -> int:
 
     if _abort_requested():
         return _cancel("validation", processed_rows=int(validation.get("row_count") or 0), total_rows=int(validation.get("row_count") or 0))
-    
+
     csv_path = str(manifest.get("master_csv_full_path") or "").strip()
     if csv_path:
         try:

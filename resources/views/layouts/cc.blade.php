@@ -41,10 +41,14 @@
         <!-- Top toast for flash messages (kept for CC-specific toasts) -->
         @include('partials.top-toast')
 
-        <!-- Offcanvas left sliding panel for Call Center (renders below navbar) -->
-        @include('partials.cc-sidebar')
+        <!-- Offcanvas left sliding panel for the current system -->
+        @if(session('user.system') === 'rb')
+            @include('partials.rb-sidebar')
+        @else
+            @include('partials.cc-sidebar')
+        @endif
 
-        <!-- small fixed toggle button so users can open the call center sidebar -->
+        <!-- small fixed toggle button so users can open the sidebar -->
         <button class="btn btn-outline-secondary cc-sidebar-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#ccSidebar" aria-controls="ccSidebar" aria-label="Open menu">
             ☰
         </button>

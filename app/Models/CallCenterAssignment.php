@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CallCenterReport;
 
 class CallCenterAssignment extends Model
 {
@@ -13,6 +14,7 @@ class CallCenterAssignment extends Model
 
     protected $fillable = [
         'call_center_report_id',
+        'report_type',
         'master_dataset_row_id',
         'assigned_user_id',
         'status',
@@ -75,5 +77,15 @@ class CallCenterAssignment extends Model
     public function scopePendingApproval($query)
     {
         return $query->where('accepted', false)->where('rejected', false);
+    }
+
+    public function scopeCallCenter($query)
+    {
+        return $query->where('report_type', CallCenterReport::REPORT_TYPE_CALL_CENTER);
+    }
+
+    public function scopeRegionalBilling($query)
+    {
+        return $query->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING);
     }
 }

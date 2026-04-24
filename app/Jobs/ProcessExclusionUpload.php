@@ -355,11 +355,6 @@ class ProcessExclusionUpload implements ShouldQueue
             return;
         }
 
-        if ($process->status === MasterDatasetProcessStatus::CANCELED) {
-            $this->cleanup();
-            return;
-        }
-
         $message = $this->limitFailureReason((string) ($exception?->getMessage() ?? 'Exclusion processing failed.'));
         $wrapped = ValidationException::withMessages([
             'exclusions' => [$message],

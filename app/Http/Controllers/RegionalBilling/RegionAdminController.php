@@ -195,10 +195,8 @@ class RegionAdminController extends Controller
 
     public function createSupervisorForm()
     {
-        $region = $this->ensureRegionAdmin();
-        $rtoms = $this->regionRtoms($region);
-
-        return view('regionalbilling.region.create_supervisor', compact('rtoms', 'region'));
+        $this->ensureRtomAdmin();
+        return view('regionalbilling.region.create_supervisor');
     }
 
     public function storeAdmin(Request $request)
@@ -233,29 +231,28 @@ class RegionAdminController extends Controller
         $assignment = session('user.assignment') ?? '';
         $isRtomAdmin = str_starts_with($assignment, 'rtom_');
 
+        if (! $isRtomAdmin) {
+            abort(403);
+        }
+
         $request->validate([
             'username' => 'required|digits:6|unique:users,username',
             'name' => 'nullable|string|max:45',
-            'supervisor' => $isRtomAdmin ? 'nullable|string|max:255' : 'required|string|max:255',
         ]);
-
-        $rtom = $isRtomAdmin
-            ? $assignment
-            : ('rtom_' . preg_replace('/\s+/', '_', strtolower($request->input('supervisor'))));
 
         $user = User::create([
             'username' => $request->input('username'),
-            'admin_prev' => 1,
+            'admin_prev' => 0,
             'system' => 'rb',
             'created_at' => now(),
             'fixed' => 0,
             'status' => 1,
             'name' => $request->input('name'),
-            'assignment' => 'supervisor_' . preg_replace('/\s+/', '_', strtolower(str_replace('rtom_', '', $rtom))),
+            'assignment' => 'caller_' . preg_replace('/\s+/', '_', strtolower(str_replace('rtom_', '', $assignment))),
             'supervisor' => session('user')['id'] ?? null,
         ]);
 
-        return redirect()->route($isRtomAdmin ? 'rb.rtom.dashboard' : 'rb.region.index')->with('status', 'Supervisor created');
+        return redirect()->route('rb.users.index')->with('status', 'Caller created');
     }
 
     public function editAdminForm(User $user)
@@ -338,11 +335,11 @@ class RegionAdminController extends Controller
         $rtom = $this->ensureRtomAdmin();
         $rtomAdminId = session('user')['id'] ?? null;
 
-        $supervisors = User::where('system', 'rb')
-            ->where('assignment', 'like', 'supervisor_%')
+        $callers = User::where('system', 'rb')
+            ->where('assignment', 'like', 'caller_%')
             ->where('supervisor', $rtomAdminId)
             ->get();
 
-        return view('regionalbilling.region.rtom_dashboard', compact('rtom', 'supervisors'));
+        return view('regionalbilling.region.rtom_dashboard', compact('rtom', 'callers'));
     }
 }

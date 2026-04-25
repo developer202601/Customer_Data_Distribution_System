@@ -21,7 +21,6 @@
                     </div>
                     <div class="d-flex gap-2">
                         <a href="{{ route('rb.region.create_admin') }}" class="btn btn-outline-success rounded-pill px-4">Add RTO Admin</a>
-                        <a href="{{ route('rb.region.create_supervisor') }}" class="btn btn-outline-primary rounded-pill px-4">Add Supervisor</a>
                     </div>
                 </div>
 

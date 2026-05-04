@@ -472,7 +472,7 @@ def _connect_mysql_from_env():
     host = os.environ.get("CDDS_DB_HOST") or "127.0.0.1"
     port_raw = os.environ.get("CDDS_DB_PORT") or "3306"
     user = os.environ.get("CDDS_DB_USERNAME") or "root"
-    password = os.environ.get("CDDS_DB_PASSWORD") or "0000"
+    password = os.environ.get("CDDS_DB_PASSWORD") or ""
     database = os.environ.get("CDDS_DB_DATABASE") or "cdds"
 
     if not host or not user or not database:

@@ -161,6 +161,7 @@ Route::middleware('session.auth')->group(function () {
     Route::prefix('rb')->name('rb.')->middleware('session.rb_user')->group(function () {
         // Regional billing staff assignment endpoints (mirror of call-center)
         Route::get('/', [\App\Http\Controllers\RegionalBilling\DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/caller/dashboard', [\App\Http\Controllers\RegionalBilling\DashboardController::class, 'callerDashboard'])->name('caller.dashboard');
         Route::get('/assignments', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'index'])->name('assignments.list');
         Route::get('/assignments/manage', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'manage'])->name('assignments.manage');
         Route::post('/assignments/{user}/accept-all', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'acceptAll'])->name('assignments.acceptAll');

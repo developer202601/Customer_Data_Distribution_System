@@ -135,7 +135,8 @@ class AuthController extends Controller
             return 'rb.users.index';
         }
 
-        return 'rb.assignments.manage';
+        // Regular callers go to caller dashboard
+        return 'rb.caller.dashboard';
     }
 
     public function logout(Request $request): RedirectResponse

@@ -29,7 +29,12 @@
                     <a class="nav-link{{ $rbRouteName === 'rb.region.index' ? ' active' : '' }}" href="{{ route('rb.region.index') }}" aria-current="{{ $rbRouteName === 'rb.region.index' ? 'page' : '' }}">RTO Admins</a>
                 @endif
             @else
-                <a class="nav-link{{ str_starts_with($rbRouteName, 'rb.assignments') ? ' active' : '' }}" href="{{ route('rb.assignments.manage') }}" aria-current="{{ str_starts_with($rbRouteName, 'rb.assignments') ? 'page' : '' }}">Assignments</a>
+                @if(str_starts_with($assignment, 'caller_'))
+                    <a class="nav-link{{ $rbRouteName === 'rb.caller.dashboard' ? ' active' : '' }}" href="{{ route('rb.caller.dashboard') }}" aria-current="{{ $rbRouteName === 'rb.caller.dashboard' ? 'page' : '' }}">Caller Dashboard</a>
+                    <a class="nav-link{{ str_starts_with($rbRouteName, 'rb.assignments') ? ' active' : '' }}" href="{{ route('rb.assignments.manage') }}" aria-current="{{ str_starts_with($rbRouteName, 'rb.assignments') ? 'page' : '' }}">Assignments</a>
+                @else
+                    <a class="nav-link{{ str_starts_with($rbRouteName, 'rb.assignments') ? ' active' : '' }}" href="{{ route('rb.assignments.manage') }}" aria-current="{{ str_starts_with($rbRouteName, 'rb.assignments') ? 'page' : '' }}">Assignments</a>
+                @endif
             @endif
         </nav>
     </div>

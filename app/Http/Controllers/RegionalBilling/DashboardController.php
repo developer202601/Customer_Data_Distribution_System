@@ -23,7 +23,7 @@ class DashboardController extends Controller
         // Redirect non-super users to their respective dashboards
         if ($assignment !== 'super') {
             if ($assignment && str_starts_with($assignment, 'caller_')) {
-                return redirect()->route('rb.assignments.list');
+                return redirect()->route('rb.assignments.manage');
             }
             if ($assignment && str_starts_with($assignment, 'supervisor_')) {
                 return redirect()->route('rb.supervisor.dashboard');
@@ -115,6 +115,60 @@ class DashboardController extends Controller
                 ->count($distinctExpr),
             'unassigned_callers_month' => $unassignedThisMonth,
             'unassigned_callers_month_count' => $unassignedThisMonth->count(),
+        ]);
+    }
+
+    public function callerDashboard(): View
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'rb') {
+            abort(403);
+        }
+
+        $assignment = strtolower(trim((string) ($sessionUser['assignment'] ?? '')));
+        if (! str_starts_with($assignment, 'caller_')) {
+            abort(403);
+        }
+
+        $userId = $sessionUser['id'] ?? null;
+        if (! $userId) {
+            abort(403);
+        }
+
+        $base = CallCenterAssignment::regionalBilling()->where('assigned_user_id', $userId);
+        $totalAssigned = (clone $base)->count();
+        $pendingAccepted = (clone $base)->where('accepted', true)->where('status', 'pending')->count();
+        $pendingAcceptance = (clone $base)->where('accepted', false)->where('rejected', false)->count();
+        $completed = (clone $base)->where('status', 'completed')->count();
+        $rejected = (clone $base)->where('rejected', true)->count();
+
+        $latestReportId = (clone $base)->max('call_center_report_id');
+        $latestReportLabel = null;
+        if ($latestReportId) {
+            $report = CallCenterReport::regionalBilling()->find((int) $latestReportId);
+            if ($report) {
+                $dm = $report->dataset_month;
+                $latestReportLabel = ($dm && strlen($dm) === 6)
+                    ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report'
+                    : ($report->dataset_month ?: 'Report #' . $report->id);
+            }
+        }
+
+        $recentAssignments = CallCenterAssignment::regionalBilling()
+            ->with(['row', 'report'])
+            ->where('assigned_user_id', $userId)
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
+
+        return view('regionalbilling.caller.dashboard', [
+            'totalAssigned' => $totalAssigned,
+            'pendingAccepted' => $pendingAccepted,
+            'pendingAcceptance' => $pendingAcceptance,
+            'completed' => $completed,
+            'rejected' => $rejected,
+            'latestReportLabel' => $latestReportLabel,
+            'recentAssignments' => $recentAssignments,
         ]);
     }
 }

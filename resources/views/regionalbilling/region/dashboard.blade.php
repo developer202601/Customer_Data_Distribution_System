@@ -26,7 +26,7 @@
                     <div class="col-md-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
-                                <h5 class="card-title">RTO Admins</h5>
+                                <h5 class="card-title">RTO Admins</h5><br>
                                 <p class="card-text">{{ $rtomCount }} RTO admin{{ $rtomCount === 1 ? '' : 's' }} assigned to your region.</p>
                                 <a href="{{ route('rb.region.index') }}" class="btn btn-primary">Manage RTO Admins</a>
                             </div>
@@ -35,7 +35,7 @@
                     <div class="col-md-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
-                                <h5 class="card-title">Reports</h5>
+                                <h5 class="card-title">Reports</h5><br>
                                 <p class="card-text">{{ $reportCount }} regional billing report{{ $reportCount === 1 ? '' : 's' }} with rows for your region.</p>
                                 <a href="{{ route('rb.reports') }}" class="btn btn-primary">Review Reports</a>
                             </div>
@@ -44,11 +44,10 @@
                     <div class="col-md-4">
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
-                                <h5 class="card-title">Quick actions</h5>
-                                <p class="card-text">Create a new RTO admin or add a supervisor for the region.</p>
+                                <h5 class="card-title">Quick actions</h5><br>
+                                <p class="card-text">Create a new RTO admin for the region.</p>
                                 <div class="d-flex flex-column gap-2">
                                     <a href="{{ route('rb.region.create_admin') }}" class="btn btn-outline-primary">Add RTO Admin</a>
-                                    <a href="{{ route('rb.region.create_supervisor') }}" class="btn btn-outline-secondary">Add Supervisor</a>
                                 </div>
                             </div>
                         </div>

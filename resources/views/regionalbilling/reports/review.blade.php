@@ -251,12 +251,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const pagerLink = ev.target.closest('.pagination a');
             if (!pagerLink) return;
             ev.preventDefault();
-            try {
-                const u = new URL(pagerLink.href);
-                fetchTable(Number(u.searchParams.get('page') || '1'));
-            } catch (e) {
-                fetchTable(1);
-            }
+            window.location.href = pagerLink.href;
         });
     }
 

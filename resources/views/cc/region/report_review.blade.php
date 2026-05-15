@@ -731,17 +731,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const pagerLink = ev.target.closest('.pagination a');
             if (pagerLink) {
                 ev.preventDefault();
-                window.CDDSLoaderIgnoreBeforeUnload = true;
-                if (window.CDDSLoader && typeof window.CDDSLoader.hide === 'function') {
-                    window.CDDSLoader.hide();
-                }
-                try {
-                    const u = new URL(pagerLink.href);
-                    const nextPage = Number(u.searchParams.get('page') || '1');
-                    fetchTable(nextPage);
-                } catch (e) {
-                    fetchTable(1);
-                }
+                window.location.href = pagerLink.href;
             }
         });
     }

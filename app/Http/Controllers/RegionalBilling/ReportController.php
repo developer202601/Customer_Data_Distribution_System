@@ -10,6 +10,7 @@ use App\Models\MasterDatasetRow;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -74,6 +75,20 @@ class ReportController extends Controller
         return substr($normalized, 5); // remove 'rtom_' prefix
     }
 
+    protected function isReviewLocked(?CallCenterReportRegionReview $reviewRecord): bool
+    {
+        return ! empty($reviewRecord?->reviewed_at);
+    }
+
+    protected function respondError(Request $request, string $message, int $status = 422)
+    {
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['message' => $message, 'errors' => ['rows' => [$message]]], $status);
+        }
+
+        return back()->withErrors(['rows' => $message]);
+    }
+
     /**
      * Derive region from RTOM by looking up master_dataset_rows where rtom matches
      */
@@ -90,7 +105,7 @@ class ReportController extends Controller
         return $region;
     }
 
-    public function index(Request $request): View
+    public function index(Request $request): View|JsonResponse
     {
         $sessionUser = $this->ensureRegionalBillingUser();
         $assignment = $this->normalizeAssignment($sessionUser['assignment'] ?? null);
@@ -505,6 +520,8 @@ class ReportController extends Controller
             ]);
         }
 
+        $canUnlockReview = $this->isRegionAdmin($assignment);
+
         return view('regionalbilling.reports.review', [
             'region' => $region,
             'reviewOptIn' => $reviewOptIn,
@@ -518,6 +535,7 @@ class ReportController extends Controller
             'showHiddenOnly' => $showHiddenOnly,
             'counts' => $counts,
             'reviewRecord' => $reviewRecord,
+            'canUnlockReview' => $canUnlockReview,
         ]);
     }
 
@@ -537,7 +555,7 @@ class ReportController extends Controller
 
         $respondError = function (string $message, int $status = 422) use ($request) {
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['errors' => ['rows' => [$message]]], $status);
+                return response()->json(['message' => $message, 'errors' => ['rows' => [$message]]], $status);
             }
             return back()->withErrors(['rows' => $message]);
         };
@@ -581,8 +599,8 @@ class ReportController extends Controller
         $reviewRecord = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
             ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
             ->first();
-        if (! empty($reviewRecord?->reviewed_at)) {
-            return $respondError('This review is already passed and locked.');
+        if ($this->isReviewLocked($reviewRecord)) {
+            return $this->respondError($request, 'This review is already passed and locked.', 423);
         }
 
         $draftHiddenIds = $this->getDraftHiddenRowIds($report->id, $normalizedRegion);
@@ -590,6 +608,12 @@ class ReportController extends Controller
         if ($action === 'unhide') {
             $draftHiddenIds = array_values(array_diff($draftHiddenIds, $regionScopedIds));
             $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $draftHiddenIds);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'message' => count($regionScopedIds) . ' row(s) set as visible in draft review. Use Pass to make it permanent.',
+                ]);
+            }
 
             return back()->with('status', count($regionScopedIds) . ' row(s) set as visible in draft review. Use Pass to make it permanent.');
         }
@@ -601,6 +625,12 @@ class ReportController extends Controller
             ->values()
             ->all();
         $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $draftHiddenIds);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'message' => count($regionScopedIds) . ' row(s) hidden in draft review. Use Pass to make it permanent.',
+            ]);
+        }
 
         return back()->with('status', count($regionScopedIds) . ' row(s) hidden in draft review. Use Pass to make it permanent.');
     }
@@ -711,6 +741,58 @@ class ReportController extends Controller
 
         return redirect()->route('rb.reports', ['report' => $report->id])
             ->with('status', 'Region review passed and locked. Report can now be handled by RTO admins.');
+    }
+
+    public function unlockReview(Request $request, int $reportId): RedirectResponse|JsonResponse
+    {
+        $sessionUser = $this->ensureRegionalBillingUser();
+        $assignment = $this->normalizeAssignment($sessionUser['assignment'] ?? null);
+
+        if (!$this->isRegionAdmin($assignment)) {
+            abort(403, 'Only region admins can unlock reviews.');
+        }
+
+        $region = $assignment;
+        $normalizedRegion = $this->normalizeRegionName($region);
+        $report = CallCenterReport::regionalBilling()->findOrFail($reportId);
+
+        $gate = $this->currentRegionAdminReviewGate();
+        $reviewOptIn = (bool) ($gate['opt_in'] ?? false);
+        /** @var Carbon|null $reviewEnabledAt */
+        $reviewEnabledAt = $gate['enabled_at'] ?? null;
+        if (! $reviewOptIn) {
+            return $this->respondError($request, 'Regional Review Gate is disabled.');
+        }
+        if (! $this->isReportEligibleForCurrentGate($report, $reviewEnabledAt)) {
+            return $this->respondError($request, 'This report was generated before Regional Review Gate was enabled and cannot be reviewed.');
+        }
+
+        $reviewRecord = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->first();
+
+        if (! $this->isReviewLocked($reviewRecord)) {
+            return $this->respondError($request, 'Review is not locked. No unlock required.');
+        }
+
+        $hiddenRowIds = CallCenterReportHiddenRow::where('call_center_report_id', $report->id)
+            ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+            ->pluck('master_dataset_row_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $hiddenRowIds);
+
+        $reviewRecord->reviewed_at = null;
+        $reviewRecord->reviewed_by_user_id = null;
+        $reviewRecord->save();
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['message' => 'Review unlocked. Hidden rows can now be managed again.']);
+        }
+
+        return redirect()->route('rb.reports', ['report' => $report->id])
+            ->with('status', 'Review unlocked. Hidden rows can now be managed again.');
     }
 
     public function getAgentDetails(Request $request)

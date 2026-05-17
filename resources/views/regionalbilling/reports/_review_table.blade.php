@@ -5,7 +5,7 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Review Locked</button>
             @endif
             <div class="form-check ms-2">
-                <input class="form-check-input" type="checkbox" id="selectAllRows">
+                <input class="form-check-input" type="checkbox" id="selectAllRows" {{ !empty($isLocked) ? 'disabled' : '' }}>
                 <label class="form-check-label small" for="selectAllRows">Select all in current page</label>
             </div>
 
@@ -48,7 +48,7 @@
                         data-row-label="{{ trim(($row->account_num ? ('Account ' . $row->account_num) : ('Row #' . $row->id)) . ($row->customer_ref ? (' | Ref ' . $row->customer_ref) : '') . ($row->mobile_contact_tel ? (' | Tel ' . $row->mobile_contact_tel) : '')) }}"
                     >
                         <td>
-                            <input class="form-check-input row-check" type="checkbox" name="row_ids[]" value="{{ $row->id }}">
+                            <input class="form-check-input row-check" type="checkbox" name="row_ids[]" value="{{ $row->id }}" {{ !empty($isLocked) ? 'disabled' : '' }}>
                         </td>
                         <td>{{ $row->account_num ?? '—' }}</td>
                         <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>

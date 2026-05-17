@@ -599,23 +599,23 @@ document.addEventListener('DOMContentLoaded', function () {
         const showHiddenInput = document.getElementById('show_hidden');
         const showHiddenOnlyInput = document.getElementById('show_hidden_only');
 
-        if (showHiddenToggle && showHiddenInput) {
+        if (showHiddenToggle) {
             showHiddenToggle.addEventListener('change', function () {
-                showHiddenInput.value = showHiddenToggle.checked ? '1' : '0';
-                if (!showHiddenToggle.checked && showHiddenOnlyToggle && showHiddenOnlyInput) {
+                if (showHiddenInput) showHiddenInput.value = showHiddenToggle.checked ? '1' : '0';
+                if (!showHiddenToggle.checked && showHiddenOnlyToggle) {
                     showHiddenOnlyToggle.checked = false;
-                    showHiddenOnlyInput.value = '0';
+                    if (showHiddenOnlyInput) showHiddenOnlyInput.value = '0';
                 }
                 fetchTable(1);
             });
         }
 
-        if (showHiddenOnlyToggle && showHiddenOnlyInput) {
+        if (showHiddenOnlyToggle) {
             showHiddenOnlyToggle.addEventListener('change', function () {
-                showHiddenOnlyInput.value = showHiddenOnlyToggle.checked ? '1' : '0';
-                if (showHiddenOnlyToggle.checked && showHiddenToggle && showHiddenInput) {
+                if (showHiddenOnlyInput) showHiddenOnlyInput.value = showHiddenOnlyToggle.checked ? '1' : '0';
+                if (showHiddenOnlyToggle.checked && showHiddenToggle) {
                     showHiddenToggle.checked = true;
-                    showHiddenInput.value = '1';
+                    if (showHiddenInput) showHiddenInput.value = '1';
                 }
                 fetchTable(1);
             });
@@ -663,6 +663,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const shouldRestoreSearchFocus = !!(activeElement && activeElement.id === 'tableSearch');
 
         const fd = new FormData(filterForm);
+        
+        // Ensure hidden inputs are set before creating FormData
+        const showHiddenToggle = document.getElementById('showHiddenRowsToggle');
+        const showHiddenInput = document.getElementById('show_hidden');
+        const showHiddenOnlyToggle = document.getElementById('showHiddenOnlyRowsToggle');
+        const showHiddenOnlyInput = document.getElementById('show_hidden_only');
+        
+        if (showHiddenToggle && showHiddenInput) {
+            fd.set('show_hidden', showHiddenToggle.checked ? '1' : '0');
+        }
+        if (showHiddenOnlyToggle && showHiddenOnlyInput) {
+            fd.set('show_hidden_only', showHiddenOnlyToggle.checked ? '1' : '0');
+        }
+        
         const searchEl = document.getElementById('tableSearch');
         if (searchEl) {
             fd.set('q', searchEl.value || '');

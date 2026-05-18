@@ -109,6 +109,17 @@
                         @else
                             <span class="small text-muted">This report has not been passed yet for this region.</span>
                         @endif
+
+                        <div class="card border-0 bg-light rounded-4 mb-3 w-100">
+                            <div class="card-body p-3">
+                                <p class="text-uppercase text-muted small mb-1">Exclude file submission</p>
+                                <form method="post" action="#" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                    @csrf
+                                    <input type="file" name="exclude_file" class="form-control form-control-sm" />
+                                    <button type="submit" class="btn btn-secondary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="bulkActionsDock" class="bulk-actions-dock mb-3" data-locked="{{ !empty($reviewRecord?->reviewed_at) ? '1' : '0' }}">

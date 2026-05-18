@@ -9,12 +9,15 @@ use App\Models\CallCenterReport;
 use App\Models\MasterDatasetRow;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ReportController extends Controller
 {
@@ -635,6 +638,92 @@ class ReportController extends Controller
         return back()->with('status', count($regionScopedIds) . ' row(s) hidden in draft review. Use Pass to make it permanent.');
     }
 
+    public function submitExcludeFile(Request $request, int $reportId): RedirectResponse|JsonResponse
+    {
+        $sessionUser = $this->ensureRegionalBillingUser();
+        $assignment = $this->normalizeAssignment($sessionUser['assignment'] ?? null);
+
+        if (! $this->isRegionAdmin($assignment)) {
+            abort(403, 'Only region admins can upload exclusion files.');
+        }
+
+        $region = $assignment;
+        $normalizedRegion = $this->normalizeRegionName($region);
+        $report = CallCenterReport::regionalBilling()->findOrFail($reportId);
+
+        $gate = $this->currentRegionAdminReviewGate();
+        $reviewOptIn = (bool) ($gate['opt_in'] ?? false);
+        /** @var Carbon|null $reviewEnabledAt */
+        $reviewEnabledAt = $gate['enabled_at'] ?? null;
+        if (! $reviewOptIn) {
+            return $this->respondError($request, 'Regional Review Gate is disabled.');
+        }
+        if (! $this->isReportEligibleForCurrentGate($report, $reviewEnabledAt)) {
+            return $this->respondError($request, 'This report was generated before Regional Review Gate was enabled and cannot be reviewed.');
+        }
+
+        $reviewRecord = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->first();
+        if ($this->isReviewLocked($reviewRecord)) {
+            return $this->respondError($request, 'This review is already passed and locked.', 423);
+        }
+
+        $data = $request->validate([
+            'exclude_file' => 'required|file|mimes:xlsx|max:20480',
+        ]);
+
+        /** @var UploadedFile $file */
+        $file = $data['exclude_file'];
+        $accountNumbers = $this->extractExcludeAccountNumbers($file);
+
+        if (empty($accountNumbers)) {
+            return $this->respondError($request, 'The uploaded exclusion file did not contain any account numbers.');
+        }
+
+        $reportRowIds = collect($report->row_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
+        if (empty($reportRowIds)) {
+            return $this->respondError($request, 'This report has no rows available for exclusion.');
+        }
+
+        $matchingRowIds = MasterDatasetRow::query()
+            ->whereIn('id', $reportRowIds)
+            ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion])
+            ->whereIn('account_num', $accountNumbers)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($matchingRowIds)) {
+            return $this->respondError($request, 'No rows in this report matched the uploaded exclusion file.');
+        }
+
+        $draftHiddenIds = array_values(array_unique(array_merge(
+            $this->getDraftHiddenRowIds($report->id, $normalizedRegion),
+            $matchingRowIds
+        )));
+        $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $draftHiddenIds);
+
+        $message = count($matchingRowIds) . ' row(s) excluded from draft review.';
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'message' => $message,
+                'matched_rows' => count($matchingRowIds),
+            ]);
+        }
+
+        return redirect()->route('rb.reports', ['report' => $report->id])
+            ->with('status', $message . ' Use Pass to make it permanent.');
+    }
+
     public function passReport(Request $request, int $reportId): RedirectResponse
     {
         $sessionUser = $this->ensureRegionalBillingUser();
@@ -851,6 +940,67 @@ class ReportController extends Controller
     private function clearDraftHiddenRowIds(int $reportId, string $normalizedRegion): void
     {
         session()->forget($this->draftHiddenRowsSessionKey($reportId, $normalizedRegion));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function extractExcludeAccountNumbers(UploadedFile $file): array
+    {
+        $reader = IOFactory::createReader('Xlsx');
+        $reader->setReadDataOnly(true);
+        $spreadsheet = $reader->load($file->getRealPath());
+
+        $accounts = [];
+
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            $accountColumn = null;
+            $highestRow = $sheet->getHighestDataRow();
+
+            foreach ($sheet->getRowIterator(1, $highestRow) as $row) {
+                $rowIndex = (int) $row->getRowIndex();
+                $cells = [];
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false);
+
+                foreach ($cellIterator as $cell) {
+                    $cells[$cell->getColumn()] = $cell->getFormattedValue();
+                }
+
+                if ($rowIndex === 1) {
+                    foreach ($cells as $column => $value) {
+                        if ($this->normalizeHeaderLabel((string) $value) === 'ACCOUNTNUM') {
+                            $accountColumn = $column;
+                            break;
+                        }
+                    }
+
+                    if (! $accountColumn) {
+                        throw ValidationException::withMessages([
+                            'exclude_file' => 'The uploaded file must contain an ACCOUNT_NUM column.',
+                        ]);
+                    }
+
+                    continue;
+                }
+
+                if (! $accountColumn) {
+                    continue;
+                }
+
+                $account = trim((string) ($cells[$accountColumn] ?? ''));
+                if ($account !== '') {
+                    $accounts[] = $account;
+                }
+            }
+        }
+
+        return array_values(array_unique($accounts));
+    }
+
+    private function normalizeHeaderLabel(string $value): string
+    {
+        return Str::upper(preg_replace('/[^A-Za-z0-9]+/', '', trim($value)) ?: '');
     }
 
     private function normalizeRegionName(?string $value): string

@@ -99,6 +99,19 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <div class="card border-0 bg-light rounded-4">
+                            <div class="card-body p-3">
+                                <p class="text-uppercase text-muted small mb-2">Attach File</p>
+                                <form method="post" action="#" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                    @csrf
+                                    <input type="file" name="attach_file" id="attachFileInput" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" />
+                                    <button type="submit" class="btn btn-primary btn-sm px-3" style="white-space: nowrap;">Attach File</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
                         <form method="post" action="{{ route('cc.region.review.pass', $selectedReport->id) }}">
                             @csrf

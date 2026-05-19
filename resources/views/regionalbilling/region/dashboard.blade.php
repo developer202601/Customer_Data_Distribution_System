@@ -58,7 +58,7 @@
                     <div class="col-12">
                         <div class="card shadow-sm">
                             <div class="card-body">
-                                <h5 class="card-title">Latest regional billing reports for {{ $region }}</h5>
+                                <h5 class="card-title"><b>Latest regional billing reports for {{ $region }}</b></h5><br>
                                 @if($recentReports->isEmpty())
                                     <p class="text-muted mb-0">No recent regional billing reports found for your region yet.</p>
                                 @else

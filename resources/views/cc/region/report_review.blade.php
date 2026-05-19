@@ -212,6 +212,160 @@
         padding: 0.25rem 0.5rem;
     }
 
+    /* AGGRESSIVE Dark Mode Overrides for theme-dark class */
+    @media (prefers-color-scheme: dark) {
+        .card.border-0.bg-light {
+            background-color: #2d3748 !important;
+            color: #e2e8f0 !important;
+        }
+
+        .card.border-0.bg-light .card-body h2,
+        .card.border-0.bg-light .card-body p {
+            color: #e2e8f0 !important;
+        }
+
+        .card.border-0.bg-light .text-muted {
+            color: #a0aec0 !important;
+        }
+
+        .card.border-0.bg-light .text-uppercase {
+            color: #cbd5e0 !important;
+        }
+
+        /* Stats cards specifically */
+        .row.g-3.mb-3 .col-md-4 .card.bg-light {
+            background-color: #2d3748 !important;
+        }
+
+        .row.g-3.mb-3 .col-md-4 .card h2 {
+            color: #e2e8f0 !important;
+        }
+
+        .row.g-3.mb-3 .col-md-4 .card p {
+            color: #a0aec0 !important;
+        }
+    }
+
+    /* Dark theme class selector (for body.theme-dark) */
+    body.theme-dark .bg-light {
+        background-color: #2d3748 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .card {
+        background-color: #1a202c !important;
+        border-color: #4a5568 !important;
+    }
+
+    body.theme-dark .card-body {
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .text-muted {
+        color: #a0aec0 !important;
+    }
+
+    body.theme-dark .text-uppercase {
+        color: #cbd5e0 !important;
+    }
+
+    body.theme-dark .form-control,
+    body.theme-dark .form-select {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark input[type="file"],
+    body.theme-dark input[type="file"]::file-selector-button {
+        background-color: #2d3748 !important;
+        color: #e2e8f0 !important;
+        border-color: #4a5568 !important;
+    }
+
+    body.theme-dark input[type="file"]::file-selector-button {
+        background-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+        border: 1px solid #4a5568 !important;
+    }
+
+    body.theme-dark input[type="text"],
+    body.theme-dark input[type="email"],
+    body.theme-dark input[type="password"],
+    body.theme-dark textarea {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .form-control::placeholder {
+        color: #718096 !important;
+    }
+
+    body.theme-dark .form-control:focus,
+    body.theme-dark .form-select:focus,
+    body.theme-dark input[type="file"]:focus {
+        background-color: #2d3748 !important;
+        border-color: #667eea !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark input[type="file"]::placeholder {
+        color: #718096 !important;
+    }
+
+    body.theme-dark h1,
+    body.theme-dark h2,
+    body.theme-dark h3,
+    body.theme-dark h4,
+    body.theme-dark h5,
+    body.theme-dark h6 {
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark p {
+        color: #cbd5e0 !important;
+    }
+
+    body.theme-dark label {
+        color: #a0aec0 !important;
+    }
+
+    body.theme-dark .form-label {
+        color: #a0aec0 !important;
+    }
+
+    body.theme-dark .badge {
+        background-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .bulk-actions-card {
+        background: rgba(45, 55, 72, 0.98) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 0.35rem 0.85rem rgba(0, 0, 0, 0.4);
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .alert-secondary {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #cbd5e0 !important;
+    }
+
+    /* Bootstrap form styling overrides */
+    body.theme-dark .form-control:not(:focus) {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .input-group .form-control {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
     .bulk-actions-dock {
         position: relative;
         z-index: 1020;
@@ -262,6 +416,12 @@
 
     .bulk-action-btn[data-action="unhide"] {
         --bulk-action-accent: rgba(25, 135, 84, 0.85);
+    }
+
+    /* Dark mode for Bootstrap's data-bs-theme attribute */
+    [data-bs-theme="dark"] .bg-light {
+        background-color: #2d3748 !important;
+        color: #e2e8f0 !important;
     }
 
     @media (max-width: 768px) {

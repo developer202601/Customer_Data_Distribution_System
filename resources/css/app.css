@@ -2090,3 +2090,35 @@ body.theme-dark .modal-header .btn-close {
 body.theme-dark .modal-header .btn-close:hover {
     opacity: 1;
 }
+
+/* Dark mode form controls */
+body.theme-dark .form-control,
+body.theme-dark .form-select {
+    background-color: #1a2a3f !important;
+    border-color: #3d4f67 !important;
+    color: #e2e8f0 !important;
+}
+
+body.theme-dark input[type="file"] {
+    background-color: #1a2a3f !important;
+    color: #e2e8f0 !important;
+    border-color: #3d4f67 !important;
+}
+
+body.theme-dark .form-control::placeholder {
+    color: #7d8a9c !important;
+}
+
+body.theme-dark .form-control:focus,
+body.theme-dark .form-select:focus {
+    background-color: #1a2a3f !important;
+    border-color: #00b4eb !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 0 0 0.25rem rgba(0, 180, 235, 0.25) !important;
+}
+
+body.theme-dark .input-group .form-control {
+    background-color: #1a2a3f !important;
+    border-color: #3d4f67 !important;
+    color: #e2e8f0 !important;
+}

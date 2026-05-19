@@ -107,14 +107,32 @@
                                 </form>
                                 <span class="small text-muted">This report has not been passed yet for this region.</span>
 
-                                <div class="card border-0 bg-light rounded-4 mb-3 w-100">
-                                    <div class="card-body p-3">
-                                        <p class="text-uppercase text-muted small mb-1">Exclude file submission</p>
-                                        <form method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
-                                            @csrf
-                                            <input type="file" name="exclude_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
-                                            <button type="submit" class="btn btn-secondary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
-                                        </form>
+                                <div class="row g-3 w-100 mb-3">
+                                    <div class="col-lg-6">
+                                        <div class="card border-0 bg-light rounded-4 h-100">
+                                            <div class="card-body p-3">
+                                                <p class="text-uppercase text-muted small mb-1">Exclude file submission</p>
+                                                <p class="small text-muted mb-2">Upload a workbook of rows to hide from the review set.</p>
+                                                <form method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                                    @csrf
+                                                    <input type="file" name="exclude_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
+                                                    <button type="submit" class="btn btn-primary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="card border-0 bg-light rounded-4 h-100">
+                                            <div class="card-body p-3">
+                                                <p class="text-uppercase text-muted small mb-1">Inclusion file submission</p>
+                                                <p class="small text-muted mb-2">Upload a workbook of rows to keep visible and hide everything else.</p>
+                                                <form method="post" action="{{ route('rb.reports.include_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                                    @csrf
+                                                    <input type="file" name="include_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
+                                                    <button type="submit" class="btn btn-primary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Inclusion File</button>
+                                                </form>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             @else

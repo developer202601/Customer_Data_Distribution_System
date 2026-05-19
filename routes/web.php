@@ -194,6 +194,7 @@ Route::middleware('session.auth')->group(function () {
             Route::get('/reports', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'index'])->name('reports');
             Route::post('/reports/review-preference', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'updateReviewPreference'])->name('reports.preference');
             Route::post('/reports/{report}/exclude-file', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'submitExcludeFile'])->name('reports.exclude_file');
+            Route::post('/reports/{report}/include-file', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'submitIncludeFile'])->name('reports.include_file');
             Route::post('/reports/{report}/rows/hide', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'hideRows'])->name('reports.hide_rows');
             Route::post('/reports/{report}/unlock', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'unlockReview'])->name('reports.unlock');
             Route::post('/reports/{report}/pass', [\App\Http\Controllers\RegionalBilling\ReportController::class, 'passReport'])->name('reports.pass');

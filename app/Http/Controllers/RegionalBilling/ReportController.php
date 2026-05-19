@@ -724,6 +724,131 @@ class ReportController extends Controller
             ->with('status', $message . ' Use Pass to make it permanent.');
     }
 
+    public function submitIncludeFile(Request $request, int $reportId): RedirectResponse|JsonResponse
+    {
+        $sessionUser = $this->ensureRegionalBillingUser();
+        $assignment = $this->normalizeAssignment($sessionUser['assignment'] ?? null);
+
+        if (! $this->isRegionAdmin($assignment)) {
+            abort(403, 'Only region admins can upload inclusion files.');
+        }
+
+        $region = $assignment;
+        $normalizedRegion = $this->normalizeRegionName($region);
+        $report = CallCenterReport::regionalBilling()->findOrFail($reportId);
+
+        $gate = $this->currentRegionAdminReviewGate();
+        $reviewOptIn = (bool) ($gate['opt_in'] ?? false);
+        /** @var Carbon|null $reviewEnabledAt */
+        $reviewEnabledAt = $gate['enabled_at'] ?? null;
+        if (! $reviewOptIn) {
+            return $this->respondError($request, 'Regional Review Gate is disabled.');
+        }
+        if (! $this->isReportEligibleForCurrentGate($report, $reviewEnabledAt)) {
+            return $this->respondError($request, 'This report was generated before Regional Review Gate was enabled and cannot be reviewed.');
+        }
+
+        $reviewRecord = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->first();
+        if ($this->isReviewLocked($reviewRecord)) {
+            return $this->respondError($request, 'This review is already passed and locked.', 423);
+        }
+
+        $data = $request->validate([
+            'include_file' => 'required|file|mimes:xlsx|max:20480',
+        ]);
+
+        /** @var UploadedFile $file */
+        $file = $data['include_file'];
+        $identifiers = $this->extractIncludeIdentifiers($file);
+
+        if (empty($identifiers)) {
+            return $this->respondError($request, 'The uploaded inclusion file did not contain any usable identifiers.');
+        }
+
+        $reportRowIds = collect($report->row_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
+        if (empty($reportRowIds)) {
+            return $this->respondError($request, 'This report has no rows available for inclusion.');
+        }
+
+        $reportRows = MasterDatasetRow::query()
+            ->whereIn('id', $reportRowIds)
+            ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion])
+            ->get(['id', 'customer_ref', 'account_num', 'product_label', 'mobile_contact_tel', 'new_arrears_value', 'region', 'rtom']);
+
+        $matchingRows = $reportRows
+            ->filter(function (MasterDatasetRow $row) use ($identifiers) {
+                return in_array($this->normalizeLookupValue($row->customer_ref), $identifiers, true)
+                    || in_array($this->normalizeLookupValue($row->account_num), $identifiers, true)
+                    || in_array($this->normalizeLookupValue($row->product_label), $identifiers, true);
+            })
+            ->values();
+
+        $matchingRowIds = $matchingRows
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($matchingRowIds)) {
+            return $this->respondError($request, 'No rows in this report matched the uploaded inclusion file.');
+        }
+
+        // Hide all rows that are NOT in the inclusion file; unhide those that ARE in it
+        $draftHiddenIds = array_values(array_diff($reportRowIds, $matchingRowIds));
+        $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $draftHiddenIds);
+
+        $previewRows = $matchingRows->map(function (MasterDatasetRow $row) use ($identifiers) {
+            $matchedBy = null;
+            
+            $customerRefNorm = $this->normalizeLookupValue($row->customer_ref);
+            $accountNumNorm = $this->normalizeLookupValue($row->account_num);
+            $productLabelNorm = $this->normalizeLookupValue($row->product_label);
+            
+            if ($customerRefNorm !== '' && in_array($customerRefNorm, $identifiers, true)) {
+                $matchedBy = 'Customer Ref';
+            } elseif ($accountNumNorm !== '' && in_array($accountNumNorm, $identifiers, true)) {
+                $matchedBy = 'Account Num';
+            } elseif ($productLabelNorm !== '' && in_array($productLabelNorm, $identifiers, true)) {
+                $matchedBy = 'Product Label';
+            }
+
+            return [
+                'id' => (int) $row->id,
+                'account_num' => $row->account_num,
+                'customer_ref' => $row->customer_ref,
+                'product_label' => $row->product_label,
+                'mobile_contact_tel' => $row->mobile_contact_tel,
+                'new_arrears_value' => $row->new_arrears_value,
+                'region' => $row->region,
+                'rtom' => $row->rtom,
+                'matched_by' => $matchedBy,
+            ];
+        })->all();
+
+        $message = count($matchingRowIds) . ' row(s) retained by inclusion file.';
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'message' => $message,
+                'matched_rows' => count($matchingRowIds),
+                'preview_rows' => $previewRows,
+            ]);
+        }
+
+        return redirect()->route('rb.reports', ['report' => $report->id])
+            ->with('status', $message . ' Use Pass to make it permanent.')
+            ->with('rb.reports.include_preview', $previewRows)
+            ->with('rb.reports.include_preview_count', count($previewRows));
+    }
+
     public function passReport(Request $request, int $reportId): RedirectResponse
     {
         $sessionUser = $this->ensureRegionalBillingUser();
@@ -996,6 +1121,63 @@ class ReportController extends Controller
         }
 
         return array_values(array_unique($accounts));
+    }
+
+    private function extractIncludeIdentifiers(UploadedFile $file): array
+    {
+        $reader = IOFactory::createReader('Xlsx');
+        $reader->setReadDataOnly(true);
+        $spreadsheet = $reader->load($file->getRealPath());
+
+        $identifiers = [];
+        $allowedHeaders = ['CUSTOMER_REF', 'ACCOUNT_NUM', 'PRODUCT_LABEL'];
+
+        foreach ($spreadsheet->getAllSheets() as $sheet) {
+            $headerColumns = [];
+            $highestRow = $sheet->getHighestDataRow();
+
+            foreach ($sheet->getRowIterator(1, $highestRow) as $row) {
+                $rowIndex = (int) $row->getRowIndex();
+                $cells = [];
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false);
+
+                foreach ($cellIterator as $cell) {
+                    $cells[$cell->getColumn()] = $cell->getFormattedValue();
+                }
+
+                if ($rowIndex === 1) {
+                    foreach ($cells as $column => $value) {
+                        $normalizedHeader = $this->normalizeHeaderLabel((string) $value);
+                        if (in_array($normalizedHeader, $allowedHeaders, true)) {
+                            $headerColumns[$column] = $normalizedHeader;
+                        }
+                    }
+
+                    if (empty($headerColumns)) {
+                        throw ValidationException::withMessages([
+                            'include_file' => 'The uploaded file must contain at least one of CUSTOMER_REF, ACCOUNT_NUM, or PRODUCT_LABEL columns.',
+                        ]);
+                    }
+
+                    continue;
+                }
+
+                foreach ($headerColumns as $column => $headerName) {
+                    $value = $this->normalizeLookupValue((string) ($cells[$column] ?? ''));
+                    if ($value !== '') {
+                        $identifiers[] = $value;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($identifiers));
+    }
+
+    private function normalizeLookupValue(string $value): string
+    {
+        return Str::lower(trim($value));
     }
 
     private function normalizeHeaderLabel(string $value): string

@@ -7,6 +7,7 @@ use App\Models\CallCenterReport;
 use App\Models\DatasetExport;
 use App\Models\MasterDatasetProcess;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\QueryException;
 use Throwable;
@@ -305,7 +306,7 @@ class MasterDatasetExportCoordinator
             return is_numeric($value) ? (int) $value : $value;
         })->toArray();
 
-        CallCenterReport::updateOrCreate([
+        $report = CallCenterReport::updateOrCreate([
             'master_dataset_process_id' => $process->id,
             'report_type' => $reportType,
         ], [
@@ -315,5 +316,57 @@ class MasterDatasetExportCoordinator
             'row_count' => count($rowIds),
             'row_ids' => $rowIds,
         ]);
+
+        if ($reportType === CallCenterReport::REPORT_TYPE_REGIONAL_BILLING) {
+            $this->seedRegionalBillingAssignments($report, $rowIds);
+        }
+    }
+
+    private function seedRegionalBillingAssignments(CallCenterReport $report, array $rowIds): void
+    {
+        $cleanRowIds = collect($rowIds)
+            ->filter(fn ($id) => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($cleanRowIds)) {
+            return;
+        }
+
+        $alreadySeeded = DB::table('call_center_row_assignments')
+            ->where('call_center_report_id', $report->id)
+            ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+            ->exists();
+
+        if ($alreadySeeded) {
+            return;
+        }
+
+        $now = now()->toDateTimeString();
+        $batch = [];
+        $batchSize = 1000;
+
+        foreach ($cleanRowIds as $rowId) {
+            $batch[] = [
+                'call_center_report_id' => $report->id,
+                'report_type' => CallCenterReport::REPORT_TYPE_REGIONAL_BILLING,
+                'master_dataset_row_id' => $rowId,
+                'assigned_user_id' => null,
+                'status' => 'pending',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if (count($batch) >= $batchSize) {
+                DB::table('call_center_row_assignments')->insertOrIgnore($batch);
+                $batch = [];
+            }
+        }
+
+        if (! empty($batch)) {
+            DB::table('call_center_row_assignments')->insertOrIgnore($batch);
+        }
     }
 }

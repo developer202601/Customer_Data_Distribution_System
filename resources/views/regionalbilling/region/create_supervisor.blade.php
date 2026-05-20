@@ -2,7 +2,7 @@
 
 @php use Illuminate\Support\Str; @endphp
 
-@section('title', 'Create Supervisor')
+@section('title', 'Create Caller')
 
 @section('content')
 <div class="process-upload py-4">
@@ -11,8 +11,8 @@
             <div class="card-body p-4 p-lg-5">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                     <div>
-                        <p class="text-uppercase text-muted mb-1">Regional Billing — Create Supervisor</p>
-                        <h1 class="process-upload-title mb-0">New Supervisor</h1>
+                        <p class="text-uppercase text-muted mb-1">Regional Billing — Create Caller</p>
+                        <h1 class="process-upload-title mb-0">New Caller</h1>
                     </div>
                 </div>
 
@@ -27,22 +27,9 @@
                         <input name="name" type="text" class="form-control">
                     </div>
 
-                    @if(Str::startsWith(session('user.assignment'), 'rtom_'))
-                        <input type="hidden" name="supervisor" value="{{ session('user.assignment') }}">
-                    @else
-                        <div class="mb-3">
-                            <label class="form-label">RTO</label>
-                            <select name="supervisor" class="form-select">
-                                @foreach($rtoms as $r)
-                                    <option value="{{ $r }}">{{ $r }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    @endif
-
                     <div class="d-flex gap-2">
                         <button class="btn btn-success">Create</button>
-                        <a href="{{ route('rb.region.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        <a href="{{ route('rb.users.index') }}" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
 

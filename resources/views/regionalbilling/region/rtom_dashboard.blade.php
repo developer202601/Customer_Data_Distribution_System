@@ -18,7 +18,12 @@
                     <div>
                         <p class="text-uppercase text-muted mb-1">Regional Billing — RTO Dashboard</p>
                         <h1 class="process-upload-title mb-0">{{ $rtom }}</h1>
-                        <p class="text-muted">Supervisors owned: {{ $supervisors->count() }}</p>
+                        <p class="text-muted">Callers owned: {{ $callers->count() }}</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{{ route('rb.users.index') }}" class="btn btn-outline-primary rounded-pill px-4">Manage Callers</a>
+                        <a href="{{ route('rb.reports') }}" class="btn btn-outline-success rounded-pill px-4">RBC Reports</a>
+                        <a href="{{ route('rb.region.create_supervisor') }}" class="btn btn-outline-secondary rounded-pill px-4">Add Caller</a>
                     </div>
                 </div>
 
@@ -28,25 +33,25 @@
                             <tr>
                                 <th>Username</th>
                                 <th>Name</th>
-                                <th>Assignment</th>
+                                <th>Role</th>
                                 <th>Created</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($supervisors as $supervisor)
+                            @forelse($callers as $caller)
                                 <tr>
-                                    <td><strong>{{ $supervisor->username }}</strong></td>
-                                    <td>{{ $supervisor->name ?? '—' }}</td>
-                                    <td>{{ $supervisor->assignment }}</td>
-                                    <td><small>{{ $supervisor->created_at?->format('M d, Y') ?? '—' }}</small></td>
+                                    <td><strong>{{ $caller->username }}</strong></td>
+                                    <td>{{ $caller->name ?? '—' }}</td>
+                                    <td>Caller</td>
+                                    <td><small>{{ $caller->created_at?->format('M d, Y') ?? '—' }}</small></td>
                                     <td class="text-end">
-                                        <a href="{{ route('rb.region.edit_supervisor', $supervisor->id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                                        <a href="{{ route('rb.users.edit', $caller->id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">No supervisors assigned</td>
+                                    <td colspan="5" class="text-center text-muted py-4">No callers assigned</td>
                                 </tr>
                             @endforelse
                         </tbody>

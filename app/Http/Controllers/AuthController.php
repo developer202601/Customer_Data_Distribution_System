@@ -9,6 +9,11 @@ use Illuminate\View\View;
 
 class AuthController extends Controller
 {
+    private function normalizeAssignment(?string $assignment): string
+    {
+        return strtolower(trim((string) $assignment));
+    }
+
     public function showLogin(Request $request): View|RedirectResponse
     {
         if ($request->session()->has('user')) {
@@ -73,7 +78,7 @@ class AuthController extends Controller
 
     private function getCCLoginRedirect(array $user): string
     {
-        $assignment = $user['assignment'] ?? null;
+        $assignment = $this->normalizeAssignment($user['assignment'] ?? null);
         $isAdmin = $user['is_admin'] ?? false;
 
         // Super admins go to overview
@@ -82,7 +87,7 @@ class AuthController extends Controller
         }
 
         // Regional admins go to region dashboard
-        if ($assignment && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
+        if ($assignment !== '' && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
             return 'cc.region.dashboard';
         }
 
@@ -107,14 +112,14 @@ class AuthController extends Controller
 
     private function getRBLoginRedirect(array $user): string
     {
-        $assignment = $user['assignment'] ?? null;
+        $assignment = $this->normalizeAssignment($user['assignment'] ?? null);
         $isAdmin = $user['is_admin'] ?? false;
 
         if ($assignment === 'super') {
             return 'rb.dashboard';
         }
 
-        if ($assignment && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
+        if ($assignment !== '' && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
             return 'rb.region.dashboard';
         }
 

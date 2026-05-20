@@ -1,6 +1,6 @@
 @php
     $rbRouteName = request()->route()?->getName() ?? '';
-    $assignment = session('user.assignment') ?? '';
+    $assignment = strtolower(trim((string) (session('user.assignment') ?? '')));
     $isAdmin = session('user.is_admin');
 @endphp
 <div class="offcanvas offcanvas-start cc-offcanvas" tabindex="-1" id="ccSidebar" aria-labelledby="ccSidebarLabel">
@@ -18,7 +18,7 @@
                     <a class="nav-link{{ str_starts_with($rbRouteName, 'rb.reports') ? ' active' : '' }}" href="{{ route('rb.reports.history') }}" aria-current="{{ str_starts_with($rbRouteName, 'rb.reports') ? 'page' : '' }}">Reports</a>
                 @elseif(str_starts_with($assignment, 'rtom_'))
                     <a class="nav-link{{ $rbRouteName === 'rb.rtom.dashboard' ? ' active' : '' }}" href="{{ route('rb.rtom.dashboard') }}" aria-current="{{ $rbRouteName === 'rb.rtom.dashboard' ? 'page' : '' }}">RTO Dashboard</a>
-                    <a class="nav-link{{ $rbRouteName === 'rb.region.create_supervisor' ? ' active' : '' }}" href="{{ route('rb.region.create_supervisor') }}" aria-current="{{ $rbRouteName === 'rb.region.create_supervisor' ? 'page' : '' }}">Create Supervisor</a>
+                    <a class="nav-link{{ str_starts_with($rbRouteName, 'rb.users') ? ' active' : '' }}" href="{{ route('rb.users.index') }}" aria-current="{{ str_starts_with($rbRouteName, 'rb.users') ? 'page' : '' }}">Manage Callers</a>
                     <a class="nav-link{{ str_starts_with($rbRouteName, 'rb.reports') ? ' active' : '' }}" href="{{ route('rb.reports') }}" aria-current="{{ str_starts_with($rbRouteName, 'rb.reports') ? 'page' : '' }}">Reports</a>
                 @elseif(str_starts_with($assignment, 'supervisor_'))
                     <a class="nav-link{{ $rbRouteName === 'rb.supervisor.dashboard' ? ' active' : '' }}" href="{{ route('rb.supervisor.dashboard') }}" aria-current="{{ $rbRouteName === 'rb.supervisor.dashboard' ? 'page' : '' }}">Supervisor Dashboard</a>

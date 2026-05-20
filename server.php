@@ -51,13 +51,37 @@ if (
     header('Referrer-Policy: strict-origin-when-cross-origin');
 
     $extension = strtolower((string) pathinfo($filePath, PATHINFO_EXTENSION));
-    $mime = function_exists('mime_content_type') ? @mime_content_type($filePath) : null;
+    $mimeByExtension = [
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'mjs' => 'application/javascript',
+        'json' => 'application/json',
+        'map' => 'application/json',
+        'svg' => 'image/svg+xml',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'ico' => 'image/x-icon',
+        'txt' => 'text/plain',
+        'html' => 'text/html',
+        'xml' => 'application/xml',
+        'pdf' => 'application/pdf',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf' => 'font/ttf',
+        'otf' => 'font/otf',
+        'eot' => 'application/vnd.ms-fontobject',
+    ];
+
+    $mime = $mimeByExtension[$extension] ?? null;
     if (!is_string($mime) || $mime === '') {
-        $mime = 'application/octet-stream';
+        $mime = function_exists('mime_content_type') ? @mime_content_type($filePath) : null;
     }
 
-    if ($extension === 'svg') {
-        $mime = 'image/svg+xml';
+    if (!is_string($mime) || $mime === '') {
+        $mime = 'application/octet-stream';
     }
 
     header('Content-Type: ' . $mime);

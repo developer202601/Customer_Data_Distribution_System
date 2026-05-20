@@ -43,6 +43,32 @@
                     </div>
                 </div>
 
+                @if(session('status') || $errors->any() || session('rb.reports.include_preview_count'))
+                    <div class="mb-3">
+                        @if(session('status'))
+                            <div class="alert alert-success mb-2">
+                                {{ session('status') }}
+                                @if(session('rb.reports.include_preview_count'))
+                                    <div class="small text-muted mt-1">
+                                        Inclusion file matched {{ number_format((int) session('rb.reports.include_preview_count')) }} row(s).
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        @if($errors->any())
+                            <div class="alert alert-danger mb-0">
+                                <div class="fw-semibold mb-1">Unable to process the uploaded file.</div>
+                                <ul class="mb-0 ps-3">
+                                    @foreach($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
                 <div id="reviewWorkspace" class="{{ empty($reviewOptIn) ? 'review-workspace-disabled' : '' }}">
                     @if(empty($reviewOptIn))
                         <div class="alert alert-secondary mb-3">

@@ -1130,7 +1130,8 @@ class ReportController extends Controller
         $spreadsheet = $reader->load($file->getRealPath());
 
         $identifiers = [];
-        $allowedHeaders = ['CUSTOMER_REF', 'ACCOUNT_NUM', 'PRODUCT_LABEL'];
+        // Match the normalized header format used below: uppercase alphanumeric only.
+        $allowedHeaders = ['CUSTOMERREF', 'ACCOUNTNUM', 'PRODUCTLABEL'];
 
         foreach ($spreadsheet->getAllSheets() as $sheet) {
             $headerColumns = [];

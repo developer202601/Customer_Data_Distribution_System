@@ -296,14 +296,20 @@
                             <div class="col-12">
                                 <label class="form-label small">Outcome</label>
                                 <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
-                                    <option value="" disabled selected>Select outcome</option>
-                                    <option value="paid">paid</option>
-                                    <option value="number invalid">number invalid</option>
-                                    <option value="user not authorized">user not authorized</option>
-                                    <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
-                                    <option value="agreed to pay within 7 days">agreed to pay within 7 days</option>
-                                    <option value="Not answered">Not answered</option>
+                                    <option value="" disabled selected>Select outcome category</option>
+                                    <option value="promise_to_pay">Promise to pay</option>
+                                    <option value="temporary_financial_difficulty">Temporary financial difficulty</option>
+                                    <option value="billing_dispute">Billing / Dispute issues</option>
+                                    <option value="service_quality">Service quality issues</option>
+                                    <option value="intention_to_disconnect">Intention to disconnect</option>
+                                    <option value="contact_issue">Contact issue</option>
+                                    <option value="payment_behavior">Payment behavior pattern</option>
+                                    <option value="escalation_risk">Dispute / Escalation risk</option>
                                 </select>
+                            </div>
+                            <div class="col-12" id="ccDependentOutcomeWrap" style="display:none;">
+                                <label class="form-label small">Outcome details</label>
+                                <div id="ccDependentOutcomeContainer"></div>
                             </div>
                             <div class="col-12">
                                 <div class="form-check">
@@ -368,6 +374,128 @@ document.addEventListener('DOMContentLoaded', function () {
         assignmentRowModal.style.display = 'none';
     }
 
+    // Dependent dropdown options for each main category
+    const outcomeDependentOptions = {
+        promise_to_pay: [
+            { value: '', label: 'Select...' },
+            { value: 'will_pay_today', label: 'Will pay today' },
+            { value: 'will_pay_within_3_days', label: 'Will pay within 3 days' },
+            { value: 'salary_not_yet_credited', label: 'Salary not yet credited' },
+            { value: 'bank_transfer_delay', label: 'Bank transfer delay' }
+        ],
+        temporary_financial_difficulty: [
+            { value: '', label: 'Select...' },
+            { value: 'salary_delay', label: 'Salary delay' },
+            { value: 'job_loss', label: 'Job loss' },
+            { value: 'medical_emergency', label: 'Medical emergency' },
+            { value: 'business_slowdown', label: 'Business slowdown' },
+            { value: 'seasonal_income_fluctuation', label: 'Seasonal income fluctuation' }
+        ],
+        billing_dispute: [
+            { value: '', label: 'Select...' },
+            { value: 'incorrect_bill_amount', label: 'Incorrect bill amount' },
+            { value: 'overcharging_complaint', label: 'Overcharging complaint' },
+            { value: 'double_billing', label: 'Double billing' },
+            { value: 'service_not_working_but_charged', label: 'Service not working but charged' },
+            { value: 'plan_mismatch', label: 'Plan mismatch' },
+            { value: 'previous_payment_not_updated', label: 'Previous payment not updated' },
+            { value: 'installation_issues', label: 'Installation issues' }
+        ],
+        service_quality: [
+            { value: '', label: 'Select...' },
+            { value: 'slow_internet', label: 'Slow internet' },
+            { value: 'frequent_disconnection', label: 'Frequent disconnection' },
+            { value: 'router_issue', label: 'Router issue' },
+            { value: 'fiber_damage', label: 'Fiber damage' },
+            { value: 'technical_complaint_pending', label: 'Technical complaint pending' },
+            { value: 'waiting_for_technician_visit', label: 'Waiting for technician visit' }
+        ],
+        intention_to_disconnect: [
+            { value: '', label: 'Select...' },
+            { value: 'wants_to_cancel_service', label: 'Wants to cancel service' },
+            { value: 'switching_to_competitor', label: 'Switching to a competitor' },
+            { value: 'moving_house', label: 'Moving house' },
+            { value: 'no_longer_needed', label: 'No longer needed' },
+            { value: 'temporary_relocator', label: 'Temporary relocator' },
+            { value: 'business_closed', label: 'Business closed' }
+        ],
+        contact_issue: [
+            { value: '', label: 'Select...' },
+            { value: 'no_answer', label: 'No answer' },
+            { value: 'switched_off', label: 'Switched off' },
+            { value: 'wrong_number', label: 'Wrong number' },
+            { value: 'number_unreachable', label: 'Number unreachable' },
+            { value: 'refused_to_talk', label: 'Refused to talk' }
+        ],
+        payment_behavior: [
+            { value: '', label: 'Select...' },
+            { value: 'always_pays_late', label: 'Always pays late' },
+            { value: 'habitual_suspend', label: 'Habitual suspend' },
+            { value: 'broken_ptp_multiple_times', label: 'Broken PTP multiple times' },
+            { value: 'demands_extensions_monthly', label: 'Demands extensions monthly' }
+        ],
+        escalation_risk: [
+            { value: '', label: 'Select...' },
+            { value: 'threatened_complaint_to_regulators', label: 'Threatened complaint to regulators' },
+            { value: 'angry_customer', label: 'Angry customer' },
+            { value: 'escalation_requested', label: 'Escalation requested' },
+            { value: 'legal_notice_mentioned', label: 'Legal notice mentioned' }
+        ]
+    };
+
+    function renderDependentDropdown(selectedOutcome) {
+        const wrap = document.getElementById('ccDependentOutcomeWrap');
+        const container = document.getElementById('ccDependentOutcomeContainer');
+        if (!wrap || !container) return;
+        const key = (selectedOutcome || '').toString();
+        const options = outcomeDependentOptions[key];
+        if (!options || !options.length) {
+            wrap.style.display = 'none';
+            container.innerHTML = '';
+            return;
+        }
+        let html = '<select name="outcome_detail" id="ccOutcomeDetail" class="form-select form-select-sm">';
+        options.forEach(opt => {
+            const val = opt.value || '';
+            const lbl = opt.label || opt.value || '';
+            html += `<option value="${val}">${lbl}</option>`;
+        });
+        html += '</select>';
+        container.innerHTML = html;
+        wrap.style.display = 'block';
+        // attach change handler to dependent select to preserve payment fields behavior
+        const dep = document.getElementById('ccOutcomeDetail');
+        if (dep) {
+            dep.addEventListener('change', function () {
+                const v = this.value || '';
+                // clear previous payment fields
+                clearPaymentFields();
+                if (v === 'will_pay_today') {
+                    // treat as payment date (today) and show paid amount field
+                    paymentDateWrap.style.display = 'block';
+                    paidAmountWrap.style.display = 'block';
+                    const today = new Date().toISOString().slice(0,10);
+                    if (paymentDate) paymentDate.value = today;
+                } else if (v === 'will_pay_within_3_days' || v === 'will_pay_within_7_days') {
+                    paymentWrap.style.display = 'block';
+                    const days = v === 'will_pay_within_3_days' ? 3 : 7;
+                    const d = new Date(); d.setDate(d.getDate() + days);
+                    if (paymentInput) paymentInput.value = d.toISOString().slice(0,10);
+                } else if (v === 'salary_not_yet_credited' || v === 'bank_transfer_delay' || v === 'salary_delay') {
+                    // expected payment but date unknown
+                    paymentWrap.style.display = 'block';
+                } else if (v === 'paid') {
+                    paymentDateWrap.style.display = 'block';
+                    paidAmountWrap.style.display = 'block';
+                    const today = new Date().toISOString().slice(0,10);
+                    if (paymentDate) paymentDate.value = today;
+                } else {
+                    // leave payment fields hidden for other suboptions
+                }
+            });
+        }
+    }
+
     window._ccNeedsListRefresh = false;
     function refreshAssignmentList() {
         if (typeof loadAssignments === 'function') {
@@ -383,6 +511,20 @@ document.addEventListener('DOMContentLoaded', function () {
                         window._ccNeedsListRefresh = false;
                         refreshAssignmentList();
                     }
+                    // also clear call form so selections don't persist between rows
+                    try {
+                        if (typeof renderDependentDropdown === 'function') renderDependentDropdown('');
+                        if (typeof clearPaymentFields === 'function') clearPaymentFields();
+                        if (callForm) callForm.reset();
+                        if (outcomeEl) outcomeEl.selectedIndex = 0;
+                        if (notRelevantPersonEl) { notRelevantPersonEl.checked = false; notRelevantPersonEl.disabled = true; }
+                        const saveBtn = document.getElementById('ccSaveCallBtn');
+                        if (saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('d-none'); }
+                        const wrapper = document.getElementById('ccCallFormWrapperAssign');
+                        if (wrapper) wrapper.classList.add('cc-disabled');
+                        const startBtn = document.getElementById('ccStartCallBtn');
+                        if (startBtn) startBtn.disabled = false;
+                    } catch (e) { /* ignore */ }
                 } catch (e) { /* ignore */ }
             });
         }
@@ -423,6 +565,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 window._ccNeedsListRefresh = false;
                 refreshAssignmentList();
             }
+        } catch (e) { /* ignore */ }
+        // Clear call form and dependent fields so selections don't persist between rows
+        try {
+            if (typeof renderDependentDropdown === 'function') {
+                renderDependentDropdown('');
+            }
+            if (typeof clearPaymentFields === 'function') {
+                clearPaymentFields();
+            }
+            if (callForm) callForm.reset();
+            if (outcomeEl) outcomeEl.selectedIndex = 0;
+            if (notRelevantPersonEl) { notRelevantPersonEl.checked = false; notRelevantPersonEl.disabled = true; }
+            const saveBtn = document.getElementById('ccSaveCallBtn');
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('d-none'); }
+            const wrapper = document.getElementById('ccCallFormWrapperAssign');
+            if (wrapper) wrapper.classList.add('cc-disabled');
+            const startBtn = document.getElementById('ccStartCallBtn');
+            if (startBtn) startBtn.disabled = false;
         } catch (e) { /* ignore */ }
     }
 
@@ -608,6 +768,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             saveBtn.classList.remove('d-none');
                         }
                         if (wrapper) wrapper.classList.remove('cc-disabled');
+                        try { renderDependentDropdown(''); } catch (e) { /* ignore */ }
                         startBtn.disabled = true;
                     };
                 }
@@ -808,6 +969,7 @@ document.addEventListener('DOMContentLoaded', function () {
             outcomeEl.value = '';
             outcomeEl.disabled = true;
             clearPaymentFields();
+            try { renderDependentDropdown(''); } catch (e) { /* ignore */ }
         } else {
             outcomeEl.disabled = false;
         }
@@ -818,6 +980,15 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         const v = this.value;
+        try { renderDependentDropdown(v); } catch (e) { /* ignore */ }
+        // Show payment date and paid amount immediately when main category selected
+        try {
+            if (paymentDateWrap) paymentDateWrap.style.display = 'block';
+            if (paidAmountWrap) paidAmountWrap.style.display = 'block';
+            const today = new Date().toISOString().slice(0,10);
+            if (paymentDate) paymentDate.value = today;
+            if (paidAmount) paidAmount.value = '';
+        } catch (e) { /* ignore */ }
         if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
             paymentWrap.style.display = 'block';
             paymentDateWrap.style.display = 'none';
@@ -873,6 +1044,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 callForm.reset();
                 clearPaymentFields();
                 if (outcomeEl) outcomeEl.selectedIndex = 0;
+                    try { renderDependentDropdown(''); } catch (e) { /* ignore */ }
                 if (notRelevantPersonEl) {
                     notRelevantPersonEl.checked = false;
                     notRelevantPersonEl.disabled = true;

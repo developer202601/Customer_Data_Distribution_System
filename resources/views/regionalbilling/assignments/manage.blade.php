@@ -1066,6 +1066,16 @@ document.addEventListener('DOMContentLoaded', function () {
             renderDetails(updated);
             // mark that assignment list should refresh once the modal is closed
             try { window._ccNeedsListRefresh = true; } catch (e) { /* ignore */ }
+            // close the modal automatically after saving the call
+            try {
+                if (bootstrapModal && typeof bootstrapModal.hide === 'function') {
+                    bootstrapModal.hide();
+                } else {
+                    hideModal();
+                }
+            } catch (e) {
+                try { hideModal(); } catch (e) { /* ignore */ }
+            }
         } catch (err) {
             statusField && (statusField.textContent = 'Save failed.');
         }

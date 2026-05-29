@@ -126,8 +126,19 @@
                                             }
 
                                             .cc-user-share {
-                                                flex: 0 0 96px;
+                                                flex: 0 0 140px;
+                                                min-width: 140px;
                                                 text-align: right;
+                                            }
+
+                                            .rb-user-count {
+                                                flex: 0 0 120px;
+                                                min-width: 120px;
+                                            }
+
+                                            .rb-user-count-input {
+                                                width: 100%;
+                                                max-width: 100px;
                                             }
 
                                             .cc-user-name {
@@ -165,6 +176,9 @@
                                                     <div class="cc-user-share">
                                                         <span class="badge bg-light text-dark rb-share-badge">0</span>
                                                     </div>
+                                                    <div class="rb-user-count">
+                                                        <input type="number" class="form-control form-control-sm rb-user-count-input" name="user_counts[{{ $caller->id }}]" value="" min="0" step="1" placeholder="Auto" disabled>
+                                                    </div>
                                                 </div>
                                             @endforeach
                                         </div>
@@ -176,6 +190,96 @@
                                         <button type="submit" class="btn btn-primary btn-sm w-100" {{ $unassigned <= 0 ? 'disabled' : '' }}>Distribute</button>
                                     </div>
                                 </form>
+                                <script nonce="{{ $cspNonce ?? '' }}">
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        const distributable = Number(@json((int) ($unassigned ?? 0)));
+                                        const checkboxes = Array.from(document.querySelectorAll('.rb-caller-check'));
+                                        const countInputs = Array.from(document.querySelectorAll('.rb-user-count-input'));
+                                        const selectAll = document.getElementById('rb-select-all-callers');
+                                        const searchInput = document.getElementById('rb-user-search');
+                                        const distributableCountEl = document.getElementById('rb-distributable-count');
+
+                                        function updateRowDisplay() {
+                                            let total = 0;
+                                            let selectedCount = 0;
+                                            checkboxes.forEach(cb => {
+                                                const row = cb.closest('.cc-user-row');
+                                                const badge = row?.querySelector('.rb-share-badge');
+                                                const input = row?.querySelector('.rb-user-count-input');
+                                                if (!cb.checked) {
+                                                    if (input) {
+                                                        input.disabled = true;
+                                                        input.value = '';
+                                                    }
+                                                    if (badge) badge.textContent = '0';
+                                                    return;
+                                                }
+
+                                                selectedCount += 1;
+                                                if (input) {
+                                                    input.disabled = false;
+                                                    const value = Number(input.value || 0);
+                                                    if (badge) badge.textContent = value > 0 ? String(value) : 'Auto';
+                                                    total += value;
+                                                }
+                                            });
+
+                                            const remaining = distributable - total;
+                                            if (distributableCountEl) {
+                                                distributableCountEl.textContent = String(remaining >= 0 ? remaining : 0);
+                                                distributableCountEl.classList.toggle('text-danger', remaining < 0);
+                                            }
+                                        }
+
+                                        function validateCounts() {
+                                            const remaining = distributable - countInputs.reduce((sum, input) => {
+                                                if (input.disabled) return sum;
+                                                return sum + Number(input.value || 0);
+                                            }, 0);
+                                            return remaining >= 0;
+                                        }
+
+                                        checkboxes.forEach(cb => {
+                                            cb.addEventListener('change', function() {
+                                                updateRowDisplay();
+                                                validateCounts();
+                                            });
+                                        });
+
+                                        countInputs.forEach(input => {
+                                            input.addEventListener('input', function() {
+                                                const row = input.closest('.cc-user-row');
+                                                const badge = row?.querySelector('.rb-share-badge');
+                                                const value = Number(input.value || 0);
+                                                if (badge) badge.textContent = value > 0 ? String(value) : 'Auto';
+                                                updateRowDisplay();
+                                                validateCounts();
+                                            });
+                                        });
+
+                                        selectAll?.addEventListener('change', function() {
+                                            const checked = this.checked;
+                                            checkboxes.forEach(cb => {
+                                                const row = cb.closest('.cc-user-row');
+                                                if (row && row.style.display === 'none') return;
+                                                cb.checked = checked;
+                                            });
+                                            updateRowDisplay();
+                                        });
+
+                                        searchInput?.addEventListener('input', function() {
+                                            const q = this.value.trim().toLowerCase();
+                                            checkboxes.forEach(cb => {
+                                                const row = cb.closest('.cc-user-row');
+                                                const text = row?.querySelector('.cc-user-name')?.textContent.toLowerCase() || '';
+                                                row.style.display = q === '' || text.includes(q) ? '' : 'none';
+                                            });
+                                        });
+
+                                        if (distributableCountEl) distributableCountEl.textContent = String(distributable);
+                                        updateRowDisplay();
+                                    });
+                                </script>
                             </div>
                         </div>
                     @endif

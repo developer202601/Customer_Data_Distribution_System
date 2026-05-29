@@ -99,6 +99,19 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <div class="card border-0 bg-light rounded-4">
+                            <div class="card-body p-3">
+                                <p class="text-uppercase text-muted small mb-2">Attach File</p>
+                                <form method="post" action="#" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                    @csrf
+                                    <input type="file" name="attach_file" id="attachFileInput" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" />
+                                    <button type="submit" class="btn btn-primary btn-sm px-3" style="white-space: nowrap;">Attach File</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
                         <form method="post" action="{{ route('cc.region.review.pass', $selectedReport->id) }}">
                             @csrf
@@ -109,6 +122,17 @@
                         @else
                             <span class="small text-muted">This report has not been passed yet for this region.</span>
                         @endif
+
+                        <div class="card border-0 bg-light rounded-4 mb-3 w-100">
+                            <div class="card-body p-3">
+                                <p class="text-uppercase text-muted small mb-1">Exclude file submission</p>
+                                <form method="post" action="#" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                    @csrf
+                                    <input type="file" name="exclude_file" class="form-control form-control-sm" />
+                                    <button type="submit" class="btn btn-secondary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="bulkActionsDock" class="bulk-actions-dock mb-3" data-locked="{{ !empty($reviewRecord?->reviewed_at) ? '1' : '0' }}">
@@ -188,6 +212,160 @@
         padding: 0.25rem 0.5rem;
     }
 
+    /* AGGRESSIVE Dark Mode Overrides for theme-dark class */
+    @media (prefers-color-scheme: dark) {
+        .card.border-0.bg-light {
+            background-color: #2d3748 !important;
+            color: #e2e8f0 !important;
+        }
+
+        .card.border-0.bg-light .card-body h2,
+        .card.border-0.bg-light .card-body p {
+            color: #e2e8f0 !important;
+        }
+
+        .card.border-0.bg-light .text-muted {
+            color: #a0aec0 !important;
+        }
+
+        .card.border-0.bg-light .text-uppercase {
+            color: #cbd5e0 !important;
+        }
+
+        /* Stats cards specifically */
+        .row.g-3.mb-3 .col-md-4 .card.bg-light {
+            background-color: #2d3748 !important;
+        }
+
+        .row.g-3.mb-3 .col-md-4 .card h2 {
+            color: #e2e8f0 !important;
+        }
+
+        .row.g-3.mb-3 .col-md-4 .card p {
+            color: #a0aec0 !important;
+        }
+    }
+
+    /* Dark theme class selector (for body.theme-dark) */
+    body.theme-dark .bg-light {
+        background-color: #2d3748 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .card {
+        background-color: #1a202c !important;
+        border-color: #4a5568 !important;
+    }
+
+    body.theme-dark .card-body {
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .text-muted {
+        color: #a0aec0 !important;
+    }
+
+    body.theme-dark .text-uppercase {
+        color: #cbd5e0 !important;
+    }
+
+    body.theme-dark .form-control,
+    body.theme-dark .form-select {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark input[type="file"],
+    body.theme-dark input[type="file"]::file-selector-button {
+        background-color: #2d3748 !important;
+        color: #e2e8f0 !important;
+        border-color: #4a5568 !important;
+    }
+
+    body.theme-dark input[type="file"]::file-selector-button {
+        background-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+        border: 1px solid #4a5568 !important;
+    }
+
+    body.theme-dark input[type="text"],
+    body.theme-dark input[type="email"],
+    body.theme-dark input[type="password"],
+    body.theme-dark textarea {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .form-control::placeholder {
+        color: #718096 !important;
+    }
+
+    body.theme-dark .form-control:focus,
+    body.theme-dark .form-select:focus,
+    body.theme-dark input[type="file"]:focus {
+        background-color: #2d3748 !important;
+        border-color: #667eea !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark input[type="file"]::placeholder {
+        color: #718096 !important;
+    }
+
+    body.theme-dark h1,
+    body.theme-dark h2,
+    body.theme-dark h3,
+    body.theme-dark h4,
+    body.theme-dark h5,
+    body.theme-dark h6 {
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark p {
+        color: #cbd5e0 !important;
+    }
+
+    body.theme-dark label {
+        color: #a0aec0 !important;
+    }
+
+    body.theme-dark .form-label {
+        color: #a0aec0 !important;
+    }
+
+    body.theme-dark .badge {
+        background-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .bulk-actions-card {
+        background: rgba(45, 55, 72, 0.98) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 0.35rem 0.85rem rgba(0, 0, 0, 0.4);
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .alert-secondary {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #cbd5e0 !important;
+    }
+
+    /* Bootstrap form styling overrides */
+    body.theme-dark .form-control:not(:focus) {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
+    body.theme-dark .input-group .form-control {
+        background-color: #2d3748 !important;
+        border-color: #4a5568 !important;
+        color: #e2e8f0 !important;
+    }
+
     .bulk-actions-dock {
         position: relative;
         z-index: 1020;
@@ -238,6 +416,12 @@
 
     .bulk-action-btn[data-action="unhide"] {
         --bulk-action-accent: rgba(25, 135, 84, 0.85);
+    }
+
+    /* Dark mode for Bootstrap's data-bs-theme attribute */
+    [data-bs-theme="dark"] .bg-light {
+        background-color: #2d3748 !important;
+        color: #e2e8f0 !important;
     }
 
     @media (max-width: 768px) {
@@ -599,23 +783,23 @@ document.addEventListener('DOMContentLoaded', function () {
         const showHiddenInput = document.getElementById('show_hidden');
         const showHiddenOnlyInput = document.getElementById('show_hidden_only');
 
-        if (showHiddenToggle && showHiddenInput) {
+        if (showHiddenToggle) {
             showHiddenToggle.addEventListener('change', function () {
-                showHiddenInput.value = showHiddenToggle.checked ? '1' : '0';
-                if (!showHiddenToggle.checked && showHiddenOnlyToggle && showHiddenOnlyInput) {
+                if (showHiddenInput) showHiddenInput.value = showHiddenToggle.checked ? '1' : '0';
+                if (!showHiddenToggle.checked && showHiddenOnlyToggle) {
                     showHiddenOnlyToggle.checked = false;
-                    showHiddenOnlyInput.value = '0';
+                    if (showHiddenOnlyInput) showHiddenOnlyInput.value = '0';
                 }
                 fetchTable(1);
             });
         }
 
-        if (showHiddenOnlyToggle && showHiddenOnlyInput) {
+        if (showHiddenOnlyToggle) {
             showHiddenOnlyToggle.addEventListener('change', function () {
-                showHiddenOnlyInput.value = showHiddenOnlyToggle.checked ? '1' : '0';
-                if (showHiddenOnlyToggle.checked && showHiddenToggle && showHiddenInput) {
+                if (showHiddenOnlyInput) showHiddenOnlyInput.value = showHiddenOnlyToggle.checked ? '1' : '0';
+                if (showHiddenOnlyToggle.checked && showHiddenToggle) {
                     showHiddenToggle.checked = true;
-                    showHiddenInput.value = '1';
+                    if (showHiddenInput) showHiddenInput.value = '1';
                 }
                 fetchTable(1);
             });
@@ -663,6 +847,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const shouldRestoreSearchFocus = !!(activeElement && activeElement.id === 'tableSearch');
 
         const fd = new FormData(filterForm);
+        
+        // Ensure hidden inputs are set before creating FormData
+        const showHiddenToggle = document.getElementById('showHiddenRowsToggle');
+        const showHiddenInput = document.getElementById('show_hidden');
+        const showHiddenOnlyToggle = document.getElementById('showHiddenOnlyRowsToggle');
+        const showHiddenOnlyInput = document.getElementById('show_hidden_only');
+        
+        if (showHiddenToggle && showHiddenInput) {
+            fd.set('show_hidden', showHiddenToggle.checked ? '1' : '0');
+        }
+        if (showHiddenOnlyToggle && showHiddenOnlyInput) {
+            fd.set('show_hidden_only', showHiddenOnlyToggle.checked ? '1' : '0');
+        }
+        
         const searchEl = document.getElementById('tableSearch');
         if (searchEl) {
             fd.set('q', searchEl.value || '');
@@ -731,17 +929,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const pagerLink = ev.target.closest('.pagination a');
             if (pagerLink) {
                 ev.preventDefault();
-                window.CDDSLoaderIgnoreBeforeUnload = true;
-                if (window.CDDSLoader && typeof window.CDDSLoader.hide === 'function') {
-                    window.CDDSLoader.hide();
-                }
-                try {
-                    const u = new URL(pagerLink.href);
-                    const nextPage = Number(u.searchParams.get('page') || '1');
-                    fetchTable(nextPage);
-                } catch (e) {
-                    fetchTable(1);
-                }
+                window.location.href = pagerLink.href;
             }
         });
     }

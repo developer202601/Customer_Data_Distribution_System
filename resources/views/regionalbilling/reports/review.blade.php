@@ -43,6 +43,32 @@
                     </div>
                 </div>
 
+                @if(session('status') || $errors->any() || session('rb.reports.include_preview_count'))
+                    <div class="mb-3">
+                        @if(session('status'))
+                            <div class="alert alert-success mb-2">
+                                {{ session('status') }}
+                                @if(session('rb.reports.include_preview_count'))
+                                    <div class="small text-muted mt-1">
+                                        Inclusion file matched {{ number_format((int) session('rb.reports.include_preview_count')) }} row(s).
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        @if($errors->any())
+                            <div class="alert alert-danger mb-0">
+                                <div class="fw-semibold mb-1">Unable to process the uploaded file.</div>
+                                <ul class="mb-0 ps-3">
+                                    @foreach($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
                 <div id="reviewWorkspace" class="{{ empty($reviewOptIn) ? 'review-workspace-disabled' : '' }}">
                     @if(empty($reviewOptIn))
                         <div class="alert alert-secondary mb-3">
@@ -100,14 +126,49 @@
                         </div>
 
                         <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
-                            <form method="post" action="{{ route('rb.reports.pass', $selectedReport->id) }}">
-                                @csrf
-                                <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">Pass to RTO Admin</button>
-                            </form>
-                            @if(!empty($reviewRecord?->reviewed_at))
-                                <span class="small text-success">Passed at {{ $reviewRecord->reviewed_at->format('Y-m-d H:i') }}</span>
-                            @else
+                            @if(empty($reviewRecord?->reviewed_at))
+                                <form method="post" action="{{ route('rb.reports.pass', $selectedReport->id) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">Pass to RTO Admin</button>
+                                </form>
                                 <span class="small text-muted">This report has not been passed yet for this region.</span>
+
+                                <div class="row g-3 w-100 mb-3">
+                                    <div class="col-lg-6">
+                                        <div class="card border-0 bg-light rounded-4 h-100">
+                                            <div class="card-body p-3">
+                                                <p class="text-uppercase text-muted small mb-1">Exclude file submission</p>
+                                                <p class="small text-muted mb-2">Upload a workbook of rows to hide from the review set.</p>
+                                                <form method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                                    @csrf
+                                                    <input type="file" name="exclude_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
+                                                    <button type="submit" class="btn btn-primary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="card border-0 bg-light rounded-4 h-100">
+                                            <div class="card-body p-3">
+                                                <p class="text-uppercase text-muted small mb-1">Inclusion file submission</p>
+                                                <p class="small text-muted mb-2">Upload a workbook of rows to keep visible and hide everything else.</p>
+                                                <form method="post" action="{{ route('rb.reports.include_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                                                    @csrf
+                                                    <input type="file" name="include_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
+                                                    <button type="submit" class="btn btn-primary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Inclusion File</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @else
+                                <span class="small text-success">Passed at {{ $reviewRecord->reviewed_at->format('Y-m-d H:i') }}</span>
+                                @if(!empty($canUnlockReview))
+                                    <form method="post" action="{{ route('rb.reports.unlock', $selectedReport->id) }}" class="ms-2">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-3">Unlock Review</button>
+                                    </form>
+                                @endif
                             @endif
                         </div>
 
@@ -131,6 +192,22 @@
                                 @include('regionalbilling.reports._review_table', ['selectedReport' => $selectedReport, 'rows' => $rows, 'showHidden' => $showHidden, 'showHiddenOnly' => $showHiddenOnly, 'isLocked' => !empty($reviewRecord?->reviewed_at), 'search' => $search])
                             </div>
                         </form>
+                        <div id="rbToastContainer" class="rb-toast-container"></div>
+                        <style nonce="{{ $cspNonce ?? '' }}">
+                            .rb-toast-container {
+                                position: fixed;
+                                right: 1rem;
+                                bottom: 1rem;
+                                z-index: 1080;
+                                width: auto;
+                                max-width: 360px;
+                                pointer-events: none;
+                            }
+                            .rb-toast-container .toast {
+                                pointer-events: auto;
+                                margin-bottom: 0.5rem;
+                            }
+                        </style>
                     @else
                         @if(!empty($reviewOptIn) && !empty($reviewEnabledAt))
                             <div class="alert alert-info mb-0">No reviewable reports found for your region after {{ $reviewEnabledAt->format('Y-m-d H:i') }}.</div>
@@ -156,7 +233,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const bulkHideBtn = document.getElementById('bulkHideBtn');
     const bulkUnhideBtn = document.getElementById('bulkUnhideBtn');
     const bulkClearSelectionBtn = document.getElementById('bulkClearSelectionBtn');
+    const bulkActionsDock = document.getElementById('bulkActionsDock');
     const bulkActionsSelectionHint = document.getElementById('bulkActionsSelectionHint');
+    const bulkActionsMixedHint = document.getElementById('bulkActionsMixedHint');
     const bulkActionsCountBadge = document.getElementById('bulkActionsCountBadge');
     const selectedRows = new Map();
     let currentPage = 1;
@@ -164,9 +243,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function applyBindings() {
         const selectAll = document.getElementById('selectAllRows');
         const checks = Array.from(document.querySelectorAll('.row-check'));
+        const isLocked = bulkActionsDock?.getAttribute('data-locked') === '1';
 
         if (selectAll) {
+            selectAll.disabled = isLocked;
             selectAll.addEventListener('change', function () {
+                if (isLocked) return;
                 checks.forEach(function (cb) {
                     cb.checked = selectAll.checked;
                     const row = cb.closest('.review-row');
@@ -181,7 +263,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         checks.forEach(function (cb) {
+            cb.disabled = isLocked;
             cb.addEventListener('change', function () {
+                if (isLocked) {
+                    cb.checked = false;
+                    return;
+                }
                 const row = cb.closest('.review-row');
                 const rowId = row?.getAttribute('data-row-id');
                 const visibility = row?.getAttribute('data-row-visibility') || 'visible';
@@ -202,10 +289,58 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function showToast(message, isError = false) {
+        const toastContainer = document.getElementById('rbToastContainer');
+        if (!toastContainer) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center text-bg-light border shadow-sm' + (isError ? ' border-danger' : '');
+        toast.role = 'alert';
+        toast.ariaLive = 'assertive';
+        toast.ariaAtomic = 'true';
+
+        const inner = document.createElement('div');
+        inner.className = 'd-flex';
+
+        const body = document.createElement('div');
+        body.className = 'toast-body text-center w-100';
+        body.textContent = message;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close me-2 m-auto';
+        closeBtn.dataset.bsDismiss = 'toast';
+        closeBtn.ariaLabel = 'Close';
+        closeBtn.addEventListener('click', function () {
+            toast.remove();
+        });
+
+        inner.appendChild(body);
+        inner.appendChild(closeBtn);
+        toast.appendChild(inner);
+        toastContainer.appendChild(toast);
+
+        if (window.bootstrap && typeof bootstrap.Toast === 'function') {
+            new bootstrap.Toast(toast, { delay: 4000 }).show();
+        }
+    }
+
     function updateBulkUi() {
+        const isLocked = bulkActionsDock?.getAttribute('data-locked') === '1';
         const selected = Array.from(selectedRows.values());
         const visible = selected.filter(function (x) { return x.visibility === 'visible'; });
         const hidden = selected.filter(function (x) { return x.visibility === 'hidden'; });
+
+        if (isLocked) {
+            if (bulkActionsSelectionHint) bulkActionsSelectionHint.textContent = 'Review is locked. Row visibility cannot be changed.';
+            if (bulkActionsMixedHint) bulkActionsMixedHint.classList.add('d-none');
+            if (bulkHideBtn) bulkHideBtn.classList.add('d-none');
+            if (bulkUnhideBtn) bulkUnhideBtn.classList.add('d-none');
+            if (bulkClearSelectionBtn) bulkClearSelectionBtn.classList.add('d-none');
+            if (bulkActionsCountBadge) bulkActionsCountBadge.classList.add('d-none');
+            return;
+        }
+
         if (bulkActionsSelectionHint) bulkActionsSelectionHint.textContent = selected.length ? ('Selected rows: ' + selected.length) : 'Select rows to manage visibility.';
         if (bulkActionsCountBadge) {
             bulkActionsCountBadge.classList.toggle('d-none', !selected.length);
@@ -235,7 +370,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (countTotal && data.counts) countTotal.textContent = Number(data.counts.total || 0).toLocaleString();
         if (countVisible && data.counts) countVisible.textContent = Number(data.counts.visible || 0).toLocaleString();
         if (countHidden && data.counts) countHidden.textContent = Number(data.counts.hidden || 0).toLocaleString();
+        if (bulkActionsDock && typeof data.is_locked !== 'undefined') {
+            bulkActionsDock.dataset.locked = data.is_locked ? '1' : '0';
+        }
         selectedRows.clear();
+        const selectAll = document.getElementById('selectAllRows');
+        if (selectAll) selectAll.checked = false;
         applyBindings();
         updateBulkUi();
     }
@@ -251,12 +391,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const pagerLink = ev.target.closest('.pagination a');
             if (!pagerLink) return;
             ev.preventDefault();
-            try {
-                const u = new URL(pagerLink.href);
-                fetchTable(Number(u.searchParams.get('page') || '1'));
-            } catch (e) {
-                fetchTable(1);
-            }
+            window.location.href = pagerLink.href;
         });
     }
 
@@ -264,6 +399,8 @@ document.addEventListener('DOMContentLoaded', function () {
         bulkClearSelectionBtn.addEventListener('click', function () {
             selectedRows.clear();
             document.querySelectorAll('.row-check').forEach(function (cb) { cb.checked = false; });
+            const selectAll = document.getElementById('selectAllRows');
+            if (selectAll) selectAll.checked = false;
             updateBulkUi();
         });
     }
@@ -272,17 +409,41 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!bulkForm) return;
         const target = Array.from(selectedRows.values()).filter(function (x) { return x.visibility === (action === 'hide' ? 'visible' : 'hidden'); });
         if (!target.length) return;
-        const tokenInput = bulkForm.querySelector('input[name="_token"]');
-        const fd = new FormData();
-        if (tokenInput) fd.append('_token', tokenInput.value);
-        fd.append('action', action);
-        target.forEach(function (x) { fd.append('row_ids[]', x.id); });
-        await fetch(bulkForm.action, {
+
+        const actionInput = bulkForm.querySelector('input[name="action"]');
+        if (actionInput) actionInput.value = action;
+
+        const fd = new FormData(bulkForm);
+        const rowIds = Array.from(fd.getAll('row_ids[]')).map(function (value) { return String(value || '').trim(); }).filter(function (value) { return value !== ''; });
+        if (!rowIds.length) {
+            console.error('Bulk action missing row_ids', action, target);
+            return;
+        }
+
+        const isLocked = bulkActionsDock?.getAttribute('data-locked') === '1';
+        if (isLocked) {
+            showToast('Review is locked. Unlock it to change row visibility.', true);
+            return;
+        }
+
+        const bulkActionUrl = bulkForm.getAttribute('action');
+        if (!bulkActionUrl) return;
+        console.log('Bulk action submitting', action, bulkActionUrl, rowIds);
+
+        const res = await fetch(bulkActionUrl, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
             body: fd
         });
+        const errorData = await res.json().catch(() => null);
+        if (!res.ok) {
+            const message = errorData?.message || 'Unable to update rows.';
+            showToast(message, true);
+            console.error('Bulk action failed', res.status, JSON.stringify(errorData, null, 2));
+            return;
+        }
+        console.log('Bulk action succeeded', action, rowIds);
         fetchTable(currentPage);
     }
 

@@ -297,6 +297,7 @@
                                 <label class="form-label small">Outcome</label>
                                 <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
                                     <option value="" disabled selected>Select outcome category</option>
+                                    <option value="paid">Already paid</option>
                                     <option value="promise_to_pay">Promise to pay</option>
                                     <option value="temporary_financial_difficulty">Temporary financial difficulty</option>
                                     <option value="billing_dispute">Billing / Dispute issues</option>
@@ -471,9 +472,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 // clear previous payment fields
                 clearPaymentFields();
                 if (v === 'will_pay_today') {
-                    // treat as payment date (today) and show paid amount field
+                    // treat as payment date (today); 
                     paymentDateWrap.style.display = 'block';
-                    paidAmountWrap.style.display = 'block';
+                    if (paidAmountWrap) paidAmountWrap.style.display = 'none';
                     const today = new Date().toISOString().slice(0,10);
                     if (paymentDate) paymentDate.value = today;
                 } else if (v === 'will_pay_within_3_days' || v === 'will_pay_within_7_days') {
@@ -981,14 +982,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const v = this.value;
         try { renderDependentDropdown(v); } catch (e) { /* ignore */ }
-        // Show payment date and paid amount immediately when main category selected
-        try {
-            if (paymentDateWrap) paymentDateWrap.style.display = 'block';
-            if (paidAmountWrap) paidAmountWrap.style.display = 'block';
-            const today = new Date().toISOString().slice(0,10);
-            if (paymentDate) paymentDate.value = today;
-            if (paidAmount) paidAmount.value = '';
-        } catch (e) { /* ignore */ }
         if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
             paymentWrap.style.display = 'block';
             paymentDateWrap.style.display = 'none';

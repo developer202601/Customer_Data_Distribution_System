@@ -129,7 +129,7 @@
                                 <form method="post" action="#" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
                                     @csrf
                                     <input type="file" name="exclude_file" class="form-control form-control-sm" />
-                                    <button type="submit" class="btn btn-secondary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
+                                    <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
                                 </form>
                             </div>
                         </div>

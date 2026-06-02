@@ -463,6 +463,12 @@ body.theme-dark .process-upload-card--transparent {
     background: rgba(3,6,12,0.55);
 }
 
+/* Make card titles white in dark mode */
+.theme-dark .card-title,
+body.theme-dark .card-title {
+    color: #ffffff;
+}
+
 /* Ensure action buttons in CC user list follow main button tokens */
 .process-upload-card .btn {
     border-radius: 999px;

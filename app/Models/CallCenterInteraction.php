@@ -16,6 +16,7 @@ class CallCenterInteraction extends Model
         'agent_id',
         'account_number',
         'outcome',
+        'outcome_detail',
         'note',
         'payment_expected_at',
         'paid',

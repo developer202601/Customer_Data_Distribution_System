@@ -494,7 +494,8 @@ class AssignmentController extends Controller
                 'id' => $i->id,
                 'agent_id' => $i->agent_id,
                 'agent_name' => $i->agent ? ($i->agent->name ?? $i->agent->username ?? null) : null,
-                'outcome' => $i->outcome,
+                    'outcome' => $i->outcome,
+                    'outcome_detail' => $i->outcome_detail ?? null,
                 'note' => $i->note,
                 'account_number' => $i->account_number ?? null,
                 'paid' => (bool) ($i->paid ?? false),
@@ -619,6 +620,7 @@ class AssignmentController extends Controller
 
         $payload = $request->validate([
             'outcome' => 'nullable|string|max:100',
+            'outcome_detail' => 'nullable|string|max:150',
             'note' => 'nullable|string',
             'payment_expected_at' => 'nullable|date',
             'paid' => 'nullable|boolean',

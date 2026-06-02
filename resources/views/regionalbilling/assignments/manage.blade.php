@@ -234,7 +234,7 @@
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="promise_overdue">Promise overdue (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="number_invalid">Number invalid (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_answered">Not answered (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_relevant_person">Not relevant person (0)</button>
+                                                   
                                                 </div>
                                             </div>
                                             <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">

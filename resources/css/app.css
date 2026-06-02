@@ -1962,6 +1962,17 @@ body.theme-dark .text-muted strong {
     color: var(--text-muted) !important;
 }
 
+/* Ensure headings and strong elements are white in dark mode */
+body.theme-dark h1,
+body.theme-dark h2,
+body.theme-dark h3,
+body.theme-dark h4,
+body.theme-dark h5,
+body.theme-dark h6,
+body.theme-dark strong {
+    color: #ffffff;
+}
+
 /* Make elevated card surfaces slightly lighter in dark mode for better separation */
 body.theme-dark .card,
 body.theme-dark .process-upload-card,

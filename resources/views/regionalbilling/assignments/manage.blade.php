@@ -40,10 +40,13 @@
     .cc-assignment-card .list-group-item {
         border-radius: 0.65rem;
         margin-bottom: 0.35rem;
-        background: rgba(248, 249, 252, 0.6);
+        /* Default: show in blue. Hover will switch to gray. */
+        background: rgba(13, 110, 253, 0.12);
+        transition: background-color 0.12s ease-in-out;
     }
     .cc-assignment-card .list-group-item:hover {
-        background: rgba(13, 110, 253, 0.08);
+        /* On hover show the previous gray look */
+        background: rgba(248, 249, 252, 0.6);
     }
     .cc-interactions-scroll {
         max-height: 360px;
@@ -66,6 +69,32 @@
     .modal-dialog { max-height: calc(100vh - var(--cc-navbar-offset)); }
     .modal-content { max-height: calc(100vh - var(--cc-navbar-offset)); overflow: hidden; }
     .modal-body { overflow-y: auto; }
+
+    /* Dark mode styling for accepted rows list */
+    @media (prefers-color-scheme: dark) {
+        .accepted-row {
+            background-color: #1a3a52;
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .accepted-row:hover {
+            background-color: #fff;
+            color: #000;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .list-group-item {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+    }
+
+    /* Light mode hover effect for accepted rows */
+    @media (prefers-color-scheme: light) {
+        .accepted-row:hover {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+        }
+    }
 
     /* When bootstrap centers modals with translateY(-50%), they can sit under a fixed navbar.
        Override centering so modals are placed below the navbar instead. */

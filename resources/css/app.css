@@ -463,6 +463,12 @@ body.theme-dark .process-upload-card--transparent {
     background: rgba(3,6,12,0.55);
 }
 
+/* Make card titles white in dark mode */
+.theme-dark .card-title,
+body.theme-dark .card-title {
+    color: #ffffff;
+}
+
 /* Ensure action buttons in CC user list follow main button tokens */
 .process-upload-card .btn {
     border-radius: 999px;
@@ -1956,6 +1962,17 @@ body.theme-dark .text-muted strong {
     color: var(--text-muted) !important;
 }
 
+/* Ensure headings and strong elements are white in dark mode */
+body.theme-dark h1,
+body.theme-dark h2,
+body.theme-dark h3,
+body.theme-dark h4,
+body.theme-dark h5,
+body.theme-dark h6,
+body.theme-dark strong {
+    color: #ffffff;
+}
+
 /* Make elevated card surfaces slightly lighter in dark mode for better separation */
 body.theme-dark .card,
 body.theme-dark .process-upload-card,
@@ -2103,6 +2120,18 @@ body.theme-dark input[type="file"] {
     background-color: #1a2a3f !important;
     color: #e2e8f0 !important;
     border-color: #3d4f67 !important;
+}
+
+body.theme-dark input[type="file"]::file-selector-button {
+    background-color: var(--btn-primary-bg) !important;
+    color: #ffffff !important;
+    border-color: var(--btn-primary-bg) !important;
+    cursor: pointer;
+}
+
+body.theme-dark input[type="file"]::file-selector-button:hover {
+    background-color: var(--btn-primary-hover-bg) !important;
+    border-color: var(--btn-primary-hover-bg) !important;
 }
 
 body.theme-dark .form-control::placeholder {

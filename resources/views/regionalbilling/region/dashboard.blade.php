@@ -47,7 +47,7 @@
                                 <h5 class="card-title">Quick actions</h5><br>
                                 <p class="card-text">Create a new RTO admin for the region.</p>
                                 <div class="d-flex flex-column gap-2">
-                                    <a href="{{ route('rb.region.create_admin') }}" class="btn btn-outline-primary">Add RTO Admin</a>
+                                    <a href="{{ route('rb.region.create_admin') }}" class="btn btn-primary">Add RTO Admin</a>
                                 </div>
                             </div>
                         </div>

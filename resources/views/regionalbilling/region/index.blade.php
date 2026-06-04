@@ -28,14 +28,15 @@
                     <div class="col-12">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h2 class="h6 mb-0">RTO Admins</h2>
-                            <form method="get" action="{{ route('rb.region.index') }}" class="d-flex gap-2">
-                                <input type="search" name="q" class="form-control form-control-sm" placeholder="Search username or name" value="{{ old('q', $q ?? request('q')) }}">
-                                <select name="rtom" class="form-select form-select-sm">
+                            <form method="get" action="{{ route('rb.region.index') }}" class="d-flex gap-3">
+                                <input type="search" name="q" class="form-control form-control-sm text-white" style="min-width: 200px; max-width: 420px;" placeholder="Search username or name" value="{{ old('q', $q ?? request('q')) }}" autocomplete="off" aria-label="Search RTO admins">
+                                <select name="rtom" class="form-select form-select-sm text-white">
                                     <option value="">All RTOs</option>
                                     @foreach(($rtoms ?? collect()) as $r)
                                         <option value="{{ $r }}" {{ (string)($selectedRtom ?? request('rtom')) === (string)$r ? 'selected' : '' }}>{{ $r }}</option>
                                     @endforeach
                                 </select>
+                                <button type="submit" class="btn btn-primary btn-sm text-white">Search</button>
                             </form>
                         </div>
 

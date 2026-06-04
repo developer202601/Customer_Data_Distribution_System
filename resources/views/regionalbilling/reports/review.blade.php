@@ -142,7 +142,7 @@
                                                 <form method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
                                                     @csrf
                                                     <input type="file" name="exclude_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
-                                                    <button type="submit" class="btn btn-primary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
+                                                    <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
                                                 </form>
                                             </div>
                                         </div>
@@ -155,7 +155,7 @@
                                                 <form method="post" action="{{ route('rb.reports.include_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
                                                     @csrf
                                                     <input type="file" name="include_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
-                                                    <button type="submit" class="btn btn-primary btn-sm px-2 py-1" style="white-space: nowrap;">Submit Inclusion File</button>
+                                                    <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Inclusion File</button>
                                                 </form>
                                             </div>
                                         </div>

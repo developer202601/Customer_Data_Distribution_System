@@ -40,10 +40,13 @@
     .cc-assignment-card .list-group-item {
         border-radius: 0.65rem;
         margin-bottom: 0.35rem;
-        background: rgba(248, 249, 252, 0.6);
+        /* Default: show in blue. Hover will switch to gray. */
+        background: rgba(13, 110, 253, 0.12);
+        transition: background-color 0.12s ease-in-out;
     }
     .cc-assignment-card .list-group-item:hover {
-        background: rgba(13, 110, 253, 0.08);
+        /* On hover show the previous gray look */
+        background: rgba(248, 249, 252, 0.6);
     }
     .cc-interactions-scroll {
         max-height: 360px;
@@ -66,6 +69,32 @@
     .modal-dialog { max-height: calc(100vh - var(--cc-navbar-offset)); }
     .modal-content { max-height: calc(100vh - var(--cc-navbar-offset)); overflow: hidden; }
     .modal-body { overflow-y: auto; }
+
+    /* Dark mode styling for accepted rows list */
+    @media (prefers-color-scheme: dark) {
+        .accepted-row {
+            background-color: #1a3a52;
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .accepted-row:hover {
+            background-color: #fff;
+            color: #000;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .list-group-item {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+    }
+
+    /* Light mode hover effect for accepted rows */
+    @media (prefers-color-scheme: light) {
+        .accepted-row:hover {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+        }
+    }
 
     /* When bootstrap centers modals with translateY(-50%), they can sit under a fixed navbar.
        Override centering so modals are placed below the navbar instead. */
@@ -234,7 +263,7 @@
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="promise_overdue">Promise overdue (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="number_invalid">Number invalid (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_answered">Not answered (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_relevant_person">Not relevant person (0)</button>
+                                                   
                                                 </div>
                                             </div>
                                             <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">
@@ -297,6 +326,7 @@
                                 <label class="form-label small">Outcome</label>
                                 <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
                                     <option value="" disabled selected>Select outcome category</option>
+                                    <option value="paid">Already paid</option>
                                     <option value="promise_to_pay">Promise to pay</option>
                                     <option value="temporary_financial_difficulty">Temporary financial difficulty</option>
                                     <option value="billing_dispute">Billing / Dispute issues</option>
@@ -471,9 +501,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 // clear previous payment fields
                 clearPaymentFields();
                 if (v === 'will_pay_today') {
-                    // treat as payment date (today) and show paid amount field
+                    // treat as payment date (today); 
                     paymentDateWrap.style.display = 'block';
-                    paidAmountWrap.style.display = 'block';
+                    if (paidAmountWrap) paidAmountWrap.style.display = 'none';
                     const today = new Date().toISOString().slice(0,10);
                     if (paymentDate) paymentDate.value = today;
                 } else if (v === 'will_pay_within_3_days' || v === 'will_pay_within_7_days') {
@@ -981,14 +1011,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const v = this.value;
         try { renderDependentDropdown(v); } catch (e) { /* ignore */ }
-        // Show payment date and paid amount immediately when main category selected
-        try {
-            if (paymentDateWrap) paymentDateWrap.style.display = 'block';
-            if (paidAmountWrap) paidAmountWrap.style.display = 'block';
-            const today = new Date().toISOString().slice(0,10);
-            if (paymentDate) paymentDate.value = today;
-            if (paidAmount) paidAmount.value = '';
-        } catch (e) { /* ignore */ }
         if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
             paymentWrap.style.display = 'block';
             paymentDateWrap.style.display = 'none';

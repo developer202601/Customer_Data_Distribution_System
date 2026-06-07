@@ -92,6 +92,36 @@
         box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
     }
 
+    /* Assignment details window dark mode UI*/
+    .theme-dark .modal-content {
+        background-color: #1a3a52;
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Override the hardcoded 'bg-light' and 'bg-white' inner panels */
+    .theme-dark .modal-content .bg-light,
+    .theme-dark .modal-content .bg-white {
+        background-color: #1a3a52 !important; 
+        color: #fff !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .theme-dark .modal-header {
+        border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Close button styling for dark mode */
+    .theme-dark .btn-close {
+        filter: invert(1) grayscale(100%) brightness(200%);
+    }
+    
+    .theme-dark .modal-content.card {
+        background-color: #0f2435 !important; 
+        color: #fff !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
     /* When bootstrap centers modals with translateY(-50%), they can sit under a fixed navbar.
        Override centering so modals are placed below the navbar instead. */
     .modal-dialog.modal-dialog-centered {

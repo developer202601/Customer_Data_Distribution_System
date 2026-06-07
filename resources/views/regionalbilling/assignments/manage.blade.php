@@ -70,30 +70,26 @@
     .modal-content { max-height: calc(100vh - var(--cc-navbar-offset)); overflow: hidden; }
     .modal-body { overflow-y: auto; }
 
-    /* Dark mode styling for accepted rows list */
-    @media (prefers-color-scheme: dark) {
-        .accepted-row {
-            background-color: #1a3a52;
-            color: #fff;
-            border-color: rgba(255, 255, 255, 0.1);
-        }
+    /* Themeable styling for accepted rows — controlled by .theme-dark / .theme-light on <html> */
+    .theme-dark .accepted-row {
+        background-color: #1a3a52;
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.1);
+    }
 
-        .accepted-row:hover {
-            background-color: #fff;
-            color: #000;
-            border-color: rgba(255, 255, 255, 0.1);
-        }
+    .theme-dark .accepted-row:hover {
+        background-color: #245071;
+        color: #000 !important;
+        border-color: rgba(255, 255, 255, 0.1);
+    }
 
-        .list-group-item {
-            border-color: rgba(255, 255, 255, 0.1);
-        }
+    .theme-dark .list-group-item {
+        border-color: rgba(255, 255, 255, 0.1);
     }
 
     /* Light mode hover effect for accepted rows */
-    @media (prefers-color-scheme: light) {
-        .accepted-row:hover {
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
-        }
+    .theme-light .accepted-row:hover {
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
     }
 
     /* When bootstrap centers modals with translateY(-50%), they can sit under a fixed navbar.

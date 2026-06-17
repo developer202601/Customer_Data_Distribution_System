@@ -276,6 +276,48 @@ class ExclusionUploadController extends Controller
         ]);
     }
 
+    public function skip(Request $request, SessionUserResolver $resolver): JsonResponse|RedirectResponse
+    {
+        $stagedUploads = session('master.dataset.staged_exclusions', []);
+
+        foreach ($stagedUploads as $entry) {
+            if (! empty($entry['path'])) {
+                Storage::disk('local')->delete((string) $entry['path']);
+            }
+
+            if (! empty($entry['id'])) {
+                Cache::forget(self::PROGRESS_CACHE_PREFIX . (string) $entry['id']);
+            }
+        }
+
+        $request->session()->forget('master.dataset.staged_exclusions');
+
+        $process = $this->resolveProcessOrRedirect('Please upload the master dataset before managing exclusions.');
+
+        if ($process instanceof RedirectResponse) {
+            return $process;
+        }
+
+        $userContext = $resolver->resolve($request);
+
+        ProcessExclusionUpload::dispatch($process->id, [], $userContext)
+            ->onQueue('exports');
+
+        $message = 'Exclusions skipped. Continue with configuration confirmation.';
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'message' => $message,
+                'redirect_url' => route('process.confirm.create'),
+            ]);
+        }
+
+        return redirect()
+            ->route('process.confirm.create')
+            ->with('status', $message);
+    }
+
     private function buildProgressPayload(string $token): array
     {
         $state = Cache::get(self::PROGRESS_CACHE_PREFIX . $token);

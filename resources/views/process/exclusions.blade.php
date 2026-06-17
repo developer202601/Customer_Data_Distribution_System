@@ -44,8 +44,15 @@
                         <div class="text-end">
                             <div class="d-flex justify-content-end align-items-center gap-2">
                                 <a href="{{ route('master.upload.create') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
+                                <button type="submit"
+                                    class="btn btn-outline-secondary"
+                                    id="exclusion-skip-button"
+                                    formaction="{{ route('process.exclusions.skip') }}"
+                                    formmethod="post"
+                                    formnovalidate
+                                    data-loader-off="1">Skip exclusions</button>
                                 <button type="button" class="btn btn-outline-secondary" id="exclusion-clear">Clear all exclusions</button>
-                                <button type="submit" class="btn btn-dark px-4" disabled>Apply exclusions</button>
+                                <button type="submit" class="btn btn-dark px-4" id="exclusion-apply-button" disabled>Apply exclusions</button>
                             </div>
                             <p class="text-muted mb-0 mt-2">You can add files one at a time or all at once.</p>
                         </div>
@@ -161,7 +168,8 @@
         const selectedFiles = [];
         let loaderActive = false;
         let uploadQueueActive = false;
-        const submitButton = form.querySelector('button[type="submit"]');
+        const applyButton = document.getElementById('exclusion-apply-button');
+        const skipButton = document.getElementById('exclusion-skip-button');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const stagedUploads = @json($stagedUploads ?? []);
         const uploadSingleRoute = @json(route('process.exclusions.upload.single'));
@@ -294,7 +302,7 @@
         };
 
         const toggleSubmitState = () => {
-            if (!submitButton) {
+            if (!applyButton) {
                 return;
             }
 
@@ -303,7 +311,7 @@
             const isAnyValidating = selectedFiles.some((entry) => entry.status === 'uploaded' && entry.validationStatus !== 'ready' && entry.validationStatus !== 'failed');
             const hasFailed = selectedFiles.some((entry) => entry.status === 'error' || entry.validationStatus === 'failed');
 
-            submitButton.disabled = loaderActive || uploadQueueActive || !hasUploaded || hasPending || isAnyValidating || hasFailed;
+            applyButton.disabled = loaderActive || uploadQueueActive || !hasUploaded || hasPending || isAnyValidating || hasFailed;
         };
 
         if (!dropzone || !fileInput || !form) {
@@ -893,6 +901,13 @@
         };
 
         form.addEventListener('submit', async (event) => {
+            const submitter = event.submitter;
+            const isSkipAction = submitter && submitter.id === 'exclusion-skip-button';
+
+            if (isSkipAction) {
+                return;
+            }
+
             event.preventDefault();
 
             if (!selectedFiles.length) {
@@ -913,15 +928,15 @@
             loaderActive = true;
             clearErrors();
 
-            if (submitButton) {
-                submitButton.disabled = true;
+            if (applyButton) {
+                applyButton.disabled = true;
             }
 
             const uploadedEntries = selectedFiles.filter((entry) => entry.status === 'uploaded' && entry.stagedId);
             if (!uploadedEntries.length) {
                 loaderActive = false;
-                if (submitButton) {
-                    submitButton.disabled = false;
+                if (applyButton) {
+                    applyButton.disabled = false;
                 }
                 showError(['Please upload at least one exclusion file before applying exclusions.']);
                 return;
@@ -947,8 +962,8 @@
 
                 if (!response.ok) {
                     loaderActive = false;
-                    if (submitButton) {
-                        submitButton.disabled = false;
+                    if (applyButton) {
+                        applyButton.disabled = false;
                     }
 
                     if (response.status === 422 && payload?.errors) {
@@ -976,8 +991,8 @@
                 }
 
 
-                if (submitButton) {
-                    submitButton.disabled = false;
+                if (applyButton) {
+                    applyButton.disabled = false;
                 }
 
                 clearAll(false);
@@ -986,8 +1001,8 @@
                     message: error?.message || 'unknown error'
                 });
                 loaderActive = false;
-                if (submitButton) {
-                    submitButton.disabled = false;
+                if (applyButton) {
+                    applyButton.disabled = false;
                 }
                 showError(['Unable to process the exclusion files. Please try again.']);
             }

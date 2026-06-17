@@ -47,6 +47,7 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/process/exclusions/chunks/finish', [ExclusionUploadController::class, 'finishChunkUpload'])->name('process.exclusions.chunks.finish');
     Route::post('/process/exclusions/upload', [ExclusionUploadController::class, 'uploadSingle'])->name('process.exclusions.upload.single');
     Route::delete('/process/exclusions/staged/{token}', [ExclusionUploadController::class, 'destroyStagedUpload'])->name('process.exclusions.staged.destroy');
+    Route::post('/process/exclusions/skip', [ExclusionUploadController::class, 'skip'])->name('process.exclusions.skip');
     Route::post('/process/exclusions', [ExclusionUploadController::class, 'store'])->name('process.exclusions.store');
 
     Route::get('/process/confirm', [App\Http\Controllers\ProcessConfirmController::class, 'create'])->name('process.confirm.create');

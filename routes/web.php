@@ -229,3 +229,9 @@ Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.perform');
 
 //Route::post('/create/range', [AdminController::class, 'createRange'])->name('create.range');
+
+Route::get('/auth/microsoft', [AuthController::class, 'microsoftRedirect']);
+Route::get('/auth/microsoft/callback', [AuthController::class, 'microsoftCallback']);
+
+// Route::get('/auth/microsoft', [AuthController::class, 'login2']);
+// Route::get('/auth/microsoft/callback', [AuthController::class, 'getLogin2']);

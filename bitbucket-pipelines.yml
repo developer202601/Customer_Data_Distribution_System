@@ -1,0 +1,12 @@
+pipelines:
+  default:
+     - step:
+         name: Deploy to production
+         deployment: production
+         script:
+           - echo "Deploying to production environment"
+           - pipe: atlassian/ssh-run:0.8.1
+             variables:
+              SSH_USER: $SERVER_USER
+              SERVER: $SERVER_IP
+              COMMAND: 'cd $APP_PATH && ./deploy.sh'

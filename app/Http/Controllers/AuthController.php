@@ -6,12 +6,74 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use League\OAuth2\Client\Provider\GenericProvider;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
     private function normalizeAssignment(?string $assignment): string
     {
         return strtolower(trim((string) $assignment));
+    }
+
+    private function provider()
+    {
+        return new GenericProvider([
+            'clientId'                => env('MICROSOFT_CLIENT_ID'),
+            'clientSecret'            => env('MICROSOFT_CLIENT_SECRET'),
+            'redirectUri'             => env('MICROSOFT_REDIRECT_URI'),
+            'urlAuthorize'            => 'https://login.microsoftonline.com/' . env('MICROSOFT_TENANT_ID') . '/oauth2/v2.0/authorize',
+            'urlAccessToken'          => 'https://login.microsoftonline.com/' . env('MICROSOFT_TENANT_ID') . '/oauth2/v2.0/token',
+            'urlResourceOwnerDetails' => '',
+        ]);
+    }
+
+    public function microsoftRedirect()
+    {
+        $provider = $this->provider();
+
+        $authUrl = $provider->getAuthorizationUrl([
+            'scope' => 'openid profile email User.Read'
+        ]);
+
+        session(['oauth_state' => $provider->getState()]);
+
+        return redirect($authUrl);
+    }
+
+    public function microsoftCallback()
+    {
+        $provider = $this->provider();
+
+        $token = $provider->getAccessToken('authorization_code', [
+            'code' => request('code')
+        ]);
+
+        $graphUrl = 'https://graph.microsoft.com/v1.0/me';
+
+        $response = file_get_contents(
+            $graphUrl,
+            false,
+            stream_context_create([
+                'http' => [
+                    'header' => 'Authorization: Bearer ' . $token->getToken()
+                ]
+            ])
+        );
+
+        $userData = json_decode($response, true);
+        print_r($userData);
+        exit;
+        // $user = User::updateOrCreate(
+        //     ['email' => $userData['mail'] ?? $userData['userPrincipalName']],
+        //     [
+        //         'name' => $userData['displayName']
+        //     ]
+        // );
+
+        // Auth::login($user);
+
+        // return redirect('/dashboard');
     }
 
     public function showLogin(Request $request): View|RedirectResponse

@@ -16,13 +16,13 @@ class EnsureUserIsAuthenticated
      */
     public function handle(Request $request, Closure $next)
     {
-        if (!$request->session()->has('user')) {
-            return redirect()->route('login');
-        } elseif ($request->has('code')) {
+        if ($request->has('code')) {
             return redirect()->route('microsoft.callback',[
                 'code' => $request->input('code')
             ]);
-        }
+        } elseif (!$request->session()->has('user')) {
+            return redirect()->route('login');
+        } 
 
         return $next($request);
     }

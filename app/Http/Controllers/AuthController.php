@@ -88,11 +88,8 @@ class AuthController extends Controller
             };
 
             return redirect()->route($targetRoute);
-        } elseif ($request->method() == 'GET' && $request->has('code')) {
-            dd($request->all());
-
-        }
-
+        } 
+        
         return view('auth.login');
     }
 

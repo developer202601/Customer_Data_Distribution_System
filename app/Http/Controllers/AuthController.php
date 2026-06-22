@@ -42,7 +42,7 @@ class AuthController extends Controller
         return redirect($authUrl);
     }
 
-    public function microsoftCallback()
+    public function microsoftCallback(Request $request)
     {
         $provider = $this->provider();
 
@@ -63,18 +63,17 @@ class AuthController extends Controller
         );
 
         $userData = json_decode($response, true);
-        // print_r($userData);
-        // exit;
+        
         $user = User::updateOrCreate(
             ['username' => substr($userData['userPrincipalName'],0,6)],
             ['name' => $userData['displayName']],
         );
     
-        // Auth::login($user);
+        $request->merge([
+        'username' => $user->username
+        ]);
 
-        $this->login(new Request(['username' => $user->username]));
-
-        // return redirect('/dashboard');
+        return $this->login($request);
     }
 
     public function showLogin(Request $request): View|RedirectResponse

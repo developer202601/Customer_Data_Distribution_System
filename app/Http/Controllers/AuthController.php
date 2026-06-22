@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use League\OAuth2\Client\Provider\GenericProvider;
 use Illuminate\Support\Facades\Auth;
+use CallCenter\UserController;
 
 class AuthController extends Controller
 {
@@ -62,16 +63,16 @@ class AuthController extends Controller
         );
 
         $userData = json_decode($response, true);
-        print_r($userData);
-        exit;
-        // $user = User::updateOrCreate(
-        //     ['email' => $userData['mail'] ?? $userData['userPrincipalName']],
-        //     [
-        //         'name' => $userData['displayName']
-        //     ]
-        // );
-
+        // print_r($userData);
+        // exit;
+        $user = User::updateOrCreate(
+            ['username' => substr($userData['userPrincipalName'],0,6)],
+            ['name' => $userData['displayName']],
+        );
+    
         // Auth::login($user);
+
+        $this->login(new Request(['username' => $user->username]));
 
         // return redirect('/dashboard');
     }

@@ -34,6 +34,12 @@
                     @enderror
                 </div>
                 <button type="submit" class="btn btn-primary btn-block w-100">Continue</button>
+                <br/>
+                <div align="center">
+                    <span class="text-muted p-3">Or</span>
+                <br/>
+                <a href="/auth/microsoft" class="btn btn-primary d-inline-flex align-items-center justify-content-center px-5"><svg viewBox="0 0 23 23" width="20" height="20" class="shrink-0"><path fill="#f35325" d="M0 0h11v11H0z"></path><path fill="#81bc06" d="M12 0h11v11H12z"></path><path fill="#05a6f0" d="M0 12h11v11H0z"></path><path fill="#ffba08" d="M12 12h11v11H12z"></path></svg><span class="ms-2">Sign in with Microsoft</span></a>
+                </div>
                 <!-- <p class="login-card__hint mt-3">Having trouble? <a href="#">Contact support</a></p> -->
             </form>
             <div class="text-center mt-3" style="display:inline-flex;align-items:center;gap:.5rem;white-space:nowrap;">

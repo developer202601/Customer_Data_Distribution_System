@@ -13,18 +13,22 @@
                 @if(session('user.assignment') === 'super')
                     <a class="nav-link{{ $ccRouteName === 'cc.dashboard' ? ' active' : '' }}" href="{{ route('cc.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.dashboard' ? 'page' : '' }}">Overview</a>
                     <a class="nav-link{{ $ccRouteName === 'cc.super.regions' ? ' active' : '' }}" href="{{ route('cc.super.regions') }}" aria-current="{{ $ccRouteName === 'cc.super.regions' ? 'page' : '' }}">Region Management</a>
-                    <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">User Management</a>
+                    <a class="nav-link{{ $ccRouteName === 'cc.management.index' ? ' active' : '' }}" href="{{ route('cc.management.index') }}" aria-current="{{ $ccRouteName === 'cc.management.index' ? 'page' : '' }}">User Management</a>
+                    <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">Legacy Users</a>
                 @elseif(session('user.assignment') && session('user.assignment') !== 'super')
                     @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'rtom_'))
                         <a class="nav-link{{ $ccRouteName === 'cc.rtom.dashboard' ? ' active' : '' }}" href="{{ route('cc.rtom.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.rtom.dashboard' ? 'page' : '' }}">RTO Dashboard</a>
                         <a class="nav-link{{ $ccRouteName === 'cc.region.assign.index' ? ' active' : '' }}" href="{{ route('cc.region.assign.index') }}" aria-current="{{ $ccRouteName === 'cc.region.assign.index' ? 'page' : '' }}">Assign Supervisors</a>
+                        <a class="nav-link{{ $ccRouteName === 'cc.management.index' ? ' active' : '' }}" href="{{ route('cc.management.index') }}" aria-current="{{ $ccRouteName === 'cc.management.index' ? 'page' : '' }}">User Management</a>
                     @elseif(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'))
                         <a class="nav-link{{ $ccRouteName === 'cc.supervisor.dashboard' ? ' active' : '' }}" href="{{ route('cc.supervisor.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.supervisor.dashboard' ? 'page' : '' }}">Supervisor Dashboard</a>
                         <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">Manage Callers</a>
+                        <a class="nav-link{{ $ccRouteName === 'cc.management.index' ? ' active' : '' }}" href="{{ route('cc.management.index') }}" aria-current="{{ $ccRouteName === 'cc.management.index' ? 'page' : '' }}">User Management</a>
                     @else
                         <a class="nav-link{{ $ccRouteName === 'cc.region.dashboard' ? ' active' : '' }}" href="{{ route('cc.region.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.region.dashboard' ? 'page' : '' }}">Region Dashboard</a>
                         <a class="nav-link{{ $ccRouteName === 'cc.region.review' ? ' active' : '' }}" href="{{ route('cc.region.review') }}" aria-current="{{ $ccRouteName === 'cc.region.review' ? 'page' : '' }}">Review Report Rows</a>
                         <a class="nav-link{{ $ccRouteName === 'cc.region.index' ? ' active' : '' }}" href="{{ route('cc.region.index') }}" aria-current="{{ $ccRouteName === 'cc.region.index' ? 'page' : '' }}">RTO Admins</a>
+                        <a class="nav-link{{ $ccRouteName === 'cc.management.index' ? ' active' : '' }}" href="{{ route('cc.management.index') }}" aria-current="{{ $ccRouteName === 'cc.management.index' ? 'page' : '' }}">User Management</a>
                     @endif
                 @endif
                 @php $isRegion = session('user.assignment') && str_starts_with(session('user.assignment'), 'REGION'); @endphp

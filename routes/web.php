@@ -114,6 +114,12 @@ Route::middleware('session.auth')->group(function () {
             Route::get('/users/{user}/assign', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'showAssignForm'])->name('users.assign');
             Route::post('/users/{user}/assign', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'storeAssignment'])->name('users.assign.store');
             Route::delete('/users/{ccUser}', [CallCenterUserController::class, 'destroy'])->name('users.destroy');
+            // Unified User Management module
+            Route::get('/management', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'index'])->name('management.index');
+            Route::get('/management/{user}/assign', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'assignForm'])->name('management.assign');
+            Route::post('/management/{user}/assign', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'assignStore'])->name('management.assign.store');
+            Route::put('/management/{user}/toggle-status', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'toggleStatus'])->name('management.toggle-status');
+            Route::delete('/management/{user}', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'destroy'])->name('management.destroy');
             Route::get('/reports/history', [CallCenterReportController::class, 'history'])->name('reports.history');
             Route::get('/reports/{report}/summary', [CallCenterReportController::class, 'summary'])->name('reports.summary');
             Route::get('/reports', [CallCenterReportController::class, 'index'])->name('reports');

@@ -104,7 +104,10 @@ class ProcessExclusionUpload implements ShouldQueue
             if (! empty($uploadedFiles)) {
                 $workflowService->ingestAndApplyExclusions($process, $uploadedFiles, $this->userContext);
             } else {
-                Log::warning('No exclusion files remained by the time the job ran.');
+                Log::info('No exclusion files provided; proceeding without exclusions.', [
+                    'process_id' => $this->processId,
+                ]);
+                $workflowService->finalizeWithoutExclusions($process, $this->userContext);
             }
         } catch (ProcessCanceledException $exception) {
             Log::info('Exclusion job canceled by user.', [

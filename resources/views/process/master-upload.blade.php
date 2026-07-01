@@ -140,10 +140,31 @@
                     <div class="process-guidelines mt-4">
                         <h2 class="process-guidelines-title">File requirements</h2>
                         <ul class="mb-0">
-                            <li>Upload one Microsoft Excel workbook (.xlsx).</li>
-                            <li>The first row must contain headers, including <strong>RUN_DATE</strong>, <strong>ACCOUNT_NUM</strong>, and <strong>PRODUCT_LABEL</strong>.</li>
-                            <li>Every data row must include values for those required columns.</li>
-                            <li><strong>PRODUCT_LABEL</strong> values must be unique (duplicates are rejected).</li>
+                            <li class="mb-3">• Upload one Microsoft Excel workbook (.xlsx).</li>
+                            
+                            <li class="mb-3">
+                                • The first row must contain headers, including:
+                                <ul class="mt-2 mb-0">
+                                    <li><strong>RUN_DATE</strong></li>
+                                    <li><strong>ACCOUNT_NUM</strong></li>
+                                    <li><strong>REGION</strong></li>
+                                    <li><strong>RTOM</strong></li>
+                                    <li><strong>CUSTOMER_REF</strong></li>
+                                    <li><strong>PRODUCT_LABEL</strong></li>
+                                    <li><strong>MEDIUM</strong></li>
+                                    <li><strong>CUSTOMER_SEGMENT</strong></li>
+                                    <li><strong>FULL_ADDRESS</strong></li>
+                                    <li><strong>LATEST_BILL_MNY</strong></li>
+                                    <li><strong>LATEST_PRODUCT_STATUS</strong></li>
+                                    <li><strong>SLT_BUSINESS_LINE_VALUE</strong></li>
+                                    <li><strong>NEW_ARREARS_YYYYMMDD</strong></li>
+                                    <li><strong>SLT_GL_SUB_SEGMENT</strong></li>
+                                </ul>
+                            </li>
+                            
+                            <li class="mb-3">• Every data row must include values for those required columns.</li>
+                            
+                            <li class="mb-3">• <strong>PRODUCT_LABEL</strong> values must be unique (duplicates are rejected).</li>
                         </ul>
                     </div>
 

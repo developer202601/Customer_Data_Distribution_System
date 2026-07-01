@@ -75,6 +75,31 @@ class MasterDatasetWorkflowService
     }
 
     /**
+     * Ingest the master dataset without applying exclusions.
+     */
+    public function finalizeWithoutExclusions(
+        MasterDatasetProcess $process,
+        ?array $userContext = null
+    ): array {
+        if (MasterDatasetCancellation::isAborted($process)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
+        $processed = $this->importer->processStoredArchive($process, $userContext, skipAssignment: true)->fresh();
+
+        if (MasterDatasetCancellation::isAborted($processed)) {
+            throw new ProcessCanceledException('Dataset processing canceled by user.');
+        }
+
+        $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::WAITING_CONFIRMATION);
+
+        return [
+            'process' => $processed->fresh(),
+            'exclusions' => [],
+        ];
+    }
+
+    /**
      * Resume processing after configuration confirmation.
      */
     public function finalizeAssignment(

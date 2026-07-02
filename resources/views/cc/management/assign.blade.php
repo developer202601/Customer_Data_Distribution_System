@@ -50,9 +50,21 @@
                     @php
                         $oldRole = old('role');
                         $selectedRoleLabel = $oldRole ? ($allowedRoles[$oldRole] ?? $oldRole) : '';
+                        $singleRole = count($allowedRoles) === 1 ? array_key_first($allowedRoles) : null;
                     @endphp
                     <div class="row g-4">
                         {{-- Role Selection --}}
+                        @if($singleRole)
+                            {{-- Only one role available — no need for a selector --}}
+                            <input id="role" name="role" type="hidden" value="{{ old('role') ?: $singleRole }}">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Role</label>
+                                    <input type="text" class="form-control" value="{{ $allowedRoles[$singleRole] }}" readonly>
+                                    <div class="form-text">Only this role is available for you to assign.</div>
+                                </div>
+                            </div>
+                        @else
                         <div class="col-md-6">
                             <div class="form-group position-relative">
                                 <label for="role-input" class="form-label">Role <span class="text-danger">*</span></label>
@@ -62,6 +74,7 @@
                                 <div id="role-suggestions" class="list-group position-absolute w-100" style="z-index:1050; display:none; max-height:240px; overflow:auto;"></div>
                             </div>
                         </div>
+                        @endif
 
                         {{-- Region Selection (for Region Admin role) --}}
                         <div class="col-md-6" id="region-box" style="display:none">
@@ -76,44 +89,76 @@
 
                         {{-- RTOM Selection (for RTOM Admin, Supervisor, Caller) --}}
                         <div class="col-md-6" id="rtom-box" style="display:none">
-                            <div class="form-group position-relative">
-                                <label for="rtom-input" class="form-label">RTOM</label>
-                                <input id="rtom-input" type="text" class="form-control" placeholder="Type to search RTOM..." autocomplete="off"
-                                    value="{{ old('rtom') }}">
-                                <input id="rtom" name="rtom" type="hidden" value="{{ old('rtom') }}">
-                                <div id="rtom-suggestions" class="list-group position-absolute w-100" style="z-index:1050; display:none; max-height:320px; overflow:auto;"></div>
-                            </div>
+                            @if($currentRtom)
+                                {{-- For supervisors, RTOM is auto-derived --}}
+                                <div class="form-group">
+                                    <label class="form-label">RTOM</label>
+                                    <input type="text" class="form-control" value="{{ $currentRtom }}" readonly>
+                                    <input type="hidden" name="rtom" value="{{ $currentRtom }}">
+                                    <div class="form-text">Auto-assigned to your RTOM.</div>
+                                </div>
+                            @else
+                                <div class="form-group">
+                                    <label for="rtom" class="form-label">RTOM</label>
+                                    <select id="rtom" name="rtom" class="form-select">
+                                        <option value="">-- Select RTOM --</option>
+                                        @foreach($rtoms as $rtom)
+                                            <option value="{{ $rtom }}" {{ old('rtom') === $rtom ? 'selected' : '' }}>{{ $rtom }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @endif
                         </div>
 
                         {{-- Supervisor Selection (for Caller role) --}}
                         <div class="col-md-6" id="supervisor-box" style="display:none">
-                            <div class="form-group">
-                                <label for="supervisor_id" class="form-label">Assign to Supervisor</label>
-                                <select id="supervisor_id" name="supervisor_id" class="form-select">
-                                    <option value="">-- Select Supervisor --</option>
-                                    @foreach($supervisors as $sup)
-                                        <option value="{{ $sup['id'] }}" {{ old('supervisor_id') == $sup['id'] ? 'selected' : '' }}>
-                                            {{ $sup['name'] ?? $sup['username'] }} ({{ $sup['username'] }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="form-text">Supervisors are filtered by the selected RTOM.</div>
-                            </div>
+                            @if($currentSupervisorId)
+                                {{-- For supervisors, caller is auto-assigned to themselves --}}
+                                <div class="form-group">
+                                    <label class="form-label">Assign to Supervisor</label>
+                                    <input type="text" class="form-control" value="{{ session('user.name') ?: session('user.username') }} (myself)" readonly>
+                                    <input type="hidden" name="supervisor_id" value="{{ $currentSupervisorId }}">
+                                    <div class="form-text">Callers will be assigned to you.</div>
+                                </div>
+                            @else
+                                <div class="form-group">
+                                    <label for="supervisor_id" class="form-label">Assign to Supervisor</label>
+                                    <select id="supervisor_id" name="supervisor_id" class="form-select">
+                                        <option value="">-- Select Supervisor --</option>
+                                        @foreach($supervisors as $sup)
+                                            <option value="{{ $sup['id'] }}" {{ old('supervisor_id') == $sup['id'] ? 'selected' : '' }}>
+                                                {{ $sup['name'] ?? $sup['username'] }} ({{ $sup['username'] }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <div class="form-text">Supervisors are filtered by the selected RTOM.</div>
+                                </div>
+                            @endif
                         </div>
 
                         {{-- RTOM Admin Selection (for Supervisor role) --}}
                         <div class="col-md-6" id="rtom-admin-box" style="display:none">
-                            <div class="form-group">
-                                <label for="rtom_admin_id" class="form-label">Assigned RTOM Admin</label>
-                                <select id="rtom_admin_id" name="rtom_admin_id" class="form-select">
-                                    <option value="">-- Select RTOM Admin --</option>
-                                    @foreach($rtomAdmins as $admin)
-                                        <option value="{{ $admin['id'] }}" {{ old('rtom_admin_id') == $admin['id'] ? 'selected' : '' }}>
-                                            {{ $admin['name'] ?? $admin['username'] }} ({{ $admin['username'] }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
+                            @if($currentRtomAdminId)
+                                {{-- For RTOM admins, supervisor is auto-assigned to themselves --}}
+                                <div class="form-group">
+                                    <label class="form-label">Assigned RTOM Admin</label>
+                                    <input type="text" class="form-control" value="{{ session('user.name') ?: session('user.username') }} (myself)" readonly>
+                                    <input type="hidden" name="rtom_admin_id" value="{{ $currentRtomAdminId }}">
+                                    <div class="form-text">Supervisors will be assigned to you.</div>
+                                </div>
+                            @else
+                                <div class="form-group">
+                                    <label for="rtom_admin_id" class="form-label">Assigned RTOM Admin</label>
+                                    <select id="rtom_admin_id" name="rtom_admin_id" class="form-select">
+                                        <option value="">-- Select RTOM Admin --</option>
+                                        @foreach($rtomAdmins as $admin)
+                                            <option value="{{ $admin['id'] }}" {{ old('rtom_admin_id') == $admin['id'] ? 'selected' : '' }}>
+                                                {{ $admin['name'] ?? $admin['username'] }} ({{ $admin['username'] }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @endif
                         </div>
                     </div>
 
@@ -141,44 +186,45 @@
     const ALLOWED_ROLES = @json($allowedRolesJson);
 
     const REGIONS = @json($regions);
-    const RTOMS = @json($rtoms);
     const SUPERVISORS = @json($supervisors);
 
-    // Role typeahead
-    const roleInput = document.getElementById('role-input');
     const roleHidden = document.getElementById('role');
+
+    // Role typeahead (only when multiple roles are available)
+    const roleInput = document.getElementById('role-input');
     const roleBox = document.getElementById('role-suggestions');
-
-    function renderSuggestions(box, items, labelKey) {
-        if (!items.length) { box.style.display='none'; box.innerHTML=''; return; }
-        box.innerHTML = items.map(it => `
-            <button type="button" class="list-group-item list-group-item-action">${labelKey ? it[labelKey] : it}</button>
-        `).join('');
-        box.style.display='block';
-    }
-
-    roleInput.addEventListener('click', () => renderSuggestions(roleBox, ALLOWED_ROLES, 'label'));
-    roleInput.addEventListener('focus', () => renderSuggestions(roleBox, ALLOWED_ROLES, 'label'));
-
-    roleBox.addEventListener('click', function(ev) {
-        const btn = ev.target.closest('button');
-        if (!btn) return;
-        const label = btn.textContent.trim();
-        const found = ALLOWED_ROLES.find(r => r.label === label);
-        if (found) {
-            roleInput.value = found.label;
-            roleHidden.value = found.key;
-        } else {
-            roleInput.value = label;
-            roleHidden.value = label;
+    if (roleInput && roleBox) {
+        function renderSuggestions(box, items, labelKey) {
+            if (!items.length) { box.style.display='none'; box.innerHTML=''; return; }
+            box.innerHTML = items.map(it => `
+                <button type="button" class="list-group-item list-group-item-action">${labelKey ? it[labelKey] : it}</button>
+            `).join('');
+            box.style.display='block';
         }
-        roleBox.style.display = 'none';
-        updateFields();
-    });
 
-    document.addEventListener('click', function(e) {
-        if (!roleInput.contains(e.target) && !roleBox.contains(e.target)) roleBox.style.display='none';
-    });
+        roleInput.addEventListener('click', () => renderSuggestions(roleBox, ALLOWED_ROLES, 'label'));
+        roleInput.addEventListener('focus', () => renderSuggestions(roleBox, ALLOWED_ROLES, 'label'));
+
+        roleBox.addEventListener('click', function(ev) {
+            const btn = ev.target.closest('button');
+            if (!btn) return;
+            const label = btn.textContent.trim();
+            const found = ALLOWED_ROLES.find(r => r.label === label);
+            if (found) {
+                roleInput.value = found.label;
+                roleHidden.value = found.key;
+            } else {
+                roleInput.value = label;
+                roleHidden.value = label;
+            }
+            roleBox.style.display = 'none';
+            updateFields();
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!roleInput.contains(e.target) && !roleBox.contains(e.target)) roleBox.style.display='none';
+        });
+    }
 
     // Region typeahead
     const regionInput = document.getElementById('region-input');
@@ -208,38 +254,6 @@
     });
     document.addEventListener('click', function(e) {
         if (!regionInput.contains(e.target) && !regionBox.contains(e.target)) regionBox.style.display='none';
-    });
-
-    // RTOM typeahead
-    const rtomInput = document.getElementById('rtom-input');
-    const rtomHidden = document.getElementById('rtom');
-    const rtomBox = document.getElementById('rtom-suggestions');
-
-    function filterRtoms(q) {
-        if (q.length < 1) return RTOMS;
-        return RTOMS.filter(r => r.toLowerCase().includes(q.toLowerCase()));
-    }
-
-    rtomInput.addEventListener('input', function() {
-        const matches = filterRtoms(this.value.trim());
-        renderSuggestions(rtomBox, matches, null);
-    });
-    rtomInput.addEventListener('focus', function() {
-        const matches = filterRtoms(this.value.trim());
-        if (matches.length) renderSuggestions(rtomBox, matches, null);
-    });
-    rtomBox.addEventListener('click', function(ev) {
-        const btn = ev.target.closest('button');
-        if (!btn) return;
-        const val = btn.textContent.trim();
-        rtomInput.value = val;
-        rtomHidden.value = val;
-        rtomBox.style.display = 'none';
-        // Filter supervisors by selected RTOM
-        filterSupervisorsByRtom(val);
-    });
-    document.addEventListener('click', function(e) {
-        if (!rtomInput.contains(e.target) && !rtomBox.contains(e.target)) rtomBox.style.display='none';
     });
 
     // Filter supervisors by RTOM
@@ -279,10 +293,12 @@
     // Also update fields when role changes via the hidden input (for old() values)
     if (roleHidden.value) {
         updateFields();
-        if (rtomHidden.value) {
-            filterSupervisorsByRtom(rtomHidden.value);
-        }
     }
+
+    // Filter supervisors when RTOM select changes
+    document.getElementById('rtom').addEventListener('change', function() {
+        filterSupervisorsByRtom(this.value);
+    });
 })();
 </script>
 @endpush

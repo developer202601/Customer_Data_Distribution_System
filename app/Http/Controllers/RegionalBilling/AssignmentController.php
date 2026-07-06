@@ -40,6 +40,17 @@ class AssignmentController extends Controller
         ];
     }
 
+    protected function deriveRegionFromRtom(string $rtomValue): ?string
+    {
+        return MasterDatasetRow::query()
+            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
+            ->whereNotNull('region')
+            ->where('region', '<>', '')
+            ->distinct()
+            ->pluck('region')
+            ->first();
+    }
+
     public function index(Request $request)
     {
         $sessionUser = $request->session()->get('user');
@@ -816,9 +827,14 @@ class AssignmentController extends Controller
                 ->withErrors(['distribute' => 'No visible rows available to distribute.']);
         }
 
+        $region = $rtom ? $this->deriveRegionFromRtom($rtom) : null;
+
         $rtomRowIds = MasterDatasetRow::query()
             ->whereIn('id', $candidateIds)
             ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtom)])
+            ->when(! empty($region), function ($query) use ($region) {
+                $query->whereRaw('LOWER(TRIM(region)) = ?', [strtolower((string) $region)]);
+            })
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->values()
@@ -883,91 +899,6 @@ class AssignmentController extends Controller
                     continue;
                 }
                 for ($i = 0; $i < $count && $pos < count($rowsToDistribute); $i++, $pos++) {
-                    $inserts[] = [
-                        'call_center_report_id' => $report->id,
-                        'report_type' => CallCenterReport::REPORT_TYPE_REGIONAL_BILLING,
-                        'master_dataset_row_id' => $rowsToDistribute[$pos],
-                        'assigned_user_id' => $callerId,
-                        'status' => 'pending',
-                        'accepted' => false,
-                        'rejected' => false,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ];
-                }
-            }
-
-            if (! empty($inserts)) {
-                DB::table('call_center_row_assignments')->insert($inserts);
-            }
-        });
-
-        if (empty($callerIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
-                ->withErrors(['distribute' => 'No valid callers selected for this RTOM admin.']);
-        }
-
-        $reportRowIds = collect($report->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
-        if (empty($reportRowIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
-                ->withErrors(['distribute' => 'This report has no rows to distribute.']);
-        }
-
-        $hiddenRowIds = DB::table('call_center_report_hidden_rows')
-            ->where('call_center_report_id', $report->id)
-            ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
-            ->pluck('master_dataset_row_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        $candidateIds = array_values(array_diff($reportRowIds, $hiddenRowIds));
-        if (empty($candidateIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
-                ->withErrors(['distribute' => 'No visible rows available to distribute.']);
-        }
-
-        $rtomRowIds = MasterDatasetRow::query()
-            ->whereIn('id', $candidateIds)
-            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtom)])
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->values()
-            ->all();
-
-        if (empty($rtomRowIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
-                ->withErrors(['distribute' => 'No rows matched your RTOM in this report.']);
-        }
-
-        $alreadyAssignedRowIds = CallCenterAssignment::regionalBilling()
-            ->where('call_center_report_id', $report->id)
-            ->whereIn('master_dataset_row_id', $rtomRowIds)
-            ->whereNotNull('assigned_user_id')
-            ->pluck('master_dataset_row_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
-
-        $rowsToDistribute = array_values(array_diff($rtomRowIds, $alreadyAssignedRowIds));
-        if (empty($rowsToDistribute)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
-                ->with('status', 'All visible rows for this RTOM are already assigned.');
-        }
-
-        DB::transaction(function () use ($report, $rowsToDistribute, $callerIds) {
-            $now = now();
-            $total = count($rowsToDistribute);
-            $userCount = count($callerIds);
-            $base = intdiv($total, $userCount);
-            $remainder = $total % $userCount;
-
-            $inserts = [];
-            $pos = 0;
-
-            foreach ($callerIds as $index => $callerId) {
-                $take = $base + ($index < $remainder ? 1 : 0);
-                for ($i = 0; $i < $take && $pos < $total; $i++, $pos++) {
                     $inserts[] = [
                         'call_center_report_id' => $report->id,
                         'report_type' => CallCenterReport::REPORT_TYPE_REGIONAL_BILLING,

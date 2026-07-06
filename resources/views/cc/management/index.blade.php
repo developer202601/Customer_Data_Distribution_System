@@ -136,7 +136,7 @@
                                             } elseif (str_starts_with($assignment, 'caller_')) {
                                                 $badgeClass = 'secondary';
                                             } else {
-                                                $badgeClass = 'light';
+                                                $badgeClass = 'dark';
                                             }
                                         @endphp
                                         <tr>

@@ -169,7 +169,7 @@
                                                         data-username="{{ $user->username }}"
                                                         data-action-label="enable">Enable</button>
                                                     @endif
-                                                    @if($canDelete)
+                                                    @if(false) {{-- Delete button disabled --}}
                                                     <button type="button" class="btn btn-sm btn-outline-danger rounded-pill mgmt-delete-btn"
                                                         data-action="{{ route('cc.management.destroy', $user) }}"
                                                         data-username="{{ $user->username }}">Delete</button>

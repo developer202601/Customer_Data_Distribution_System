@@ -39,7 +39,6 @@ class UserManagementController extends Controller
         ) {
             return [
                 'rtom_admin' => 'RTOM Admin',
-                'supervisor' => 'Supervisor',
             ];
         }
 
@@ -209,6 +208,9 @@ class UserManagementController extends Controller
      */
     protected function availableRtomAdmins(): array
     {
+        $sessionUserId = session('user')['id'] ?? null;
+        $assignment = session('user.assignment') ?? '';
+
         $query = User::where('system', 'cc')
             ->where('assignment', 'like', 'rtom_%')
             ->where('admin_prev', true)
@@ -216,7 +218,17 @@ class UserManagementController extends Controller
 
         $region = $this->currentRegion();
         if ($region) {
-            $query->where('supervisor', session('user')['id'] ?? null);
+            if (str_starts_with($assignment, 'rtom_')) {
+                // RTOM admin: show other RTOM admins supervised by the same region admin
+                $query->where('supervisor', function ($q) use ($sessionUserId) {
+                    $q->select('supervisor')
+                      ->from('users')
+                      ->where('id', $sessionUserId);
+                });
+            } else {
+                // Region admin: scope to RTOM admins they supervise directly
+                $query->where('supervisor', $sessionUserId);
+            }
         }
 
         return $query->orderBy('username')->get(['id', 'username', 'name', 'assignment'])->toArray();
@@ -260,55 +272,46 @@ class UserManagementController extends Controller
         $sessionUser = session('user');
         $assignment = $sessionUser['assignment'] ?? '';
 
-        $query = CallCenterUser::query()
+        $query = User::query()
             ->with('supervisorUser')
             ->withCount(['supervisedUsers', 'interactionsAsAgent', 'rowAssignments']);
 
-        // Scope users based on current user's role
+        $unassignedCondition = function ($q) {
+            $q->whereNull('assignment')
+              ->orWhere('assignment', '');
+        };
+
         if ($assignment === 'super') {
-            // Super admin sees all CC users
+            $query->where(function ($q) use ($unassignedCondition) {
+                $q->where('system', 'cc')
+                  ->orWhere($unassignedCondition);
+            });
         } elseif ($assignment && ! str_starts_with($assignment, 'rtom_')
             && ! str_starts_with($assignment, 'supervisor_')
             && ! str_starts_with($assignment, 'caller_')
         ) {
-            // Region admin: see users in their region
-            $region = $assignment;
-            $query->where(function ($q) use ($region) {
-                // Region admins (assignment = region name)
-                $q->where('assignment', $region)
-                  // RTOM admins they supervise
-                  ->orWhere(function ($sq) use ($region) {
+            $query->where(function ($q) use ($unassignedCondition) {
+                $q->where($unassignedCondition)
+                  ->orWhere(function ($sq) {
                       $sq->where('assignment', 'like', 'rtom_%')
                          ->where('supervisor', session('user')['id'] ?? null);
-                  })
-                  // Supervisors they created
-                  ->orWhere(function ($sq) use ($region) {
-                      $sq->where('assignment', 'like', 'supervisor_rtom_%')
-                         ->where('supervisor', session('user')['id'] ?? null);
-                  })
-                  // Callers under their supervisors
-                  ->orWhere(function ($sq) {
-                      $sq->where('assignment', 'like', 'caller_%')
-                         ->whereIn('supervisor', function ($sub) {
-                             $sub->select('id')
-                                 ->from('users')
-                                 ->where('supervisor', session('user')['id'] ?? null)
-                                 ->where('system', 'cc');
-                         });
                   });
             });
         } elseif (str_starts_with($assignment, 'rtom_')) {
-            // RTOM admin: see supervisors and callers under their RTOM
             $rtom = $this->currentRtom();
-            $query->where(function ($q) use ($rtom) {
-                $q->where('assignment', 'supervisor_rtom_' . strtolower(str_replace(' ', '_', $rtom)))
-                  ->orWhere('assignment', 'caller_rtom_' . strtolower(str_replace(' ', '_', $rtom)));
+            $query->where(function ($q) use ($unassignedCondition, $rtom) {
+                $q->where($unassignedCondition)
+                  ->orWhere('assignment', 'supervisor_rtom_' . strtolower(str_replace(' ', '_', $rtom)));
             });
         } elseif (str_starts_with($assignment, 'supervisor_')) {
-            // Supervisor: see only callers under them
             $rtom = $this->currentRtom();
-            $query->where('assignment', 'caller_rtom_' . strtolower(str_replace(' ', '_', $rtom)))
-                  ->where('supervisor', $sessionUser['id'] ?? null);
+            $query->where(function ($q) use ($unassignedCondition, $sessionUser, $rtom) {
+                $q->where($unassignedCondition)
+                  ->orWhere(function ($sq) use ($rtom, $sessionUser) {
+                      $sq->where('assignment', 'caller_rtom_' . strtolower(str_replace(' ', '_', $rtom)))
+                         ->where('supervisor', $sessionUser['id'] ?? null);
+                  });
+            });
         }
 
         // Status filter
@@ -362,15 +365,26 @@ class UserManagementController extends Controller
             abort(403, 'You cannot change your own role.');
         }
 
-        // Ensure user is a CC user
-        if ($user->system !== 'cc') {
-            abort(404, 'User is not a Call Center user.');
-        }
-
         $regions = $this->availableRegions();
         $rtoms = $this->availableRtoms();
         $supervisors = $this->availableSupervisors();
         $rtomAdmins = $this->availableRtomAdmins();
+
+        // Auto-derive fields when the logged-in user is a direct-level admin
+        $currentAssignment = $sessionUser['assignment'] ?? '';
+        $currentRtom = null;
+        $currentSupervisorId = null;
+        $currentRtomAdminId = null;
+
+        if (str_starts_with($currentAssignment, 'supervisor_')) {
+            // Supervisor assigning a caller — RTOM and supervisor are themselves
+            $currentRtom = $this->currentRtom();
+            $currentSupervisorId = $sessionUser['id'] ?? null;
+        } elseif (str_starts_with($currentAssignment, 'rtom_')) {
+            // RTOM admin assigning a supervisor — RTOM and rtom_admin are themselves
+            $currentRtom = $this->currentRtom();
+            $currentRtomAdminId = $sessionUser['id'] ?? null;
+        }
 
         return view('cc.management.assign', compact(
             'user',
@@ -378,7 +392,10 @@ class UserManagementController extends Controller
             'regions',
             'rtoms',
             'supervisors',
-            'rtomAdmins'
+            'rtomAdmins',
+            'currentRtom',
+            'currentSupervisorId',
+            'currentRtomAdminId'
         ));
     }
 
@@ -402,10 +419,6 @@ class UserManagementController extends Controller
             abort(403, 'You cannot change your own role.');
         }
 
-        if ($user->system !== 'cc') {
-            abort(404, 'User is not a Call Center user.');
-        }
-
         $roleKeys = array_keys($allowedRoles);
 
         $rules = [
@@ -423,6 +436,7 @@ class UserManagementController extends Controller
 
         switch ($role) {
             case 'super':
+                $user->system = 'cc';
                 $user->assignment = 'super';
                 $user->admin_prev = true;
                 $user->supervisor = $sessionUser['id'] ?? null;
@@ -434,6 +448,7 @@ class UserManagementController extends Controller
                 if (! in_array($region, $allowedRegions, true)) {
                     return back()->withErrors(['region' => 'Selected region is not available.']);
                 }
+                $user->system = 'cc';
                 $user->assignment = $region;
                 $user->admin_prev = true;
                 $user->supervisor = $sessionUser['id'] ?? null;
@@ -445,32 +460,49 @@ class UserManagementController extends Controller
                 if (! in_array($rtom, $allowedRtoms, true)) {
                     return back()->withErrors(['rtom' => 'Selected RTOM is not available.']);
                 }
+                $user->system = 'cc';
                 $user->assignment = 'rtom_' . preg_replace('/\s+/', '_', strtolower($rtom));
                 $user->admin_prev = true;
                 $user->supervisor = $sessionUser['id'] ?? null;
                 break;
 
             case 'supervisor':
-                $rtom = $validated['rtom'];
-                $allowedRtoms = $this->availableRtoms();
-                if (! in_array($rtom, $allowedRtoms, true)) {
-                    return back()->withErrors(['rtom' => 'Selected RTOM is not available.']);
+                // For RTOM admins, auto-derive RTOM and supervisor from their session
+                if (str_starts_with($sessionUser['assignment'] ?? '', 'rtom_')) {
+                    $rtom = $this->currentRtom();
+                    $supervisor = $sessionUser['id'] ?? null;
+                } else {
+                    $rtom = $validated['rtom'] ?? '';
+                    $allowedRtoms = $this->availableRtoms();
+                    if (! in_array($rtom, $allowedRtoms, true)) {
+                        return back()->withErrors(['rtom' => 'Selected RTOM is not available.']);
+                    }
+                    $supervisor = $validated['rtom_admin_id'] ?? null;
                 }
+                $user->system = 'cc';
                 $user->assignment = 'supervisor_rtom_' . preg_replace('/\s+/', '_', strtolower($rtom));
                 $user->admin_prev = false;
                 // Supervisor is assigned to the RTOM admin or region admin who creates them
-                $user->supervisor = $validated['rtom_admin_id'] ?? ($sessionUser['id'] ?? null);
+                $user->supervisor = $supervisor;
                 break;
 
             case 'caller':
-                $rtom = $validated['rtom'];
-                $allowedRtoms = $this->availableRtoms();
-                if (! in_array($rtom, $allowedRtoms, true)) {
-                    return back()->withErrors(['rtom' => 'Selected RTOM is not available.']);
+                // For supervisors, auto-derive RTOM and supervisor from their session
+                if (str_starts_with($sessionUser['assignment'] ?? '', 'supervisor_')) {
+                    $rtom = $this->currentRtom();
+                    $supervisorId = $sessionUser['id'] ?? null;
+                } else {
+                    $rtom = $validated['rtom'] ?? '';
+                    $allowedRtoms = $this->availableRtoms();
+                    if (! in_array($rtom, $allowedRtoms, true)) {
+                        return back()->withErrors(['rtom' => 'Selected RTOM is not available.']);
+                    }
+                    $supervisorId = $validated['supervisor_id'] ?? null;
                 }
+                $user->system = 'cc';
                 $user->assignment = 'caller_rtom_' . preg_replace('/\s+/', '_', strtolower($rtom));
                 $user->admin_prev = false;
-                $user->supervisor = $validated['supervisor_id'] ?? ($sessionUser['id'] ?? null);
+                $user->supervisor = $supervisorId;
                 break;
         }
 

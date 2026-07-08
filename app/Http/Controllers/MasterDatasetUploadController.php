@@ -21,7 +21,7 @@ use Throwable;
 
 class MasterDatasetUploadController extends Controller
 {
-    private const MASTER_MAX_BYTES = 52428800;
+    private const MASTER_MAX_BYTES = 72428800;
     private const CHUNK_BYTES = 2097152;
     private const STAGED_UPLOAD_SESSION_KEY = 'master.dataset.staged_upload';
     private const FAILURE_CACHE_PREFIX = 'master.dataset.failure.user.';

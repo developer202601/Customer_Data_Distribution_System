@@ -42,6 +42,7 @@
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload Master Dataset</h1>
                                 <p class="text-muted mb-0">Upload a Microsoft Excel (.xlsx) workbook with the required headers.</p>
+                                <p class="mb-0 mt-2"><a href="/downloads/master-sample.xlsx" class="link-primary" target="_blank" rel="noopener">Download a sample Excel file with required columns</a></p>
                             </div>
                         </div>
                         <div class="d-flex gap-2">

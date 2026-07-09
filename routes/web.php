@@ -86,13 +86,6 @@ Route::middleware('session.auth')->group(function () {
         // Supervisor dashboard
         Route::get('/supervisor/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'supervisorDashboard'])->name('supervisor.dashboard');
 
-        // Unified User Management module (accessible by all CC users, role-based authorization inside)
-        Route::get('/management', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'index'])->name('management.index');
-        Route::get('/management/{user}/assign', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'assignForm'])->name('management.assign');
-        Route::post('/management/{user}/assign', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'assignStore'])->name('management.assign.store');
-        Route::put('/management/{user}/toggle-status', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'toggleStatus'])->name('management.toggle-status');
-        Route::delete('/management/{user}', [\App\Http\Controllers\CallCenter\UserManagementController::class, 'destroy'])->name('management.destroy');
-
         // RTOM dashboard
         Route::get('/rtom/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'rtomDashboard'])->name('rtom.dashboard');
 

@@ -39,6 +39,7 @@
                             <div>
                                 <h1 class="process-upload-title mb-1">Upload exclusion sheets</h1>
                                 <p class="text-muted mb-0">Upload up to {{ $maxFiles }} Excel (.xlsx) workbooks that list the identifiers you want to remove from the master list.</p>
+                                <p class="mb-0 mt-2"><a href="/downloads/master-sample.xlsx" class="link-primary" target="_blank" rel="noopener">Download a sample Excel file with required columns</a></p>
                             </div>
                         </div>
                         <div class="text-end">

@@ -145,7 +145,7 @@ class MasterDatasetAssignmentService
 
         $staffIds = $selection->slice($offset, $staffQuota)->pluck('id')->all();
 
-        if (! empty($callCenterStaffIds)) {
+        if (!empty($callCenterStaffIds)) {
             foreach (array_chunk($callCenterStaffIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -153,7 +153,7 @@ class MasterDatasetAssignmentService
             }
         }
 
-        if (! empty($callCenterIds)) {
+        if (!empty($callCenterIds)) {
             foreach (array_chunk($callCenterIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -161,7 +161,7 @@ class MasterDatasetAssignmentService
             }
         }
 
-        if (! empty($staffIds)) {
+        if (!empty($staffIds)) {
             foreach (array_chunk($staffIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -176,7 +176,7 @@ class MasterDatasetAssignmentService
             ->where('process_id', $process->id)
             ->where('excluded', false)
             ->whereNull('assigned_to')
-            ->where('latest_bill_mny', '>=', 5000)
+            // ->where('latest_bill_mny', '>=', 5000)
             ->get(['id', 'slt_gl_sub_segment']);
 
         if ($rows->isEmpty()) {
@@ -194,12 +194,12 @@ class MasterDatasetAssignmentService
                 $enterpriseIds[] = $row->id;
             } elseif (str_contains($segment, 'sme')) {
                 $smeIds[] = $row->id;
-            } elseif (! $this->isRetailOrMicroSegment($segment)) {
+            } elseif (!$this->isRetailOrMicroSegment($segment)) {
                 $regionIds[] = $row->id;
             }
         }
 
-        if (! empty($enterpriseIds)) {
+        if (!empty($enterpriseIds)) {
             foreach (array_chunk($enterpriseIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -207,7 +207,7 @@ class MasterDatasetAssignmentService
             }
         }
 
-        if (! empty($smeIds)) {
+        if (!empty($smeIds)) {
             foreach (array_chunk($smeIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -215,7 +215,7 @@ class MasterDatasetAssignmentService
             }
         }
 
-        if (! empty($regionIds)) {
+        if (!empty($regionIds)) {
             foreach (array_chunk($regionIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)

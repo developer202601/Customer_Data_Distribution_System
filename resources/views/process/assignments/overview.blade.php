@@ -21,8 +21,8 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
                 <h1 class="process-preview-title mb-2">Assignments overview</h1>
-                <p class="text-muted mb-1">Choose which allocation set you want to review and download. Retail &amp; Micro quotas sit alongside Enterprise, Wholesale, and SME segments.</p>
-                <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($dataset['row_count'] ?? 0) }} · Excluded: {{ number_format($dataset['excluded_count'] ?? 0) }}</p>
+                <p class="text-muted mb-1">Choose which allocated dataset you want to review and download. The Retail &amp; Micro Business segments are assigned to calling units while other records are available only to download.</p>
+                <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($dataset['row_count'] ?? 0) }} · Unassigned: {{ number_format($dataset['excluded_count'] ?? 0) }}</p>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 <a href="#" class="btn btn-outline-secondary" data-loader-off="1" onclick="history.back(); return false;">Back</a>
@@ -174,14 +174,13 @@
         @endphp
 
         <div class="mb-5">
-            <h2 class="h4 mb-3">Retail &amp; Micro Business</h2>
             <div class="process-table-container">
                 <div class="table-responsive">
                     <table class="table table-sm process-table align-middle mb-0">
                         <thead>
                             <tr>
-                                <th scope="col" class="align-middle">Segment</th>
-                                <th scope="col" class="text-end align-middle">Downloads</th>
+                                <th scope="col" class="align-middle">Assigned Unit</th>
+                                <th scope="col" class="text-end align-middle">Download</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -203,24 +202,6 @@
                                 <td colspan="2" class="text-center py-4 text-muted">No retail &amp; micro quotas available. Upload a dataset to continue.</td>
                             </tr>
                             @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="mb-5">
-            <h2 class="h4 mb-3">Region Billing Centre</h2>
-            <div class="process-table-container">
-                <div class="table-responsive">
-                    <table class="table table-sm process-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th scope="col" class="align-middle">Segment</th>
-                                <th scope="col" class="text-end align-middle">Downloads</th>
-                            </tr>
-                        </thead>
-                        <tbody>
                             <tr>
                                 <th scope="row">
                                     <div class="fw-semibold mb-0">
@@ -239,14 +220,14 @@
         </div>
 
         <div class="mb-5">
-            <h2 class="h4 mb-3">Enterprise, Wholesale &amp; SME</h2>
+            <h2 class="h4 mb-3">Unassigned Records</h2>
             <div class="process-table-container">
                 <div class="table-responsive">
                     <table class="table table-sm process-table align-middle mb-0">
                         <thead>
                             <tr>
-                                <th scope="col" class="align-middle">Segment</th>
-                                <th scope="col" class="text-end align-middle">Downloads</th>
+                                <th scope="col" class="align-middle">Segment / Type</th>
+                                <th scope="col" class="text-end align-middle">Download</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -276,24 +257,6 @@
                                     @php $renderDownloadButtons('group-b', 'sme', $smeCount); @endphp
                                 </td>
                             </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="mb-5">
-            <h2 class="h4 mb-3">VIP Records</h2>
-            <div class="process-table-container">
-                <div class="table-responsive">
-                    <table class="table table-sm process-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th scope="col" class="align-middle">Segment</th>
-                                <th scope="col" class="text-end align-middle">Downloads</th>
-                            </tr>
-                        </thead>
-                        <tbody>
                             @php $vipCount = (int) ($vip['count'] ?? 0); @endphp
                             <tr>
                                 <th scope="row">
@@ -306,24 +269,6 @@
                                     @php $renderDownloadButtons('vip', 'vip', $vipCount); @endphp
                                 </td>
                             </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div>
-            <h2 class="h4 mb-3">Exclusions</h2>
-            <div class="process-table-container">
-                <div class="table-responsive">
-                    <table class="table table-sm process-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th scope="col" class="align-middle">Segment</th>
-                                <th scope="col" class="text-end align-middle">Downloads</th>
-                            </tr>
-                        </thead>
-                        <tbody>
                             @php
                                 $excludedCount = (int) ($exclusions['total_excluded'] ?? 0);
                                 $retailMicroCopperCount = (int) ($exclusions['retail_micro_copper_count'] ?? 0);

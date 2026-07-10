@@ -34,6 +34,7 @@ class MasterDatasetAssignmentService
         return DB::transaction(function () use ($process, $configOverrides) {
             $this->resetAssignableRows($process);
             $this->excludeRetailMicroCopper($process);
+            $this->excludeLowBillNonRetail($process);
             $this->assignRetailHighBillToRegion($process);
             $this->assignRetailArrearsBands($process, $configOverrides);
             $this->assignNonRetailHighBill($process);
@@ -64,6 +65,24 @@ class MasterDatasetAssignmentService
             'excluded' => true,
             'assigned_to' => self::EXCLUDED_LABEL,
             'exclusion_reason' => 'Medium is Copper (Retail/Micro)',
+            'exclusion_priority' => 5,
+        ]);
+    }
+
+    private function excludeLowBillNonRetail(MasterDatasetProcess $process): void
+    {
+        $query = MasterDatasetRow::query()
+            ->where('process_id', $process->id)
+            ->where('excluded', false)
+            ->whereNull('assigned_to')
+            ->where('latest_bill_mny', '<', 5000);
+
+        $query = $this->applyNonRetailOrMicroFilter($query);
+
+        $query->update([
+            'excluded' => true,
+            'assigned_to' => self::EXCLUDED_LABEL,
+            'exclusion_reason' => 'Non-Retail with bill value under 5000',
             'exclusion_priority' => 5,
         ]);
     }
@@ -176,7 +195,7 @@ class MasterDatasetAssignmentService
             ->where('process_id', $process->id)
             ->where('excluded', false)
             ->whereNull('assigned_to')
-            // ->where('latest_bill_mny', '>=', 5000)
+            ->where('latest_bill_mny', '>=', 5000)
             ->get(['id', 'slt_gl_sub_segment']);
 
         if ($rows->isEmpty()) {
@@ -185,17 +204,14 @@ class MasterDatasetAssignmentService
 
         $enterpriseIds = [];
         $smeIds = [];
-        $regionIds = [];
 
         foreach ($rows as $row) {
             $segment = strtolower((string) $row->slt_gl_sub_segment);
 
-            if (str_contains($segment, 'enterprise') || str_contains($segment, 'wholesale')) {
-                $enterpriseIds[] = $row->id;
-            } elseif (str_contains($segment, 'sme')) {
+            if (str_contains($segment, 'sme')) {
                 $smeIds[] = $row->id;
-            } elseif (!$this->isRetailOrMicroSegment($segment)) {
-                $regionIds[] = $row->id;
+            } elseif (str_contains($segment, 'enterprise') || str_contains($segment, 'wholesale') || !$this->isRetailOrMicroSegment($segment)) {
+                $enterpriseIds[] = $row->id;
             }
         }
 
@@ -212,14 +228,6 @@ class MasterDatasetAssignmentService
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
                     ->update(['assigned_to' => self::SME_LABEL]);
-            }
-        }
-
-        if (!empty($regionIds)) {
-            foreach (array_chunk($regionIds, 1000) as $chunk) {
-                MasterDatasetRow::query()
-                    ->whereIn('id', $chunk)
-                    ->update(['assigned_to' => self::REGION_LABEL]);
             }
         }
     }
@@ -259,6 +267,15 @@ class MasterDatasetAssignmentService
                 } else {
                     $subQuery->orWhereRaw('LOWER(COALESCE(slt_gl_sub_segment, "")) = ?', [$segment]);
                 }
+            }
+        });
+    }
+
+    private function applyNonRetailOrMicroFilter(Builder $query): Builder
+    {
+        return $query->where(function (Builder $subQuery) {
+            foreach (self::RETAIL_SEGMENTS as $segment) {
+                $subQuery->whereRaw('LOWER(COALESCE(slt_gl_sub_segment, "")) != ?', [$segment]);
             }
         });
     }

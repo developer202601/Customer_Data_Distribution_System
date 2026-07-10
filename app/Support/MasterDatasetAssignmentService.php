@@ -33,7 +33,7 @@ class MasterDatasetAssignmentService
     {
         return DB::transaction(function () use ($process, $configOverrides) {
             $this->resetAssignableRows($process);
-            $this->excludeRetailMicroCopper($process);
+            // $this->excludeRetailMicroCopper($process);
             $this->excludeLowBillNonRetail($process);
             $this->assignRetailHighBillToRegion($process);
             $this->assignRetailArrearsBands($process, $configOverrides);

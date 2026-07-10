@@ -159,9 +159,9 @@ def _is_vip(value: str) -> bool:
 
 def _evaluate_auto_exclusion(medium: str, latest_product_status: str, arrears_value: Optional[float], arrears_column: str) -> Optional[str]:
     medium_norm = (medium or "").strip().upper()
-    if medium_norm == "" or medium_norm not in ("COPPER", "FTTH"):
+    if medium_norm == "" or medium_norm not in ("COPPER", "FTTH", "LTE"):
         value = medium_norm if medium_norm != "" else "blank"
-        return f"AUTO: MEDIUM is {value} (requires COPPER or FTTH)"
+        return f"AUTO: MEDIUM is {value} (requires COPPER, FTTH or LTE)"
 
     status_norm = (latest_product_status or "").strip().upper()
     if status_norm != "OK":

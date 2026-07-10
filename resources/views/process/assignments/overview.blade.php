@@ -284,7 +284,7 @@
                                     @php $renderDownloadButtons('exclusions', 'excluded', $excludedCount); @endphp
                                 </td>
                             </tr>
-                            <tr>
+                            <!-- <tr>
                                 <th scope="row">
                                     <div class="fw-semibold mb-0">
                                         Copper - Retail &amp; Micro Business
@@ -294,7 +294,7 @@
                                 <td class="text-end align-middle">
                                     @php $renderDownloadButtons('exclusions', 'excluded-copper-retail-micro', $retailMicroCopperCount); @endphp
                                 </td>
-                            </tr>
+                            </tr> -->
                         </tbody>
                     </table>
                 </div>

@@ -15,19 +15,24 @@ use Illuminate\View\View;
 
 class ProcessConfirmController extends Controller
 {
-    private function computeFtthCount(int $processId): int
+    private function computeMediumCount(int $processId, string $medium): int
     {
-        return MasterDatasetRow::query()
+        $query = MasterDatasetRow::query()
             ->where('process_id', $processId)
             ->where('excluded', false)
-            ->where(function ($query) {
-                $query
-                    ->whereRaw('LOWER(slt_gl_sub_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness'])
-                    ->orWhereIn('customer_segment', ['11', '35'])
-                    ->orWhereRaw('LOWER(customer_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness']);
-            })
-            ->whereRaw('LOWER(medium) IN (?, ?)', ['ftth', 'fiber'])
-            ->count();
+            ->where(function ($q) {
+                $q->whereRaw('LOWER(slt_gl_sub_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness'])
+                  ->orWhereIn('customer_segment', ['11', '35'])
+                  ->orWhereRaw('LOWER(customer_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness']);
+            });
+
+        if (strtolower($medium) === 'ftth') {
+            $query->whereRaw('LOWER(medium) IN (?, ?)', ['ftth', 'fiber']);
+        } else {
+            $query->whereRaw('LOWER(medium) = ?', [strtolower($medium)]);
+        }
+
+        return $query->count();
     }
 
     public function create(
@@ -74,11 +79,15 @@ class ProcessConfirmController extends Controller
             ]);
         }
 
-        $ftthCount = $this->computeFtthCount($process->id);
+        $ftthCount = $this->computeMediumCount($process->id, 'ftth');
+        $copperCount = $this->computeMediumCount($process->id, 'copper');
+        $lteCount = $this->computeMediumCount($process->id, 'lte');
 
         return view('process.confirm', [
             'process' => $process,
             'ftthCount' => $ftthCount,
+            'copperCount' => $copperCount,
+            'lteCount' => $lteCount,
             'assignmentConfig' => $configuration->toArray(),
         ]);
     }
@@ -131,6 +140,8 @@ class ProcessConfirmController extends Controller
             'call_center_staff_quota' => 'required|integer|min:0',
             'call_center_quota' => 'required|integer|min:0',
             'staff_quota' => 'required|integer|min:0',
+            'mediums' => 'required|array|min:1',
+            'mediums.*' => 'in:FTTH,COPPER,LTE',
         ]);
         
         $userContext = $resolver->resolve($request);
@@ -143,20 +154,28 @@ class ProcessConfirmController extends Controller
                 'call_center_staff_quota' => (int) ($values['call_center_staff_quota'] ?? 0),
                 'call_center_quota' => (int) ($values['call_center_quota'] ?? 0),
                 'staff_quota' => (int) ($values['staff_quota'] ?? 0),
+                'mediums' => $values['mediums'] ?? ['FTTH', 'COPPER', 'LTE'],
             ];
         };
 
         $validatedNormalized = $normalize($validated);
         $defaultsNormalized = $normalize($defaults);
+        // Add default mediums to default snapshot for comparison
+        $defaultsNormalized['mediums'] = ['FTTH', 'COPPER', 'LTE'];
+
         $source = $validatedNormalized === $defaultsNormalized ? 'default' : 'manual';
 
-        $ftthCount = $this->computeFtthCount($process->id);
+        // Sum counts of all selected mediums
+        $totalSelectedCount = 0;
+        foreach ($validatedNormalized['mediums'] as $m) {
+            $totalSelectedCount += $this->computeMediumCount($process->id, $m);
+        }
 
         $process->update([
             'assignment_config_source' => $source,
             'assignment_config_overrides' => $validatedNormalized,
             'assignment_config_default_snapshot' => $defaultsNormalized,
-            'assignment_config_ftth_count' => $ftthCount,
+            'assignment_config_ftth_count' => $totalSelectedCount,
             'assignment_config_set_by_user_id' => $userContext['id'] ?? null,
             'assignment_config_set_at' => now(),
         ]);

@@ -33,7 +33,10 @@ class MasterDatasetAssignmentService
     {
         return DB::transaction(function () use ($process, $configOverrides) {
             $this->resetAssignableRows($process);
-            // $this->excludeRetailMicroCopper($process);
+            
+            $selectedMediums = $configOverrides['mediums'] ?? ['FTTH', 'COPPER', 'LTE'];
+            $this->excludeUnselectedMediums($process, $selectedMediums);
+            
             $this->excludeLowBillNonRetail($process);
             $this->assignRetailHighBillToRegion($process);
             $this->assignRetailArrearsBands($process, $configOverrides);
@@ -51,20 +54,31 @@ class MasterDatasetAssignmentService
         });
     }
 
-    private function excludeRetailMicroCopper(MasterDatasetProcess $process): void
+    private function excludeUnselectedMediums(MasterDatasetProcess $process, array $selectedMediums): void
     {
+        $selectedLower = array_map('strtolower', $selectedMediums);
+
+        // Normalize fiber/ftth matching
+        if (in_array('ftth', $selectedLower, true) && !in_array('fiber', $selectedLower, true)) {
+            $selectedLower[] = 'fiber';
+        }
+
         $query = MasterDatasetRow::query()
             ->where('process_id', $process->id)
             ->where('excluded', false)
             ->whereNull('assigned_to');
 
         $query = $this->applyRetailOrMicroFilter($query)
-            ->whereRaw('LOWER(COALESCE(medium, "")) = ?', ['copper']);
+            ->where(function ($q) use ($selectedLower) {
+                $q->whereNull('medium')
+                  ->orWhereRaw('TRIM(medium) = ?', [''])
+                  ->orWhereNotIn(DB::raw('LOWER(TRIM(medium))'), $selectedLower);
+            });
 
         $query->update([
             'excluded' => true,
             'assigned_to' => self::EXCLUDED_LABEL,
-            'exclusion_reason' => 'Medium is Copper (Retail/Micro)',
+            'exclusion_reason' => 'Medium is excluded by user configuration',
             'exclusion_priority' => 5,
         ]);
     }

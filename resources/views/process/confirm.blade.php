@@ -28,14 +28,16 @@
                         </div>
                     </div>
 
-                    <!-- <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+                    <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
                         <div>
-                            <h4 class="alert-heading h5">Dataset Analysis</h4>
-                            <p class="mb-0">
-                                Found <strong>{{ number_format($ftthCount) }}</strong> Retail and Micro Business FTTH (Fiber) records in the uploaded master dataset (after applying exclusions).
-                            </p>
+                            <h4 class="alert-heading h5">Dataset Analysis (Retail & Micro Business)</h4>
+                            <ul class="mb-0 ps-3">
+                                <li>FTTH (Fiber): <strong>{{ number_format($ftthCount) }}</strong> records</li>
+                                <li>Copper: <strong>{{ number_format($copperCount) }}</strong> records</li>
+                                <li>LTE (4G): <strong>{{ number_format($lteCount) }}</strong> records</li>
+                            </ul>
                         </div>
-                    </div> -->
+                    </div>
 
                     <form action="{{ route('process.confirm.store') }}" method="post">
                         @csrf
@@ -53,6 +55,33 @@
                                 <input type="number" class="form-control" id="lower_range" name="lower_range"
                                     value="{{ old('lower_range', $assignmentConfig['lower_range']) }}" required min="0">
                                 <div class="form-text">Lower limit for bill value selection.</div>
+                            </div>
+                        </div>
+
+                        <h5 class="mb-3">Include Communication Mediums</h5>
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="medium_ftth" name="mediums[]" value="FTTH" {{ is_array(old('mediums')) ? (in_array('FTTH', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <label class="form-check-label" for="medium_ftth">
+                                            FTTH (Fiber)
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="medium_copper" name="mediums[]" value="COPPER" {{ is_array(old('mediums')) ? (in_array('COPPER', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <label class="form-check-label" for="medium_copper">
+                                            Copper
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="medium_lte" name="mediums[]" value="LTE" {{ is_array(old('mediums')) ? (in_array('LTE', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <label class="form-check-label" for="medium_lte">
+                                            LTE (4G)
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-text mt-2">Choose which communication mediums should remain active for Call Center and Regional Billing assignments. At least one must be selected.</div>
                             </div>
                         </div>
 

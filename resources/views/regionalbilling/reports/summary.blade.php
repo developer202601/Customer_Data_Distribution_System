@@ -28,9 +28,9 @@
 
                 @if(($reports ?? collect())->isNotEmpty())
                 <div class="row g-3 mt-3 align-items-center">
-                    <div class="col-md-8">
+                    <div class="col-md-6">
                         <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
-                            <label for="report" class="mb-0 text-muted small me-2" style="min-width: 180px;">Select report</label>
+                            <label for="report" class="mb-0 text-muted small me-2" style="min-width: 120px;">Select report</label>
                             <select id="report" name="report" class="form-select form-select-sm rounded" onchange="this.form.submit()">
                                 @foreach(($reports ?? collect()) as $candidate)
                                     @php
@@ -44,7 +44,7 @@
                             </select>
                         </form>
                     </div>
-                    <div class="col-md-4 text-md-end">
+                    <div class="col-md-6 text-md-end">
                         @if($anyAssigned ?? false)
                         <p class="small text-uppercase text-muted mb-0">Assigned rows ready</p>
                         @endif
@@ -182,12 +182,9 @@
                                                 </div>
                                             @endforeach
                                         </div>
-                                    </div>
-                                    <div class="col-md-8">
-                                        <!-- selector column left intentionally wide -->
-                                    </div>
-                                    <div class="col-md-4 d-flex align-items-end">
-                                        <button type="submit" class="btn btn-primary btn-sm w-100" {{ $unassigned <= 0 ? 'disabled' : '' }}>Distribute</button>
+                                        <div class="mt-3">
+                                            <button type="submit" id="rb-distribute-btn" class="btn btn-primary btn-sm w-100" {{ $unassigned <= 0 ? 'disabled' : '' }}>Distribute</button>
+                                        </div>
                                     </div>
                                 </form>
                                 <script nonce="{{ $cspNonce ?? '' }}">
@@ -198,6 +195,7 @@
                                         const selectAll = document.getElementById('rb-select-all-callers');
                                         const searchInput = document.getElementById('rb-user-search');
                                         const distributableCountEl = document.getElementById('rb-distributable-count');
+                                        const submitBtn = document.getElementById('rb-distribute-btn');
 
                                         function updateRowDisplay() {
                                             let total = 0;
@@ -223,6 +221,10 @@
                                                     total += value;
                                                 }
                                             });
+
+                                            if (submitBtn) {
+                                                submitBtn.disabled = (selectedCount === 0 || distributable <= 0);
+                                            }
 
                                             const remaining = distributable - total;
                                             if (distributableCountEl) {

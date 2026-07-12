@@ -32,9 +32,9 @@
                         <div>
                             <h4 class="alert-heading h5">Dataset Analysis (Retail & Micro Business)</h4>
                             <ul class="mb-0 ps-3">
-                                <li>FTTH (Fiber): <strong>{{ number_format($ftthCount) }}</strong> records</li>
+                                <li>FTTH: <strong>{{ number_format($ftthCount) }}</strong> records</li>
                                 <li>Copper: <strong>{{ number_format($copperCount) }}</strong> records</li>
-                                <li>LTE (4G): <strong>{{ number_format($lteCount) }}</strong> records</li>
+                                <li>LTE: <strong>{{ number_format($lteCount) }}</strong> records</li>
                             </ul>
                         </div>
                     </div>
@@ -42,46 +42,46 @@
                     <form action="{{ route('process.confirm.store') }}" method="post">
                         @csrf
 
+                        <h5 class="mb-3">Select the Connection Mediums</h5>
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_ftth" name="mediums[]" value="FTTH" {{ is_array(old('mediums')) ? (in_array('FTTH', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <label class="form-check-label" for="medium_ftth">
+                                            FTTH
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_copper" name="mediums[]" value="COPPER" {{ is_array(old('mediums')) ? (in_array('COPPER', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <label class="form-check-label" for="medium_copper">
+                                            Copper
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_lte" name="mediums[]" value="LTE" {{ is_array(old('mediums')) ? (in_array('LTE', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <label class="form-check-label" for="medium_lte">
+                                            LTE
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="form-text text-muted mt-2">Choose which communication mediums should remain active for Call Center and Regional Billing assignments. At least one must be selected.</div>
+                            </div>
+                        </div>
+
                         <h5 class="mb-3">Assignment Configuration</h5>
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
                                 <label for="upper_range" class="form-label">Upper Range (LKR)</label>
                                 <input type="number" class="form-control" id="upper_range" name="upper_range"
                                     value="{{ old('upper_range', $assignmentConfig['upper_range']) }}" required min="0">
-                                <div class="form-text">Upper limit for bill value selection.</div>
+                                <div class="form-text text-muted">Upper limit for bill value selection.</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="lower_range" class="form-label">Lower Range (LKR)</label>
                                 <input type="number" class="form-control" id="lower_range" name="lower_range"
                                     value="{{ old('lower_range', $assignmentConfig['lower_range']) }}" required min="0">
-                                <div class="form-text">Lower limit for bill value selection.</div>
-                            </div>
-                        </div>
-
-                        <h5 class="mb-3">Include Communication Mediums</h5>
-                        <div class="row g-3 mb-4">
-                            <div class="col-12">
-                                <div class="d-flex flex-wrap gap-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="medium_ftth" name="mediums[]" value="FTTH" {{ is_array(old('mediums')) ? (in_array('FTTH', old('mediums')) ? 'checked' : '') : 'checked' }}>
-                                        <label class="form-check-label" for="medium_ftth">
-                                            FTTH (Fiber)
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="medium_copper" name="mediums[]" value="COPPER" {{ is_array(old('mediums')) ? (in_array('COPPER', old('mediums')) ? 'checked' : '') : 'checked' }}>
-                                        <label class="form-check-label" for="medium_copper">
-                                            Copper
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="medium_lte" name="mediums[]" value="LTE" {{ is_array(old('mediums')) ? (in_array('LTE', old('mediums')) ? 'checked' : '') : 'checked' }}>
-                                        <label class="form-check-label" for="medium_lte">
-                                            LTE (4G)
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="form-text mt-2">Choose which communication mediums should remain active for Call Center and Regional Billing assignments. At least one must be selected.</div>
+                                <div class="form-text text-muted">Lower limit for bill value selection.</div>
                             </div>
                         </div>
 
@@ -108,9 +108,39 @@
                         </div>
 
                         <div class="d-flex justify-content-end gap-2">
-                            <button type="submit" class="btn btn-primary px-4">Confirm & Process</button>
+                            <button type="submit" id="confirm-submit-btn" class="btn btn-primary px-4">Confirm & Process</button>
                         </div>
                     </form>
+
+                    <script nonce="{{ $cspNonce ?? '' }}">
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const checkboxes = document.querySelectorAll('.medium-checkbox');
+                            const submitBtn = document.getElementById('confirm-submit-btn');
+                            const form = document.querySelector('form[action*="process.confirm.store"]');
+
+                            function updateBtnState() {
+                                const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+                                submitBtn.disabled = !anyChecked;
+                            }
+
+                            checkboxes.forEach(cb => {
+                                cb.addEventListener('change', updateBtnState);
+                            });
+
+                            if (form) {
+                                form.addEventListener('submit', function(event) {
+                                    const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+                                    if (!anyChecked) {
+                                        event.preventDefault();
+                                        alert('Please select at least one communication medium.');
+                                    }
+                                });
+                            }
+
+                            // Initial check
+                            updateBtnState();
+                        });
+                    </script>
                 </div>
             </div>
         </div>

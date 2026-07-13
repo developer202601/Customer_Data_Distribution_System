@@ -53,7 +53,7 @@ class RegionAdminController extends Controller
             abort(403);
         }
 
-        return str_replace('_', ' ', str_replace('rtom_', '', $assignment));
+        return strtoupper(trim(str_replace('_', ' ', str_replace('rtom_', '', $assignment))));
     }
 
     protected function regionRtoms(string $region)

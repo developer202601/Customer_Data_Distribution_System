@@ -1050,9 +1050,9 @@ class MasterDatasetImporter
     private function evaluateAutoExclusion(array $row): ?string
     {
         $medium = strtoupper(trim((string) $row['medium']));
-        if ($medium === '' || ! in_array($medium, ['COPPER', 'FTTH'], true)) {
+        if ($medium === '' || ! in_array($medium, ['COPPER', 'FTTH', 'LTE'], true)) {
             $value = $medium === '' ? 'blank' : $medium;
-            return sprintf('AUTO: MEDIUM is %s (requires COPPER or FTTH)', $value);
+            return sprintf('AUTO: MEDIUM is %s (requires COPPER, FTTH or LTE)', $value);
         }
 
         $status = strtoupper(trim((string) $row['latest_product_status']));

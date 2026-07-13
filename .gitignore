@@ -48,3 +48,7 @@ NAITA_*.md
 # Local CI/CD setup notes (do not commit)
 CICD_SETUP.md
 
+# SonarQube
+.scannerwork/
+sonar-project.properties
+

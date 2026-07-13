@@ -97,13 +97,28 @@ class ReportController extends Controller
      */
     protected function deriveRegionFromRtom(string $rtomValue): ?string
     {
-        $region = MasterDatasetRow::query()
+        $query = MasterDatasetRow::query();
+
+        // Get the latest process ID to restrict the search and avoid a full-table scan on millions of rows
+        $latestProcessId = MasterDatasetRow::query()->max('process_id');
+        if ($latestProcessId) {
+            $query->where('process_id', $latestProcessId);
+        }
+
+        $region = $query
             ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
             ->whereNotNull('region')
             ->where('region', '<>', '')
-            ->distinct()
-            ->pluck('region')
-            ->first();
+            ->value('region');
+
+        // Fallback to full table search in case it's not found in the latest process
+        if (!$region) {
+            $region = MasterDatasetRow::query()
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
+                ->whereNotNull('region')
+                ->where('region', '<>', '')
+                ->value('region');
+        }
 
         return $region;
     }

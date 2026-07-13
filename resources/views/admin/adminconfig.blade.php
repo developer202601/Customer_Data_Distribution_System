@@ -103,7 +103,7 @@
                         </div>
                     </form>
 
-                    <div class="admin-config-form" data-config-block="user-account">
+                    <!-- <div class="admin-config-form" data-config-block="user-account">
                         <div class="config-card">
                             <p class="admin-config-hint">Here you can change the user account</p>
 
@@ -137,7 +137,7 @@
                             </div>
                         </div>
 
-                    </div>
+                    </div> -->
 
                 </div>
             </div>

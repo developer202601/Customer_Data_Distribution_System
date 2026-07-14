@@ -117,7 +117,8 @@ class SuperAdminController extends Controller
         }
 
         $roles = ['region' => 'Region Admin'];
-        $systems = ['cc' => 'Call Center', 'rb' => 'Regional Billing Centre'];
+        //$systems = ['cc' => 'Call Center', 'rb' => 'Regional Billing Centre'];
+        $systems = ['rb' => 'Regional Billing Centre'];
 
         $lastTwoProcessIds = MasterDatasetRow::select('process_id')
             ->distinct()

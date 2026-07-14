@@ -42,13 +42,46 @@ class AssignmentController extends Controller
 
     protected function deriveRegionFromRtom(string $rtomValue): ?string
     {
-        return MasterDatasetRow::query()
+        $query = MasterDatasetRow::query();
+
+        // Get the latest process ID to restrict the search and avoid a full-table scan on millions of rows
+        $latestProcessId = MasterDatasetRow::query()->max('process_id');
+        if ($latestProcessId) {
+            $query->where('process_id', $latestProcessId);
+        }
+
+        $region = $query
             ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
             ->whereNotNull('region')
             ->where('region', '<>', '')
-            ->distinct()
-            ->pluck('region')
-            ->first();
+            ->value('region');
+
+        // Fallback to full table search in case it's not found in the latest process
+        if (!$region) {
+            $region = MasterDatasetRow::query()
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
+                ->whereNotNull('region')
+                ->where('region', '<>', '')
+                ->value('region');
+        }
+
+        return $region;
+    }
+
+    protected function getRtomAdminRegion(User $user): ?string
+    {
+        $currentUser = $user->supervisor ? User::find($user->supervisor) : null;
+        while ($currentUser) {
+            $currentAssignment = $currentUser->assignment ?? null;
+            if ($currentAssignment && !str_starts_with($currentAssignment, 'caller_') && !str_starts_with($currentAssignment, 'rtom_') && !str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
+                return $currentAssignment;
+            }
+            $currentUser = $currentUser->supervisor ? User::find($currentUser->supervisor) : null;
+        }
+
+        $assignment = strtolower(trim((string) $user->assignment));
+        $rtomValue = preg_replace('/^rtom_/', '', $assignment);
+        return $rtomValue ? $this->deriveRegionFromRtom($rtomValue) : null;
     }
 
     public function index(Request $request)
@@ -827,18 +860,44 @@ class AssignmentController extends Controller
                 ->withErrors(['distribute' => 'No visible rows available to distribute.']);
         }
 
-        $region = $rtom ? $this->deriveRegionFromRtom($rtom) : null;
+        $dbUser = User::find($sessionUser['id'] ?? 0);
+        $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
 
-        $rtomRowIds = MasterDatasetRow::query()
-            ->whereIn('id', $candidateIds)
-            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtom)])
-            ->when(! empty($region), function ($query) use ($region) {
-                $query->whereRaw('LOWER(TRIM(region)) = ?', [strtolower((string) $region)]);
-            })
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->values()
-            ->all();
+        if (!$region) {
+            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+                ->withErrors(['distribute' => 'Could not determine region for your RTOM.']);
+        }
+
+        $gateUser = User::where('system', 'rb')
+            ->where('assignment', $region)
+            ->where('enable_regional_review', 1)
+            ->first();
+
+        if ($gateUser) {
+            $enabledAt = $gateUser->enable_regional_review_enabled_at;
+            if ($enabledAt && $report->created_at && $report->created_at->greaterThanOrEqualTo($enabledAt)) {
+                // Check if the report has been passed for this region
+                $passed = \App\Models\CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+                    ->whereRaw('LOWER(TRIM(region_name)) = ?', [strtolower(trim($region))])
+                    ->whereNotNull('reviewed_at')
+                    ->exists();
+                if (!$passed) {
+                    return Redirect::route('rb.reports.summary', ['report' => $report->id])
+                        ->withErrors(['distribute' => 'Distribution is blocked. The Regional Admin has not passed the report for your region yet.']);
+                }
+            }
+        }
+
+        $rtomRowIds = empty($candidateIds)
+            ? []
+            : MasterDatasetRow::query()
+                ->whereIn('id', $candidateIds)
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtom)])
+                ->whereRaw('LOWER(TRIM(region)) = ?', [strtolower($region)])
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
 
         if (empty($rtomRowIds)) {
             return Redirect::route('rb.reports.summary', ['report' => $report->id])

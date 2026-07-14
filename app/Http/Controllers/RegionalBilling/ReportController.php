@@ -123,6 +123,22 @@ class ReportController extends Controller
         return $region;
     }
 
+    protected function getRtomAdminRegion(User $user): ?string
+    {
+        $currentUser = $user->supervisor ? User::find($user->supervisor) : null;
+        while ($currentUser) {
+            $currentAssignment = $currentUser->assignment ?? null;
+            if ($currentAssignment && !str_starts_with($currentAssignment, 'caller_') && !str_starts_with($currentAssignment, 'rtom_') && !str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
+                return $currentAssignment;
+            }
+            $currentUser = $currentUser->supervisor ? User::find($currentUser->supervisor) : null;
+        }
+
+        $assignment = strtolower(trim((string) $user->assignment));
+        $rtomValue = preg_replace('/^rtom_/', '', $assignment);
+        return $rtomValue ? $this->deriveRegionFromRtom($rtomValue) : null;
+    }
+
     public function index(Request $request): View|JsonResponse
     {
         $sessionUser = $this->ensureRegionalBillingUser();
@@ -145,7 +161,9 @@ class ReportController extends Controller
         $sessionUser = $this->ensureRegionalBillingUser();
         $assignment = $this->normalizeAssignment($sessionUser['assignment'] ?? null);
         $rtomValue = $this->extractRtomValue($assignment);
-        $region = $rtomValue ? $this->deriveRegionFromRtom($rtomValue) : null;
+
+        $dbUser = User::find($sessionUser['id'] ?? 0);
+        $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
 
         if (!$region || !$rtomValue) {
             return view('regionalbilling.reports.index', [
@@ -156,7 +174,7 @@ class ReportController extends Controller
             ]);
         }
 
-        // Fetch regional billing reports that have rows for this RTOM
+        // Fetch regional billing reports that have rows for this RTOM and region
         $reports = CallCenterReport::regionalBilling()
             ->with('process')
             ->orderByDesc('created_at')
@@ -167,10 +185,33 @@ class ReportController extends Controller
                     return false;
                 }
                 // Check if any row has this RTOM and region
-                return MasterDatasetRow::whereIn('id', $rowIds)
+                $hasRows = MasterDatasetRow::whereIn('id', $rowIds)
                     ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtomValue)])
                     ->whereRaw('LOWER(TRIM(region)) = ?', [strtolower($region)])
                     ->exists();
+
+                if (!$hasRows) {
+                    return false;
+                }
+
+                // Check if regional review is enabled for this region
+                $gateUser = User::where('system', 'rb')
+                    ->where('assignment', $region)
+                    ->where('enable_regional_review', 1)
+                    ->first();
+
+                if ($gateUser) {
+                    $enabledAt = $gateUser->enable_regional_review_enabled_at;
+                    if ($enabledAt && $report->created_at && $report->created_at->greaterThanOrEqualTo($enabledAt)) {
+                        // Check if the report has been passed for this region
+                        return CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+                            ->whereRaw('LOWER(TRIM(region_name)) = ?', [strtolower(trim($region))])
+                            ->whereNotNull('reviewed_at')
+                            ->exists();
+                    }
+                }
+
+                return true;
             })
             ->values();
 
@@ -227,9 +268,34 @@ class ReportController extends Controller
     protected function rtomReportSummary(Request $request, CallCenterReport $report, string $assignment, $reports = null): View
     {
         $rtom = $this->extractRtomValue($assignment);
-        $region = $rtom ? $this->deriveRegionFromRtom($rtom) : null;
-
         abort_if(! $rtom, 403, 'Invalid RTOM admin assignment.');
+
+        $dbUser = User::find(session('user.id') ?? session('user')['id'] ?? 0);
+        $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
+
+        if (!$region) {
+            abort(403, 'Could not determine region for your RTOM.');
+        }
+
+        // Check if regional review is enabled for this region
+        $gateUser = User::where('system', 'rb')
+            ->where('assignment', $region)
+            ->where('enable_regional_review', 1)
+            ->first();
+
+        if ($gateUser) {
+            $enabledAt = $gateUser->enable_regional_review_enabled_at;
+            if ($enabledAt && $report->created_at && $report->created_at->greaterThanOrEqualTo($enabledAt)) {
+                // Check if the report has been passed for this region
+                $passed = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+                    ->whereRaw('LOWER(TRIM(region_name)) = ?', [strtolower(trim($region))])
+                    ->whereNotNull('reviewed_at')
+                    ->exists();
+                if (!$passed) {
+                    abort(403, 'This report is currently pending regional admin review and has not been passed to RTO admins yet.');
+                }
+            }
+        }
 
         $search = trim((string) $request->query('q', ''));
         $reportRowIds = collect($report->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
@@ -248,9 +314,7 @@ class ReportController extends Controller
             : MasterDatasetRow::query()
                 ->whereIn('id', $visibleRowIds)
                 ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtom)])
-                ->when(! empty($region), function ($query) use ($region) {
-                    $query->whereRaw('LOWER(TRIM(region)) = ?', [strtolower((string) $region)]);
-                })
+                ->whereRaw('LOWER(TRIM(region)) = ?', [strtolower($region)])
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
                 ->values()

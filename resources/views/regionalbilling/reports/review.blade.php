@@ -125,53 +125,6 @@
                             </div>
                         </div>
 
-                        <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
-                            @if(empty($reviewRecord?->reviewed_at))
-                                <form method="post" action="{{ route('rb.reports.pass', $selectedReport->id) }}">
-                                    @csrf
-                                    <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">Pass to RTO Admin</button>
-                                </form>
-                                <span class="small text-muted">This report has not been passed yet for this region.</span>
-
-                                <div class="row g-3 w-100 mb-3">
-                                    <div class="col-lg-6">
-                                        <div class="card border-0 bg-light rounded-4 h-100">
-                                            <div class="card-body p-3">
-                                                <p class="text-uppercase text-muted small mb-1">Exclude file submission</p>
-                                                <p class="small text-muted mb-2">Upload a workbook of rows to hide from the review set.</p>
-                                                <form method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
-                                                    @csrf
-                                                    <input type="file" name="exclude_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
-                                                    <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-6">
-                                        <div class="card border-0 bg-light rounded-4 h-100">
-                                            <div class="card-body p-3">
-                                                <p class="text-uppercase text-muted small mb-1">Inclusion file submission</p>
-                                                <p class="small text-muted mb-2">Upload a workbook of rows to keep visible and hide everything else.</p>
-                                                <form method="post" action="{{ route('rb.reports.include_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
-                                                    @csrf
-                                                    <input type="file" name="include_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
-                                                    <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Inclusion File</button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            @else
-                                <span class="small text-success">Passed at {{ $reviewRecord->reviewed_at->format('Y-m-d H:i') }}</span>
-                                @if(!empty($canUnlockReview))
-                                    <form method="post" action="{{ route('rb.reports.unlock', $selectedReport->id) }}" class="ms-2">
-                                        @csrf
-                                        <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-3">Unlock Review</button>
-                                    </form>
-                                @endif
-                            @endif
-                        </div>
-
                         <div id="bulkActionsDock" class="bulk-actions-dock mb-3" data-locked="{{ !empty($reviewRecord?->reviewed_at) ? '1' : '0' }}">
                             <div class="bulk-actions-card" id="bulkActionsCard">
                                 <div class="small text-muted mb-1" id="bulkActionsSelectionHint">Select rows to manage visibility.</div>
@@ -185,13 +138,19 @@
                             </div>
                         </div>
 
-                        <form id="bulkRowsForm" method="post" action="{{ route('rb.reports.hide_rows', $selectedReport->id) }}">
-                            @csrf
-                            <input type="hidden" name="action" id="bulkAction" value="hide">
-                            <div id="reviewTableContainer" data-loader-off="1">
-                                @include('regionalbilling.reports._review_table', ['selectedReport' => $selectedReport, 'rows' => $rows, 'showHidden' => $showHidden, 'showHiddenOnly' => $showHiddenOnly, 'isLocked' => !empty($reviewRecord?->reviewed_at), 'search' => $search])
-                            </div>
-                        </form>
+                        <div id="reviewTableContainer" data-loader-off="1">
+                            @include('regionalbilling.reports._review_table', [
+                                'selectedReport' => $selectedReport,
+                                'rows' => $rows,
+                                'showHidden' => $showHidden,
+                                'showHiddenOnly' => $showHiddenOnly,
+                                'isLocked' => !empty($reviewRecord?->reviewed_at),
+                                'search' => $search,
+                                'rtomsWithDetails' => $rtomsWithDetails ?? [],
+                                'canUnlockReview' => $canUnlockReview ?? false,
+                                'passedRtomNames' => $passedRtomNames ?? []
+                            ])
+                        </div>
                         <div id="rbToastContainer" class="rb-toast-container"></div>
                         <style nonce="{{ $cspNonce ?? '' }}">
                             .rb-toast-container {

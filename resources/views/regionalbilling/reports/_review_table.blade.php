@@ -1,33 +1,122 @@
 @if($selectedReport)
-    <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-2">
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            @if(!empty($isLocked))
-                <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Review Locked</button>
-            @endif
-            <div class="form-check ms-2">
-                <input class="form-check-input" type="checkbox" id="selectAllRows" {{ !empty($isLocked) ? 'disabled' : '' }}>
-                <label class="form-check-label small" for="selectAllRows">Select all in current page</label>
-            </div>
-
-            <div class="vr mx-1 d-none d-md-block"></div>
-
-            <div class="form-check ms-1">
-                <input class="form-check-input" type="checkbox" id="showHiddenRowsToggle" {{ !empty($showHidden) ? 'checked' : '' }}>
-                <label class="form-check-label small" for="showHiddenRowsToggle">Show hidden rows</label>
-            </div>
-            <div class="form-check ms-1">
-                <input class="form-check-input" type="checkbox" id="showHiddenOnlyRowsToggle" {{ !empty($showHiddenOnly) ? 'checked' : '' }}>
-                <label class="form-check-label small" for="showHiddenOnlyRowsToggle">Hidden only</label>
+    <!-- File Upload Submission Section -->
+    <div class="row g-3 w-100 mb-4">
+        <div class="col-lg-6">
+            <div class="card border-0 bg-light rounded-4 h-100">
+                <div class="card-body p-3">
+                    <p class="text-uppercase text-muted small mb-1 fw-bold">Exclude file submission</p>
+                    <p class="small text-muted mb-2">Upload a workbook of rows to hide from the review set.</p>
+                    <form method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                        @csrf
+                        <input type="file" name="exclude_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
+                        <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
+                    </form>
+                </div>
             </div>
         </div>
-        <div style="min-width: 320px;" class="w-100 w-md-auto">
-            <label class="form-label small text-muted mb-1" for="tableSearch">Search</label>
-            <input class="form-control form-control-sm" type="search" id="tableSearch" name="q" value="{{ $search ?? request('q') }}" placeholder="Account / arrears / phone / customer ref">
+        <div class="col-lg-6">
+            <div class="card border-0 bg-light rounded-4 h-100">
+                <div class="card-body p-3">
+                    <p class="text-uppercase text-muted small mb-1 fw-bold">Inclusion file submission</p>
+                    <p class="small text-muted mb-2">Upload a workbook of rows to keep visible and hide everything else.</p>
+                    <form method="post" action="{{ route('rb.reports.include_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
+                        @csrf
+                        <input type="file" name="include_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
+                        <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Inclusion File</button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="table-responsive cc-table-container">
-        <table class="table align-middle mb-0" id="reviewRowsTable">
+    <!-- RTOM Releases Section -->
+    <div class="card border-0 bg-light rounded-4 mb-4">
+        <div class="card-body p-4">
+            <p class="text-uppercase text-muted small mb-1 fw-bold">RTOM Releases</p>
+            <p class="text-muted small mb-3">Release records to specific RTOMs under your region once you have completed your review. Remaining RTOMs can be passed later.</p>
+            
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>RTOM Name</th>
+                            <th>Record Count</th>
+                            <th>Status / Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($rtomsWithDetails ?? [] as $rtom)
+                            <tr>
+                                <td class="fw-bold">{{ strtoupper($rtom['name']) }}</td>
+                                <td><span class="badge text-bg-secondary">{{ number_format($rtom['count']) }} records</span></td>
+                                <td>
+                                    @if($rtom['is_passed'])
+                                        <div class="d-flex align-items-center gap-3">
+                                            <span class="text-success small fw-semibold">
+                                                <i class="bi bi-check-circle-fill"></i> Passed at {{ $rtom['passed_at']->format('Y-m-d H:i') }} by {{ $rtom['passed_by'] }}
+                                            </span>
+                                            @if(!empty($canUnlockReview))
+                                                <form method="post" action="{{ route('rb.reports.unlock', $selectedReport->id) }}" class="m-0 d-inline">
+                                                    @csrf
+                                                    <input type="hidden" name="rtom" value="{{ $rtom['name'] }}">
+                                                    <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-3">Unlock</button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    @else
+                                        <form method="post" action="{{ route('rb.reports.pass', $selectedReport->id) }}" class="m-0">
+                                            @csrf
+                                            <input type="hidden" name="rtom" value="{{ $rtom['name'] }}">
+                                            <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">Pass to RTOM {{ strtoupper($rtom['name']) }}</button>
+                                        </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="3" class="text-muted text-center py-3">No RTOM records found for this report in your region.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk actions rows form wrapper -->
+    <form id="bulkRowsForm" method="post" action="{{ route('rb.reports.hide_rows', $selectedReport->id) }}">
+        @csrf
+        <input type="hidden" name="action" id="bulkAction" value="hide">
+
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-2">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                @if(!empty($isLocked))
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Review Locked</button>
+                @endif
+                <div class="form-check ms-2">
+                    <input class="form-check-input" type="checkbox" id="selectAllRows" {{ !empty($isLocked) ? 'disabled' : '' }}>
+                    <label class="form-check-label small" for="selectAllRows">Select all in current page</label>
+                </div>
+
+                <div class="vr mx-1 d-none d-md-block"></div>
+
+                <div class="form-check ms-1">
+                    <input class="form-check-input" type="checkbox" id="showHiddenRowsToggle" {{ !empty($showHidden) ? 'checked' : '' }}>
+                    <label class="form-check-label small" for="showHiddenRowsToggle">Show hidden rows</label>
+                </div>
+                <div class="form-check ms-1">
+                    <input class="form-check-input" type="checkbox" id="showHiddenOnlyRowsToggle" {{ !empty($showHiddenOnly) ? 'checked' : '' }}>
+                    <label class="form-check-label small" for="showHiddenOnlyRowsToggle">Hidden only</label>
+                </div>
+            </div>
+            <div style="min-width: 320px;" class="w-100 w-md-auto">
+                <label class="form-label small text-muted mb-1" for="tableSearch">Search</label>
+                <input class="form-control form-control-sm" type="search" id="tableSearch" name="q" value="{{ $search ?? request('q') }}" placeholder="Account / arrears / phone / customer ref">
+            </div>
+        </div>
+
+        <div class="table-responsive cc-table-container">
+            <table class="table align-middle mb-0" id="reviewRowsTable">
             <thead>
                 <tr>
                     <th style="width: 40px;"></th>
@@ -48,7 +137,10 @@
                         data-row-label="{{ trim(($row->account_num ? ('Account ' . $row->account_num) : ('Row #' . $row->id)) . ($row->customer_ref ? (' | Ref ' . $row->customer_ref) : '') . ($row->mobile_contact_tel ? (' | Tel ' . $row->mobile_contact_tel) : '')) }}"
                     >
                         <td>
-                            <input class="form-check-input row-check" type="checkbox" name="row_ids[]" value="{{ $row->id }}" {{ !empty($isLocked) ? 'disabled' : '' }}>
+                            @php
+                                $isRtomPassed = in_array(strtolower(trim($row->rtom)), $passedRtomNames ?? [], true);
+                            @endphp
+                            <input class="form-check-input row-check" type="checkbox" name="row_ids[]" value="{{ $row->id }}" {{ (!empty($isLocked) || $isRtomPassed) ? 'disabled' : '' }}>
                         </td>
                         <td>{{ $row->account_num ?? '—' }}</td>
                         <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
@@ -59,6 +151,9 @@
                                 <span class="badge text-bg-danger">Hidden</span>
                             @else
                                 <span class="badge text-bg-success">Visible</span>
+                            @endif
+                            @if($isRtomPassed)
+                                <span class="badge text-bg-secondary" title="Passed to RTOM"><i class="bi-lock-fill"></i> Passed</span>
                             @endif
                         </td>
                         <td>
@@ -114,4 +209,5 @@
             </div>
         </div>
     @endif
+    </form>
 @endif

@@ -3,7 +3,7 @@
 @section('title', 'CDDS & PRMS')
 
 @section('content')
-<section class="content login-page mt-5">
+<section class="content login-page">
     <div class="login-page__panel login-page__panel--form">
         <div class="login-card shadow-sm">
             <div class="login-card__header">

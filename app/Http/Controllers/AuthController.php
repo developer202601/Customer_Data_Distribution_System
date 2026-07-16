@@ -64,13 +64,21 @@ class AuthController extends Controller
 
         $userData = json_decode($response, true);
         
-        $user = User::updateOrCreate(
-            ['username' => substr($userData['userPrincipalName'],0,6)],
-            ['name' => $userData['displayName']],
-        );
+        $user = User::where('username', substr($userData['userPrincipalName'],0,6))->first();
+
+        if (!$user) {
+            return back()
+                ->withErrors(['username' => 'Not Authorized.'])
+                ->withInput();
+        }
+
+        $user = User::where('username', substr($userData['userPrincipalName'],0,6))
+            ->update([
+                'name' => $userData['displayName'],
+            ]);
     
         $request->merge([
-        'username' => $user->username
+        'username' => substr($userData['userPrincipalName'],0,6)
         ]);
 
         return $this->login($request);

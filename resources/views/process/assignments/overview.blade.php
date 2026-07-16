@@ -152,7 +152,7 @@
                 $ready = $state === 'ready';
                 $failed = $state === 'failed';
 
-                echo '<div class="d-flex flex-wrap justify-content-end gap-2">';
+                echo '<div class="d-flex flex-wrap justify-content-end gap-2" data-export-buttons="1" data-export-group="' . e($groupKey) . '" data-export-bucket="' . e($bucket) . '" data-export-count="' . $count . '">';
 
                 if ($count === 0) {
                     echo '<span class="btn btn-outline-secondary disabled" aria-disabled="true">No export</span>';

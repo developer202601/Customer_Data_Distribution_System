@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessExclusionUpload;
 use App\Models\MasterDatasetProcess;
 use App\Support\ChunkedUploadManager;
 use App\Support\MasterDatasetAssignmentConfiguration;
@@ -260,14 +261,17 @@ class MasterDatasetUploadController extends Controller
 
             $process = $workflow->queueMasterArchive($uploadedFile, $userContext);
 
+            ProcessExclusionUpload::dispatch($process->id, [], $userContext)
+                ->onQueue('exports');
+
             $request->session()->put('master.dataset.process_id', $process->id);
             $request->session()->forget('master.dataset.staged_exclusions');
 
             return response()->json([
                 'status' => 'ok',
-                'message' => 'Master dataset uploaded. Continue by adding exclusion files to begin validation.',
+                'message' => 'Master dataset uploaded. Exclusions skipped. Proceeding to confirmation.',
                 'process_id' => $process->id,
-                'redirect_url' => route('process.exclusions.create'),
+                'redirect_url' => route('process.confirm.create'),
             ]);
         } catch (ValidationException $exception) {
             throw $exception;
@@ -332,6 +336,9 @@ class MasterDatasetUploadController extends Controller
             $userContext = $resolver->resolve($request);
 
             $process = $workflow->queueMasterArchive($request->file('upload'), $userContext);
+
+            ProcessExclusionUpload::dispatch($process->id, [], $userContext)
+                ->onQueue('exports');
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -343,8 +350,7 @@ class MasterDatasetUploadController extends Controller
         $request->session()->put('master.dataset.process_id', $process->id);
 
         return redirect()
-            ->route('process.exclusions.create')
-            ->with('status', 'Master dataset uploaded. Continue by adding exclusion files to begin validation.')
-            ->with('hide_dataset_info', true);
+            ->route('process.confirm.create')
+            ->with('status', 'Master dataset uploaded. Exclusions skipped. Proceeding to confirmation.');
     }
 }

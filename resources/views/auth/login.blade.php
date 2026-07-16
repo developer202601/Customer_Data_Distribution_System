@@ -3,26 +3,11 @@
 @section('title', 'CDDS & PRMS')
 
 @section('content')
-<section class="content login-page">
-    <div class="login-page__panel login-page__panel--visual">
-        <div class="login-page__visual-inner">
-            <span class="login-page__eyebrow">Customer Data Distribution & Payment Reminder System</span>
-            <h1>Secure delivery for your customers</h1>
-            <p>
-                Customer data distribution system that keeps every client package verified, tracked, and compliant.
-            </p>
-            <p>
-                Payment reminder management system that provides automated payment reminders, overdue tracking, and financial performance oversight across the organization.
-            </p>
-            <p class="login-page__visual-note">Trusted dashboards, concise alerts, zero guesswork.</p>
-        </div>
-    </div>
+<section class="content login-page mt-5">
     <div class="login-page__panel login-page__panel--form">
         <div class="login-card shadow-sm">
             <div class="login-card__header">
-                <p class="text-uppercase mb-1">Secure Access</p>
-                <h2>Customer Portal Login</h2>
-                <p class="text-muted">Access your distribution feeds, delivery approvals, and payment management tools.</p>
+                <h2>Login</h2>
             </div>
             <form action="{{ route('login.perform') }}" method="post">
                 @csrf
@@ -45,7 +30,7 @@
             <div class="text-center mt-3" style="display:inline-flex;align-items:center;gap:.5rem;white-space:nowrap;">
                 <span>Powered by</span>
                 <a href="" style="display:inline-flex;align-items:center;gap:.25rem;">
-                    <img src="{{ asset('images/Transzent-logo.png') }}" alt="Transzent" style="height:24px;max-height:24px;padding-bottom:1px;" />
+                    <img src="{{ asset('images/Transzent-logo.png') }}" alt="Transzent" style="height:50px;max-height:50px;padding-bottom:1px;" />
                 </a>
             </div>
         </div>

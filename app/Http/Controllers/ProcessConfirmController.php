@@ -83,12 +83,29 @@ class ProcessConfirmController extends Controller
         $copperCount = $this->computeMediumCount($process->id, 'copper');
         $lteCount = $this->computeMediumCount($process->id, 'lte');
 
+        // Fetch configurations for mediums
+        $mediumConfigs = \App\Models\Configurations::whereIn('config_name', ['medium_ftth', 'medium_copper', 'medium_lte'])
+            ->get()
+            ->keyBy('config_name');
+
+        $activeMediums = [];
+        if (isset($mediumConfigs['medium_ftth']) ? $mediumConfigs['medium_ftth']->value == 1 : true) {
+            $activeMediums[] = 'FTTH';
+        }
+        if (isset($mediumConfigs['medium_copper']) ? $mediumConfigs['medium_copper']->value == 1 : false) {
+            $activeMediums[] = 'COPPER';
+        }
+        if (isset($mediumConfigs['medium_lte']) ? $mediumConfigs['medium_lte']->value == 1 : false) {
+            $activeMediums[] = 'LTE';
+        }
+
         return view('process.confirm', [
             'process' => $process,
             'ftthCount' => $ftthCount,
             'copperCount' => $copperCount,
             'lteCount' => $lteCount,
             'assignmentConfig' => $configuration->toArray(),
+            'activeMediums' => $activeMediums,
         ]);
     }
 
@@ -140,11 +157,32 @@ class ProcessConfirmController extends Controller
             'call_center_staff_quota' => 'required|integer|min:0',
             'call_center_quota' => 'required|integer|min:0',
             'staff_quota' => 'required|integer|min:0',
-            'mediums' => 'required|array|min:1',
-            'mediums.*' => 'in:FTTH,COPPER,LTE',
         ]);
         
         $userContext = $resolver->resolve($request);
+
+        // Fetch configurations for mediums
+        $mediumConfigs = \App\Models\Configurations::whereIn('config_name', ['medium_ftth', 'medium_copper', 'medium_lte'])
+            ->get()
+            ->keyBy('config_name');
+
+        $activeMediums = [];
+        if (isset($mediumConfigs['medium_ftth']) ? $mediumConfigs['medium_ftth']->value == 1 : true) {
+            $activeMediums[] = 'FTTH';
+        }
+        if (isset($mediumConfigs['medium_copper']) ? $mediumConfigs['medium_copper']->value == 1 : false) {
+            $activeMediums[] = 'COPPER';
+        }
+        if (isset($mediumConfigs['medium_lte']) ? $mediumConfigs['medium_lte']->value == 1 : false) {
+            $activeMediums[] = 'LTE';
+        }
+
+        // Default to FTTH if somehow all are off in database
+        if (empty($activeMediums)) {
+            $activeMediums = ['FTTH'];
+        }
+
+        $validated['mediums'] = $activeMediums;
 
         $defaults = $configuration->toArray();
         $normalize = static function (array $values): array {

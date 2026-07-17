@@ -16,12 +16,13 @@ class AdminController extends Controller
     public function config()
     {
         $configs = Configurations::with('editor')
-            ->whereIn('config_name', ['upper_range', 'lower_range', 'ccs', 'cc', 's'])
+            ->whereIn('config_name', ['upper_range', 'lower_range', 'ccs', 'cc', 's', 'medium_ftth', 'medium_copper', 'medium_lte'])
             ->get()
             ->keyBy('config_name');
 
         $billRangeUpdated = $this->latestMeta($configs, ['upper_range', 'lower_range']);
         $staffUpdated = $this->latestMeta($configs, ['ccs', 'cc', 's']);
+        $mediumsUpdated = $this->latestMeta($configs, ['medium_ftth', 'medium_copper', 'medium_lte']);
 
         // Fetch master system users (excluding call center users)
         $users = User::where(function ($q) {
@@ -62,6 +63,7 @@ class AdminController extends Controller
             'configs' => $configs,
             'billRangeUpdated' => $billRangeUpdated,
             'staffUpdated' => $staffUpdated,
+            'mediumsUpdated' => $mediumsUpdated,
             'users' => $users,
         ]);
     }

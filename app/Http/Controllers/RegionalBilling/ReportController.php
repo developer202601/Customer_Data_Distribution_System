@@ -196,7 +196,7 @@ class ReportController extends Controller
 
                 // Check if regional review is enabled for this region
                 $gateUser = User::where('system', 'rb')
-                    ->where('assignment', $region)
+                    ->whereRaw('LOWER(TRIM(assignment)) = ?', [strtolower(trim($region))])
                     ->where('enable_regional_review', 1)
                     ->first();
 
@@ -279,7 +279,7 @@ class ReportController extends Controller
 
         // Check if regional review is enabled for this region
         $gateUser = User::where('system', 'rb')
-            ->where('assignment', $region)
+            ->whereRaw('LOWER(TRIM(assignment)) = ?', [strtolower(trim($region))])
             ->where('enable_regional_review', 1)
             ->first();
 

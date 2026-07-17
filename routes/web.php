@@ -77,6 +77,8 @@ Route::middleware('session.auth')->group(function () {
 
     Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');
 
+    Route::post('/configurations/mediums', [BillRangeController::class, 'saveMediums'])->name('configurations.mediums');
+
     Route::prefix('cc')->name('cc.')->middleware('session.cc_user')->group(function () {
         Route::get('/', [CallCenterDashboardController::class, 'index'])->name('dashboard');
         // allow callers to set their display name on first login

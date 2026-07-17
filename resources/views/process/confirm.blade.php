@@ -42,30 +42,30 @@
                     <form action="{{ route('process.confirm.store') }}" method="post">
                         @csrf
 
-                        <h5 class="mb-3">Select the Connection Mediums</h5>
+                        <h5 class="mb-3">Connection Mediums</h5>
                         <div class="row g-3 mb-4">
                             <div class="col-12">
                                 <div class="d-flex flex-wrap gap-4">
                                     <div class="form-check">
-                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_ftth" name="mediums[]" value="FTTH" {{ is_array(old('mediums')) ? (in_array('FTTH', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_ftth" name="mediums[]" value="FTTH" {{ in_array('FTTH', $activeMediums) ? 'checked' : '' }} disabled>
                                         <label class="form-check-label" for="medium_ftth">
                                             FTTH
                                         </label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_copper" name="mediums[]" value="COPPER" {{ is_array(old('mediums')) ? (in_array('COPPER', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_copper" name="mediums[]" value="COPPER" {{ in_array('COPPER', $activeMediums) ? 'checked' : '' }} disabled>
                                         <label class="form-check-label" for="medium_copper">
                                             Copper
                                         </label>
                                     </div>
                                     <div class="form-check">
-                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_lte" name="mediums[]" value="LTE" {{ is_array(old('mediums')) ? (in_array('LTE', old('mediums')) ? 'checked' : '') : 'checked' }}>
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_lte" name="mediums[]" value="LTE" {{ in_array('LTE', $activeMediums) ? 'checked' : '' }} disabled>
                                         <label class="form-check-label" for="medium_lte">
                                             LTE
                                         </label>
                                     </div>
                                 </div>
-                                <div class="form-text text-muted mt-2">Choose which communication mediums should remain active for Call Center and Regional Billing assignments. At least one must be selected.</div>
+                                <div class="form-text text-muted mt-2">These connection mediums are configured by the Administrator and are read-only here.</div>
                             </div>
                         </div>
 
@@ -113,33 +113,7 @@
                     </form>
 
                     <script nonce="{{ $cspNonce ?? '' }}">
-                        document.addEventListener('DOMContentLoaded', function() {
-                            const checkboxes = document.querySelectorAll('.medium-checkbox');
-                            const submitBtn = document.getElementById('confirm-submit-btn');
-                            const form = document.querySelector('form[action*="process.confirm.store"]');
-
-                            function updateBtnState() {
-                                const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-                                submitBtn.disabled = !anyChecked;
-                            }
-
-                            checkboxes.forEach(cb => {
-                                cb.addEventListener('change', updateBtnState);
-                            });
-
-                            if (form) {
-                                form.addEventListener('submit', function(event) {
-                                    const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-                                    if (!anyChecked) {
-                                        event.preventDefault();
-                                        alert('Please select at least one communication medium.');
-                                    }
-                                });
-                            }
-
-                            // Initial check
-                            updateBtnState();
-                        });
+                        // Connection mediums are configured in the Admin settings
                     </script>
                 </div>
             </div>

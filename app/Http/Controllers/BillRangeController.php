@@ -154,4 +154,54 @@ class BillRangeController extends Controller
             ->route('admin.config', ['tab' => $request->input('tab', 'bill-arears-quota')])
             ->with('success', 'staff saved successfully.');
     }
+
+    public function saveMediums(Request $request)
+    {
+        $incomingFields = $request->validate([
+            'mediums' => 'required|array|min:1',
+            'mediums.*' => 'in:FTTH,COPPER,LTE',
+        ]);
+
+        $selectedMediums = $incomingFields['mediums'];
+
+        $userId = auth()->id() ?: $request->session()->get('user.id');
+        if (!$userId) {
+            return redirect()->route('login')->withErrors(['auth' => 'You must be logged in to perform this action.']);
+        }
+
+        $previous = Configurations::whereIn('config_name', ['medium_ftth', 'medium_copper', 'medium_lte'])->get()->keyBy('config_name');
+
+        $mediumKeys = [
+            'FTTH' => 'medium_ftth',
+            'COPPER' => 'medium_copper',
+            'LTE' => 'medium_lte',
+        ];
+
+        try {
+            foreach ($mediumKeys as $mediumName => $configKey) {
+                $newValue = in_array($mediumName, $selectedMediums, true) ? 1 : 0;
+                $config = Configurations::updateOrCreate(
+                    ['config_name' => $configKey],
+                    ['value' => $newValue, 'changedby_id' => $userId]
+                );
+
+                $oldValue = $previous->get($configKey) ? (string) $previous->get($configKey)->value : null;
+                if ($oldValue !== (string) $newValue) {
+                    ConfigurationChange::create([
+                        'configuration_id' => $config->id,
+                        'config_key' => $configKey,
+                        'old_value' => $oldValue,
+                        'new_value' => (string) $newValue,
+                        'user_id' => $userId,
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            logger()->error('Failed to record connection mediums change: ' . $e->getMessage());
+        }
+
+        return redirect()
+            ->route('admin.config', ['tab' => $request->input('tab', 'connection-mediums')])
+            ->with('success', 'Connection mediums saved successfully.');
+    }
 }

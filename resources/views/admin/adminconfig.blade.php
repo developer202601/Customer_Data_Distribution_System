@@ -158,7 +158,7 @@
 
                             <div class="user-account-panel">
                                 <div class="user-account-add">
-                                    <input type="text" id="user-account-input" class="user-acc-input admin-config-input" placeholder="Enter 6-digit ID" inputmode="numeric" autocomplete="off" />
+                                    <input type="text" id="user-account-input" class="user-acc-input admin-config-input" placeholder="Enter 6-digit ID" inputmode="numeric" autocomplete="off" maxlength="6" />
                                     <button type="button" class="btn btn-primary user-account-add-btn">Add</button>
                                 </div>
 
@@ -410,6 +410,10 @@
         box-shadow: var(--shadow-soft);
     }
 
+    .admin-config-form[data-config-block="user-account"] {
+        width: min(650px, 100%);
+    }
+
     .admin-config-visual-panel {
         background-color: transparent;
         color: var(--text-primary);
@@ -488,17 +492,16 @@
     .user-account-add {
         display: flex;
         gap: 12px;
-        justify-content: flex-end;
         align-items: center;
-        margin-bottom: 12px;
-        margin-right: 70px;
+        margin-bottom: 16px;
+        width: 100%;
     }
 
     .user-account-add input {
-        padding: 8px 10px;
+        flex: 1;
+        padding: 8px 16px;
         border: 1px solid var(--surface-border);
         border-radius: 6px;
-        min-width: 220px;
         background: var(--surface-card);
         color: var(--text-primary);
     }
@@ -849,6 +852,12 @@
                     '<button type="button" class="btn btn-sm btn-outline-danger rounded-pill user-account-item-remove">Delete</button>' +
                     '</div>';
                 return item;
+            }
+
+            if (input) {
+                input.addEventListener('input', function() {
+                    this.value = this.value.replace(/[^0-9]/g, '');
+                });
             }
 
             addBtn.addEventListener('click', function() {

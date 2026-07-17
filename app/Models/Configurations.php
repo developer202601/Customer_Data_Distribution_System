@@ -14,6 +14,8 @@ class Configurations extends Model
 
     protected $table = 'configurations';
 
+    const CREATED_AT = null;
+
     protected $fillable = [
         'config_name',
         'value',

@@ -203,10 +203,10 @@ class ReportController extends Controller
                 if ($gateUser) {
                     $enabledAt = $gateUser->enable_regional_review_enabled_at;
                     if ($enabledAt && $report->created_at && $report->created_at->greaterThanOrEqualTo($enabledAt)) {
-                        // Check if the report has been passed for this region
-                        return CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+                        // Check if the report has been passed for this specific RTOM
+                        return \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
                             ->whereRaw('LOWER(TRIM(region_name)) = ?', [strtolower(trim($region))])
-                            ->whereNotNull('reviewed_at')
+                            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
                             ->exists();
                     }
                 }
@@ -286,13 +286,13 @@ class ReportController extends Controller
         if ($gateUser) {
             $enabledAt = $gateUser->enable_regional_review_enabled_at;
             if ($enabledAt && $report->created_at && $report->created_at->greaterThanOrEqualTo($enabledAt)) {
-                // Check if the report has been passed for this region
-                $passed = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+                // Check if the report has been passed for this specific RTOM
+                $passed = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
                     ->whereRaw('LOWER(TRIM(region_name)) = ?', [strtolower(trim($region))])
-                    ->whereNotNull('reviewed_at')
+                    ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtom))])
                     ->exists();
                 if (!$passed) {
-                    abort(403, 'This report is currently pending regional admin review and has not been passed to RTO admins yet.');
+                    abort(403, 'This report is currently pending regional admin review and has not been passed to your RTOM yet.');
                 }
             }
         }
@@ -584,7 +584,50 @@ class ReportController extends Controller
             }
         }
 
+        $rtomsWithDetails = [];
+        if ($selectedReport && isset($regionRowIds) && !empty($regionRowIds)) {
+            // Get unique RTOMs and their record counts for this region in this report
+            $rtomCounts = MasterDatasetRow::whereIn('id', $regionRowIds)
+                ->whereNotNull('rtom')
+                ->where('rtom', '<>', '')
+                ->select('rtom', DB::raw('count(*) as count'))
+                ->groupBy('rtom')
+                ->pluck('count', 'rtom')
+                ->all();
+
+            // Fetch existing passes for these RTOMs
+            $rtomPasses = \App\Models\CallCenterReportRtomPass::with('passedBy')
+                ->where('call_center_report_id', $selectedReport->id)
+                ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+                ->get()
+                ->keyBy(fn($p) => strtolower(trim($p->rtom)));
+
+            foreach ($rtomCounts as $rtomName => $count) {
+                $passRecord = $rtomPasses->get(strtolower(trim($rtomName)));
+                $rtomsWithDetails[] = [
+                    'name' => $rtomName,
+                    'count' => $count,
+                    'is_passed' => $passRecord !== null,
+                    'passed_at' => $passRecord?->passed_at,
+                    'passed_by' => $passRecord?->passedBy?->username ?? $passRecord?->passedBy?->name ?? 'System',
+                ];
+            }
+
+            // Sort RTOMs alphabetically
+            usort($rtomsWithDetails, fn($a, $b) => strcmp($a['name'], $b['name']));
+        }
+
+        $passedRtomNames = [];
+        if (!empty($rtomsWithDetails)) {
+            foreach ($rtomsWithDetails as $rwd) {
+                if ($rwd['is_passed']) {
+                    $passedRtomNames[] = strtolower(trim($rwd['name']));
+                }
+            }
+        }
+
         if ($request->ajax() || $request->wantsJson()) {
+            $canUnlockReview = $this->isRegionAdmin($assignment);
             $tableHtml = view('regionalbilling.reports._review_table', [
                 'selectedReport' => $selectedReport,
                 'rows' => $reportRows,
@@ -592,6 +635,9 @@ class ReportController extends Controller
                 'showHiddenOnly' => $showHiddenOnly,
                 'isLocked' => $isLocked,
                 'search' => $search,
+                'passedRtomNames' => $passedRtomNames,
+                'rtomsWithDetails' => $rtomsWithDetails,
+                'canUnlockReview' => $canUnlockReview,
             ])->render();
 
             return response()->json([
@@ -618,6 +664,8 @@ class ReportController extends Controller
             'counts' => $counts,
             'reviewRecord' => $reviewRecord,
             'canUnlockReview' => $canUnlockReview,
+            'rtomsWithDetails' => $rtomsWithDetails,
+            'passedRtomNames' => $passedRtomNames,
         ]);
     }
 
@@ -682,7 +730,25 @@ class ReportController extends Controller
             ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
             ->first();
         if ($this->isReviewLocked($reviewRecord)) {
+            // If the whole region is locked, block
             return $this->respondError($request, 'This review is already passed and locked.', 423);
+        }
+
+        // Get passed RTOMs for this report and region
+        $passedRtoms = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->pluck('rtom')
+            ->map(fn($r) => strtolower(trim($r)))
+            ->all();
+
+        if (!empty($passedRtoms)) {
+            // Check if any of the regionScopedIds belong to a passed RTOM
+            $hasPassedRtomRows = MasterDatasetRow::whereIn('id', $regionScopedIds)
+                ->whereIn(DB::raw('LOWER(TRIM(rtom))'), $passedRtoms)
+                ->exists();
+            if ($hasPassedRtomRows) {
+                return $respondError('Some selected rows belong to RTOMs that have already been passed and locked.', 423);
+            }
         }
 
         $draftHiddenIds = $this->getDraftHiddenRowIds($report->id, $normalizedRegion);
@@ -937,6 +1003,12 @@ class ReportController extends Controller
         if (!$this->isRegionAdmin($assignment)) {
             abort(403, 'Only region admins can pass reports for regional review.');
         }
+
+        $rtomInput = trim((string) $request->input('rtom'));
+        if ($rtomInput === '') {
+            return redirect()->route('rb.reports', ['report' => $reportId])
+                ->withErrors(['review' => 'RTOM is required to pass records.']);
+        }
         
         $region = $assignment;
         $normalizedRegion = $this->normalizeRegionName($region);
@@ -955,40 +1027,47 @@ class ReportController extends Controller
                 ->withErrors(['review' => 'This report was generated before Regional Review Gate was enabled and cannot be reviewed.']);
         }
 
-        $existingReview = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+        // Check if this specific RTOM has already been passed
+        $existingPass = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
             ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtomInput)])
             ->first();
-        if (! empty($existingReview?->reviewed_at)) {
+        if ($existingPass) {
             return redirect()->route('rb.reports', ['report' => $report->id])
-                ->withErrors(['review' => 'This report has already been passed for your region and cannot be changed.']);
+                ->withErrors(['review' => "Records for RTOM {$rtomInput} have already been passed and cannot be changed."]);
         }
 
         $sessionUserId = (int) (session('user.id') ?? session('user')['id'] ?? 0);
         $reportRowIds = collect($report->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
-        $regionReportRowIds = empty($reportRowIds)
+        
+        // Find row IDs belonging to this region AND this specific RTOM
+        $rtomRowIds = empty($reportRowIds)
             ? []
             : MasterDatasetRow::whereIn('id', $reportRowIds)
                 ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion])
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtomInput)])
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
                 ->values()
                 ->all();
 
-        $draftHiddenIds = array_values(array_intersect(
-            $this->getDraftHiddenRowIds($report->id, $normalizedRegion),
-            $regionReportRowIds
-        ));
+        $draftHiddenIds = $this->getDraftHiddenRowIds($report->id, $normalizedRegion);
+        
+        // Only finalize hidden rows that belong to this RTOM
+        $hiddenIdsToCommit = array_values(array_intersect($draftHiddenIds, $rtomRowIds));
 
-        DB::transaction(function () use ($report, $region, $normalizedRegion, $sessionUserId, $regionReportRowIds, $draftHiddenIds) {
-            if (! empty($regionReportRowIds)) {
+        DB::transaction(function () use ($report, $region, $normalizedRegion, $sessionUserId, $rtomRowIds, $hiddenIdsToCommit, $rtomInput) {
+            // Delete existing committed exclusions for this RTOM
+            if (! empty($rtomRowIds)) {
                 CallCenterReportHiddenRow::where('call_center_report_id', $report->id)
                     ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
-                    ->whereIn('master_dataset_row_id', $regionReportRowIds)
+                    ->whereIn('master_dataset_row_id', $rtomRowIds)
                     ->delete();
             }
 
             $now = now();
-            foreach ($draftHiddenIds as $rowId) {
+            // Commit new exclusions for this RTOM
+            foreach ($hiddenIdsToCommit as $rowId) {
                 CallCenterReportHiddenRow::create([
                     'call_center_report_id' => $report->id,
                     'report_type' => CallCenterReport::REPORT_TYPE_REGIONAL_BILLING,
@@ -998,7 +1077,7 @@ class ReportController extends Controller
                 ]);
             }
 
-            if (! empty($draftHiddenIds)) {
+            if (! empty($hiddenIdsToCommit)) {
                 $auditRows = array_map(function (int $rowId) use ($report, $sessionUserId, $now) {
                     return [
                         'call_center_report_id' => $report->id,
@@ -1010,30 +1089,38 @@ class ReportController extends Controller
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
-                }, $draftHiddenIds);
+                }, $hiddenIdsToCommit);
                 DB::table('call_center_report_row_actions')->insert($auditRows);
             }
 
-            $review = CallCenterReportRegionReview::firstOrNew([
+            // Create the RTOM pass record
+            \App\Models\CallCenterReportRtomPass::create([
+                'call_center_report_id' => $report->id,
+                'region_name' => $region,
+                'rtom' => $rtomInput,
+                'passed_by_user_id' => $sessionUserId > 0 ? $sessionUserId : null,
+                'passed_at' => $now,
+            ]);
+
+            // Create a general region review record if it doesn't exist, to keep it compatible with general queries
+            $review = CallCenterReportRegionReview::firstOrCreate([
                 'call_center_report_id' => $report->id,
                 'region_name' => $region,
             ]);
-
             $review->report_type = CallCenterReport::REPORT_TYPE_REGIONAL_BILLING;
             $review->reviewed_by_user_id = $sessionUserId > 0 ? $sessionUserId : null;
             $review->reviewed_at = $now;
             $review->save();
-
-            if ($this->normalizeRegionName((string) $review->region_name) !== $normalizedRegion) {
-                $review->region_name = $region;
-                $review->save();
-            }
         });
 
-        $this->clearDraftHiddenRowIds($report->id, $normalizedRegion);
+        // Remove these committed row IDs from the draft cache
+        if (!empty($rtomRowIds)) {
+            $remainingDraftHiddenIds = array_values(array_diff($draftHiddenIds, $rtomRowIds));
+            $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $remainingDraftHiddenIds);
+        }
 
         return redirect()->route('rb.reports', ['report' => $report->id])
-            ->with('status', 'Region review passed and locked. Report can now be handled by RTO admins.');
+            ->with('status', "Records for RTOM " . strtoupper($rtomInput) . " passed successfully.");
     }
 
     public function unlockReview(Request $request, int $reportId): RedirectResponse|JsonResponse
@@ -1043,6 +1130,12 @@ class ReportController extends Controller
 
         if (!$this->isRegionAdmin($assignment)) {
             abort(403, 'Only region admins can unlock reviews.');
+        }
+
+        $rtomInput = trim((string) $request->input('rtom'));
+        if ($rtomInput === '') {
+            return redirect()->route('rb.reports', ['report' => $reportId])
+                ->withErrors(['review' => 'RTOM is required to unlock records.']);
         }
 
         $region = $assignment;
@@ -1060,32 +1153,60 @@ class ReportController extends Controller
             return $this->respondError($request, 'This report was generated before Regional Review Gate was enabled and cannot be reviewed.');
         }
 
-        $reviewRecord = CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+        // Delete the pass record
+        \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
             ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
-            ->first();
+            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtomInput)])
+            ->delete();
 
-        if (! $this->isReviewLocked($reviewRecord)) {
-            return $this->respondError($request, 'Review is not locked. No unlock required.');
-        }
+        // Get committed exclusions for this RTOM
+        $reportRowIds = collect($report->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
+        $rtomRowIds = empty($reportRowIds)
+            ? []
+            : MasterDatasetRow::whereIn('id', $reportRowIds)
+                ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion])
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtomInput)])
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
 
-        $hiddenRowIds = CallCenterReportHiddenRow::where('call_center_report_id', $report->id)
+        $committedHiddenIds = CallCenterReportHiddenRow::where('call_center_report_id', $report->id)
             ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+            ->whereIn('master_dataset_row_id', $rtomRowIds)
             ->pluck('master_dataset_row_id')
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $hiddenRowIds);
+        // Move them back to draft cache
+        $draftHiddenIds = $this->getDraftHiddenRowIds($report->id, $normalizedRegion);
+        $newDraftHiddenIds = array_values(array_unique(array_merge($draftHiddenIds, $committedHiddenIds)));
+        $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $newDraftHiddenIds);
 
-        $reviewRecord->reviewed_at = null;
-        $reviewRecord->reviewed_by_user_id = null;
-        $reviewRecord->save();
+        // Delete from database committed table
+        if (!empty($committedHiddenIds)) {
+            CallCenterReportHiddenRow::where('call_center_report_id', $report->id)
+                ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+                ->whereIn('master_dataset_row_id', $committedHiddenIds)
+                ->delete();
+        }
+
+        // Also check if any RTOMs are still passed. If none are, delete the regional review record
+        $anyPassed = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->exists();
+        if (!$anyPassed) {
+            CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+                ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+                ->delete();
+        }
 
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['message' => 'Review unlocked. Hidden rows can now be managed again.']);
+            return response()->json(['message' => 'Review unlocked for RTOM ' . strtoupper($rtomInput)]);
         }
 
         return redirect()->route('rb.reports', ['report' => $report->id])
-            ->with('status', 'Review unlocked. Hidden rows can now be managed again.');
+            ->with('status', 'Review unlocked for RTOM ' . strtoupper($rtomInput));
     }
 
     public function getAgentDetails(Request $request)

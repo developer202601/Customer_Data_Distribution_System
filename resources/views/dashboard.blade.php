@@ -37,6 +37,14 @@
                 </div>
             </a>
         </div>
+        <div class="col-lg-6 offset-lg-3">
+            <a href="{{ route('payment.upload') }}" class="dashboard-card h-100" role="button" aria-label="Open payment files upload page">
+                <div class="dashboard-card-body">
+                    <h2 class="dashboard-card-title">Payment Files Upload</h2>
+                    <p class="dashboard-card-description">Upload the monthly payment files and review the import statistics.</p>
+                </div>
+            </a>
+        </div>
     </div>
 </div>
 @endsection

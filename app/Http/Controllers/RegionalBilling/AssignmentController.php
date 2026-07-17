@@ -876,14 +876,14 @@ class AssignmentController extends Controller
         if ($gateUser) {
             $enabledAt = $gateUser->enable_regional_review_enabled_at;
             if ($enabledAt && $report->created_at && $report->created_at->greaterThanOrEqualTo($enabledAt)) {
-                // Check if the report has been passed for this region
-                $passed = \App\Models\CallCenterReportRegionReview::where('call_center_report_id', $report->id)
+                // Check if the report has been passed for this RTOM
+                $passed = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
                     ->whereRaw('LOWER(TRIM(region_name)) = ?', [strtolower(trim($region))])
-                    ->whereNotNull('reviewed_at')
+                    ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtom))])
                     ->exists();
                 if (!$passed) {
                     return Redirect::route('rb.reports.summary', ['report' => $report->id])
-                        ->withErrors(['distribute' => 'Distribution is blocked. The Regional Admin has not passed the report for your region yet.']);
+                        ->withErrors(['distribute' => 'Distribution is blocked. The Regional Admin has not passed the report for your RTOM yet.']);
                 }
             }
         }

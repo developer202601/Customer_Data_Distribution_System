@@ -269,9 +269,9 @@ class MasterDatasetUploadController extends Controller
 
             return response()->json([
                 'status' => 'ok',
-                'message' => 'Master dataset uploaded. Exclusions skipped. Proceeding to confirmation.',
+                'message' => 'Master dataset uploaded. Processing started.',
                 'process_id' => $process->id,
-                'redirect_url' => route('process.confirm.create'),
+                'redirect_url' => route('process.assignments.report', ['process' => $process->id]),
             ]);
         } catch (ValidationException $exception) {
             throw $exception;
@@ -350,7 +350,7 @@ class MasterDatasetUploadController extends Controller
         $request->session()->put('master.dataset.process_id', $process->id);
 
         return redirect()
-            ->route('process.confirm.create')
-            ->with('status', 'Master dataset uploaded. Exclusions skipped. Proceeding to confirmation.');
+            ->route('process.assignments.report', ['process' => $process->id])
+            ->with('status', 'Master dataset uploaded. Processing started.');
     }
 }

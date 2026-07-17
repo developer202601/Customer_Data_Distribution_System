@@ -21,7 +21,8 @@
     </div>
 
     <div class="dashboard-grid row g-4">
-        <div class="col-lg-6">
+        @if(session('user.is_admin'))
+        <div class="col-lg-6 offset-lg-3">
             <a href="{{ route('process.assignments.reports') }}" class="dashboard-card h-100" role="button" aria-label="Open past reports">
                 <div class="dashboard-card-body">
                     <h2 class="dashboard-card-title">Past Reports</h2>
@@ -29,6 +30,7 @@
                 </div>
             </a>
         </div>
+        @else
         <div class="col-lg-6">
             <a href="{{ route('master.upload.create') }}" class="dashboard-card h-100" role="button" aria-label="Start master dataset upload">
                 <div class="dashboard-card-body">
@@ -37,7 +39,7 @@
                 </div>
             </a>
         </div>
-        <div class="col-lg-6 offset-lg-3">
+        <div class="col-lg-6">
             <a href="{{ route('payment.upload') }}" class="dashboard-card h-100" role="button" aria-label="Open payment files upload page">
                 <div class="dashboard-card-body">
                     <h2 class="dashboard-card-title">Payment Files Upload</h2>
@@ -45,6 +47,7 @@
                 </div>
             </a>
         </div>
+        @endif
     </div>
 </div>
 @endsection

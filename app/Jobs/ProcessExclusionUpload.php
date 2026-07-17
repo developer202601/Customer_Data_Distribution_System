@@ -109,6 +109,90 @@ class ProcessExclusionUpload implements ShouldQueue
                 ]);
                 $workflowService->finalizeWithoutExclusions($process, $this->userContext);
             }
+
+            // Automate processing: bypass confirmation page and apply configurations automatically
+            $mediumConfigs = \App\Models\Configurations::whereIn('config_name', ['medium_ftth', 'medium_copper', 'medium_lte'])
+                ->get()
+                ->keyBy('config_name');
+
+            $activeMediums = [];
+            if (isset($mediumConfigs['medium_ftth']) ? $mediumConfigs['medium_ftth']->value == 1 : true) {
+                $activeMediums[] = 'FTTH';
+            }
+            if (isset($mediumConfigs['medium_copper']) ? $mediumConfigs['medium_copper']->value == 1 : false) {
+                $activeMediums[] = 'COPPER';
+            }
+            if (isset($mediumConfigs['medium_lte']) ? $mediumConfigs['medium_lte']->value == 1 : false) {
+                $activeMediums[] = 'LTE';
+            }
+
+            if (empty($activeMediums)) {
+                $activeMediums = ['FTTH'];
+            }
+
+            $configuration = app(\App\Support\MasterDatasetAssignmentConfiguration::class);
+            $configOverrides = [
+                'upper_range' => $configuration->getRetailUpperBound(),
+                'lower_range' => $configuration->getRetailLowerBound(),
+                'call_center_staff_quota' => $configuration->getCallCenterStaffQuota(),
+                'call_center_quota' => $configuration->getCallCenterQuota(),
+                'staff_quota' => $configuration->getStaffQuota(),
+                'mediums' => $activeMediums,
+            ];
+
+            $computeMediumCount = function ($processId, $medium) {
+                $query = \App\Models\MasterDatasetRow::query()
+                    ->where('process_id', $processId)
+                    ->where('excluded', false)
+                    ->where(function ($q) {
+                        $q->whereRaw('LOWER(slt_gl_sub_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness'])
+                          ->orWhereIn('customer_segment', ['11', '35'])
+                          ->orWhereRaw('LOWER(customer_segment) IN (?, ?, ?)', ['retail', 'micro business', 'microbusiness']);
+                    });
+
+                if (strtolower($medium) === 'ftth') {
+                    $query->whereRaw('LOWER(medium) IN (?, ?)', ['ftth', 'fiber']);
+                } else {
+                    $query->whereRaw('LOWER(medium) = ?', [strtolower($medium)]);
+                }
+
+                return $query->count();
+            };
+
+            $totalSelectedCount = 0;
+            foreach ($activeMediums as $m) {
+                $totalSelectedCount += $computeMediumCount($process->id, $m);
+            }
+
+            $normalize = function (array $values): array {
+                return [
+                    'upper_range' => (int) ($values['upper_range'] ?? 0),
+                    'lower_range' => (int) ($values['lower_range'] ?? 0),
+                    'call_center_staff_quota' => (int) ($values['call_center_staff_quota'] ?? 0),
+                    'call_center_quota' => (int) ($values['call_center_quota'] ?? 0),
+                    'staff_quota' => (int) ($values['staff_quota'] ?? 0),
+                    'mediums' => $values['mediums'] ?? ['FTTH', 'COPPER', 'LTE'],
+                ];
+            };
+
+            $defaultsNormalized = $normalize($configOverrides);
+            $defaultsSnapshot = $defaultsNormalized;
+            $defaultsSnapshot['mediums'] = ['FTTH', 'COPPER', 'LTE'];
+
+            $process->update([
+                'assignment_config_source' => 'default',
+                'assignment_config_overrides' => $defaultsNormalized,
+                'assignment_config_default_snapshot' => $defaultsSnapshot,
+                'assignment_config_ftth_count' => $totalSelectedCount,
+                'assignment_config_set_by_user_id' => $this->userContext['id'] ?? null,
+                'assignment_config_set_at' => now(),
+            ]);
+
+            $process->refresh();
+            $workflowService->finalizeAssignment($process, $configOverrides);
+
+            $process = MasterDatasetProcessStatus::set($process->fresh(), MasterDatasetProcessStatus::EXPORTS_PENDING);
+            $exportCoordinator->ensureFresh($process, $this->userContext);
         } catch (ProcessCanceledException $exception) {
             Log::info('Exclusion job canceled by user.', [
                 'process_id' => $this->processId,

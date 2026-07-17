@@ -24,7 +24,7 @@ class ProcessStatusController extends Controller
         [$payload, $statusCode] = $this->buildStatusPayload($request);
 
         if (($payload['status'] ?? null) === 'waiting_confirmation' && ! $request->expectsJson()) {
-            return redirect()->route('process.confirm.create');
+            return redirect()->route('process.running.show');
         }
 
         return response()->json($payload, $statusCode);
@@ -133,16 +133,15 @@ class ProcessStatusController extends Controller
             $token = (string) ($process->token ?? '');
             [$processedRows, $totalRows] = $this->resolveRowProgress($token);
 
-            $message = 'Waiting for configuration confirmation...';
+            $message = 'Processing assignments...';
             if ($processedRows !== null && $totalRows !== null && $totalRows > 0) {
-                $message = sprintf('Preparing confirmation... (%d/%d rows checked)', $processedRows, $totalRows);
+                $message = sprintf('Processing assignments... (%d/%d rows checked)', $processedRows, $totalRows);
             }
 
             return [[
                 'status' => 'waiting_confirmation',
-                'progress' => 50,
+                'progress' => 75,
                 'message' => $message,
-                'redirect_url' => route('process.confirm.create'),
                 'last_updated_at' => $process->updated_at?->toIso8601String(),
                 'processed_rows' => $processedRows,
                 'total_rows' => $totalRows,

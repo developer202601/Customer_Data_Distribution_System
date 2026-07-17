@@ -41,10 +41,8 @@ class AssignmentController extends Controller
             return $process;
         }
 
-        // Enforce the new two-step workflow: do not show assignments until the
-        // user has confirmed configuration and processing has completed.
         if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
-            return redirect()->route('process.confirm.create');
+            return redirect()->route('process.running.show');
         }
 
         if ($process->status === MasterDatasetProcessStatus::CANCELED) {
@@ -415,10 +413,6 @@ class AssignmentController extends Controller
     {
         session(['master.dataset.process_id' => $process->id]);
 
-        if ($process->status === MasterDatasetProcessStatus::AWAITING_EXCLUSIONS) {
-            return redirect()->route('process.exclusions.create');
-        }
-
         return redirect()->route('process.assignments.index');
     }
 
@@ -433,12 +427,7 @@ class AssignmentController extends Controller
             ], 409);
         }
 
-        if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
-            return response()->json([
-                'status' => MasterDatasetProcessStatus::WAITING_CONFIRMATION,
-                'redirect_url' => route('process.confirm.create'),
-            ], 409);
-        }
+
 
         if (! in_array($process->status, [
             MasterDatasetProcessStatus::EXPORTS_PENDING,
@@ -467,7 +456,7 @@ class AssignmentController extends Controller
         }
 
         if ($process->status === MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
-            return redirect()->route('process.confirm.create');
+            return redirect()->route('process.running.show');
         }
 
         if ($process->status !== MasterDatasetProcessStatus::READY) {

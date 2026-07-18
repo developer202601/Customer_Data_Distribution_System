@@ -25,7 +25,11 @@
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($dataset['row_count'] ?? 0) }} · Excluded: {{ number_format($dataset['excluded_count'] ?? 0) }}</p>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <a href="#" class="btn btn-outline-secondary" data-loader-off="1" onclick="history.back(); return false;">Back</a>
+                @if(session('user.is_admin'))
+                    <a href="{{ route('process.assignments.reports') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
+                @else
+                    <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary" data-loader-off="1">Return to dashboard</a>
+                @endif
             </div>
         </div>
 
@@ -86,42 +90,30 @@
                             <thead>
                                 <tr>
                                     <th style="width: 240px;">Field</th>
-                                    <th>Default (at run time)</th>
-                                    <th>Used for this process</th>
-                                    <th style="width: 110px;">Status</th>
+                                    <th class="text-end">Value</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($configRows as $key => $meta)
                                     @php
-                                        $defaultVal = $defaultForCompare[$key] ?? null;
                                         $usedVal = $usedConfig[$key] ?? null;
-                                        $changed = $defaultForCompare ? ((string) (int) $defaultVal !== (string) (int) $usedVal) : null;
                                     @endphp
                                     <tr>
                                         <th>{{ $meta['label'] }}</th>
-                                        <td>{{ $defaultVal === null ? '—' : number_format((int) $defaultVal) }}</td>
-                                        <td>{{ $usedVal === null ? '—' : number_format((int) $usedVal) }}</td>
-                                        <td>
-                                            @if($changed === null)
-                                                <span class="badge text-bg-light">Unknown</span>
-                                            @elseif($changed)
-                                                <span class="badge text-bg-warning">Changed</span>
-                                            @else
-                                                <span class="badge text-bg-secondary">Default</span>
-                                            @endif
-                                        </td>
+                                        <td class="text-end">{{ $usedVal === null ? '—' : number_format((int) $usedVal) }}</td>
                                     </tr>
                                 @endforeach
+                                @php
+                                    $mediums = $usedConfig['mediums'] ?? null;
+                                    $mediumsStr = is_array($mediums) ? implode(', ', $mediums) : (is_string($mediums) ? $mediums : '—');
+                                @endphp
+                                <tr>
+                                    <th>Selected Mediums</th>
+                                    <td class="text-end">{{ $mediumsStr }}</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
-
-                    @if($defaultSnapshot && $defaultConfig && $defaultSnapshot !== $defaultConfig)
-                        <div class="text-muted small mt-2">
-                            Note: admin defaults were changed after this process ran, so "Default (at run time)" may differ from current configuration.
-                        </div>
-                    @endif
                 @else
                     <div class="text-muted mt-3">No configuration audit data recorded for this dataset.</div>
                 @endif

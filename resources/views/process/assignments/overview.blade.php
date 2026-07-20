@@ -25,10 +25,12 @@
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($dataset['row_count'] ?? 0) }} · Excluded: {{ number_format($dataset['excluded_count'] ?? 0) }}</p>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                @if(session('user.is_admin'))
+                @if(session('user.system') === 'cc')
+                    <a href="{{ route('cc.dashboard') }}" class="btn btn-outline-secondary" data-loader-off="1">Return to CC dashboard</a>
+                @elseif(session('user.is_admin'))
                     <a href="{{ route('process.assignments.reports') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
                 @else
-                    <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary" data-loader-off="1">Return to dashboard</a>
+                    <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary" data-loader-off="1">Return to options</a>
                 @endif
             </div>
         </div>

@@ -13,7 +13,7 @@ class AdminController extends Controller
 {
     
 
-    public function config()
+    public function config(Request $request)
     {
         $configs = Configurations::with('editor')
             ->whereIn('config_name', ['upper_range', 'lower_range', 'ccs', 'cc', 's', 'medium_ftth', 'medium_copper', 'medium_lte'])
@@ -24,12 +24,15 @@ class AdminController extends Controller
         $staffUpdated = $this->latestMeta($configs, ['ccs', 'cc', 's']);
         $mediumsUpdated = $this->latestMeta($configs, ['medium_ftth', 'medium_copper', 'medium_lte']);
 
-        // Fetch master system users (excluding call center users)
+        $adminId = auth()->id() ?: $request->session()->get('user.id');
+
+        // Fetch master system users created by this admin account
         $users = User::where(function ($q) {
-                $q->where('system', '!=', 'cc')
+                 $q->where('system', 'master')
                     ->orWhereNull('system');
             })
             ->where('admin_prev', false)
+            ->where('supervisor', $adminId)
             ->orderBy('username')
             ->get();
 
@@ -144,6 +147,8 @@ class AdminController extends Controller
             ],
         ]);
 
+        $adminId = auth()->id() ?: $request->session()->get('user.id');
+
         $user = User::create([
             'username' => $validated['username'],
             'name' => null,
@@ -153,6 +158,7 @@ class AdminController extends Controller
             'fixed' => false,
             'status' => true,
             'created_at' => now(),
+            'supervisor' => $adminId,
         ]);
 
         $user->setAttribute('has_generated_reports', false);

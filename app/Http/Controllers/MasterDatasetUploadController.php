@@ -268,10 +268,15 @@ class MasterDatasetUploadController extends Controller
             $request->session()->put('master.dataset.process_id', $process->id);
             $request->session()->forget('master.dataset.staged_exclusions');
 
+            $request->session()->flash('status', 'Master dataset file uploaded successfully. Passed to download section for processing.');
+
             return response()->json([
-                'status' => 'ok','message' => 'Master dataset uploaded. Continue by adding exclusion files to begin validation.',
+                'status' => 'ok',
+                'message' => 'Master dataset file uploaded successfully. Passed to download section for processing.',
                 'process_id' => $process->id,
-                'redirect_url' => route('process.exclusions.create'),
+                'redirect_url' => route('dashboard'),
+                // Previous redirect:
+                // 'redirect_url' => route('process.exclusions.create'),
             ]);
         } catch (ValidationException $exception) {
             throw $exception;
@@ -347,9 +352,15 @@ class MasterDatasetUploadController extends Controller
 
         $request->session()->put('master.dataset.process_id', $process->id);
 
+        $request->session()->flash('status', 'Master dataset file uploaded successfully. Passed to download section for processing.');
+
+        return redirect()
+            ->route('dashboard');
+        /*
         return redirect()
             ->route('process.exclusions.create')
             ->with('status', 'Master dataset uploaded. Continue by adding exclusion files to begin validation.')
             ->with('hide_dataset_info', true);
+        */
     }
 }

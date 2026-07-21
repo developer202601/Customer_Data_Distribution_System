@@ -423,7 +423,19 @@ class AssignmentController extends Controller
     {
         session(['master.dataset.process_id' => $process->id]);
 
-        if ($process->status === MasterDatasetProcessStatus::AWAITING_EXCLUSIONS) {
+        $isRawUpload = in_array(
+            (string) ($process->status ?? ''),
+            [
+                MasterDatasetProcessStatus::WAITING_CONFIRMATION,
+                MasterDatasetProcessStatus::AWAITING_EXCLUSIONS,
+                'waiting_confirmation',
+                'awaiting_confirmation',
+                'staged',
+            ],
+            true
+        );
+
+        if ($isRawUpload) {
             return redirect()->route('process.exclusions.create');
         }
 

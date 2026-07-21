@@ -72,7 +72,16 @@ class ProcessConfirmController extends Controller
             return redirect()->route('process.running.show');
         }
 
-        if ($process->status !== MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+        $validConfirmationStatuses = [
+            MasterDatasetProcessStatus::WAITING_CONFIRMATION,
+            'waiting_confirmation',
+            'awaiting_confirmation',
+            'staged',
+            'records_inserted',
+            'exclusions_applied',
+        ];
+
+        if (! in_array($process->status, $validConfirmationStatuses, true)) {
             // While the exclusions job is still running, show an HTML waiting page.
             return view('process.confirm-wait', [
                 'process' => $process,
@@ -147,7 +156,16 @@ class ProcessConfirmController extends Controller
         $processId = $request->session()->get('master.dataset.process_id');
         $process = MasterDatasetProcess::find($processId);
 
-        if (! $process || $process->status !== MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+        $validConfirmationStatuses = [
+            MasterDatasetProcessStatus::WAITING_CONFIRMATION,
+            'waiting_confirmation',
+            'awaiting_confirmation',
+            'staged',
+            'records_inserted',
+            'exclusions_applied',
+        ];
+
+        if (! $process || ! in_array($process->status, $validConfirmationStatuses, true)) {
             return redirect()->route('master.upload.create');
         }
 

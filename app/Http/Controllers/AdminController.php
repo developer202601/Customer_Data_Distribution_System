@@ -15,6 +15,14 @@ class AdminController extends Controller
 
     public function config(Request $request)
     {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        $isCc = (string) ($request->session()->get('user.system') ?? '') === 'cc';
+        if (! $isAdmin && ! $isCc) {
+            return redirect()->route('dashboard')->withErrors([
+                'auth' => 'Only administrators can access configurations.',
+            ]);
+        }
+
         $configs = Configurations::with('editor')
             ->whereIn('config_name', ['upper_range', 'lower_range', 'ccs', 'cc', 's', 'medium_ftth', 'medium_copper', 'medium_lte'])
             ->get()

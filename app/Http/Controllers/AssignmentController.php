@@ -204,8 +204,16 @@ class AssignmentController extends Controller
             ->count();
     }
 
-    public function reports(Request $request): View
+    public function reports(Request $request): View|RedirectResponse
     {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        $isCc = (string) ($request->session()->get('user.system') ?? '') === 'cc';
+        if (! $isAdmin && ! $isCc) {
+            return redirect()->route('dashboard')->withErrors([
+                'auth' => 'Only administrators can view past reports.',
+            ]);
+        }
+
         $reportGroups = $this->reportArchiveGroups();
         $monthOptions = $reportGroups->keys();
         $selectedMonth = null;

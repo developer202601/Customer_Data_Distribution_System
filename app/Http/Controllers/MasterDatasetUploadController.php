@@ -68,8 +68,12 @@ class MasterDatasetUploadController extends Controller
         $request->session()->forget('master.dataset.staged_exclusions');
     }
 
-    public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View
+    public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View|RedirectResponse
     {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        if ($isAdmin) {
+            return redirect()->route('process.assignments.reports')->with('status', 'File uploads are reserved for normal users.');
+        }
         $process = null;
         $showProcessBanner = false;
         $failurePayload = null;

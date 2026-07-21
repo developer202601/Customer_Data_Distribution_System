@@ -217,7 +217,8 @@ class SuperAdminController extends Controller
         $selectedRegion = request()->query('region');
         $selectedSystem = request()->query('system');
 
-        $query = User::whereIn('system', ['cc', 'rb']);
+        $query = User::whereIn('system', ['cc', 'rb'])
+            ->where('supervisor', $sessionUser['id'] ?? null);
         if (! $allRegions->isEmpty()) {
             $query->whereIn('assignment', $allRegions->toArray());
         } else {
@@ -262,7 +263,8 @@ class SuperAdminController extends Controller
             ->pluck('region')
             ->values();
 
-        $query = User::whereIn('system', ['cc', 'rb']);
+        $query = User::whereIn('system', ['cc', 'rb'])
+            ->where('supervisor', $sessionUser['id'] ?? null);
         if (! $allRegions->isEmpty()) {
             $query->whereIn('assignment', $allRegions->toArray());
         } else {

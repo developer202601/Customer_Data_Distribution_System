@@ -14,6 +14,8 @@
                     <a class="nav-link{{ $ccRouteName === 'cc.dashboard' ? ' active' : '' }}" href="{{ route('cc.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.dashboard' ? 'page' : '' }}">Overview</a>
                     <a class="nav-link{{ $ccRouteName === 'cc.super.regions' ? ' active' : '' }}" href="{{ route('cc.super.regions') }}" aria-current="{{ $ccRouteName === 'cc.super.regions' ? 'page' : '' }}">Region Management</a>
                     <a class="nav-link{{ $ccRouteName === 'cc.users.index' ? ' active' : '' }}" href="{{ route('cc.users.index') }}" aria-current="{{ $ccRouteName === 'cc.users.index' ? 'page' : '' }}">User Management (Call Center)</a>
+                    <a class="nav-link{{ $ccRouteName === 'process.assignments.reports' ? ' active' : '' }}" href="{{ route('process.assignments.reports') }}" aria-current="{{ $ccRouteName === 'process.assignments.reports' ? 'page' : '' }}">View Reports</a>
+                    <a class="nav-link{{ $ccRouteName === 'admin.config' ? ' active' : '' }}" href="{{ route('admin.config') }}" aria-current="{{ $ccRouteName === 'admin.config' ? 'page' : '' }}">Configurations</a>
                 @elseif(session('user.assignment') && session('user.assignment') !== 'super')
                     @if(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'rtom_'))
                         <a class="nav-link{{ $ccRouteName === 'cc.rtom.dashboard' ? ' active' : '' }}" href="{{ route('cc.rtom.dashboard') }}" aria-current="{{ $ccRouteName === 'cc.rtom.dashboard' ? 'page' : '' }}">RTO Dashboard</a>

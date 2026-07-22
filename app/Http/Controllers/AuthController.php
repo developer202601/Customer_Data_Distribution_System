@@ -155,29 +155,6 @@ class AuthController extends Controller
         if ($assignment === 'super') {
             return 'cc.dashboard';
         }
-
-        // Regional admins go to region dashboard
-        if ($assignment !== '' && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
-            return 'cc.region.dashboard';
-        }
-
-        // RTOM admins go to RTOM assignment management
-        if (str_starts_with($assignment, 'rtom_')) {
-            return 'cc.region.assign.index';
-        }
-
-        // Supervisors go to supervisor dashboard
-        if (str_starts_with($assignment, 'supervisor_')) {
-            return 'cc.supervisor.dashboard';
-        }
-
-        // Regular admins go to user management
-        if ($isAdmin) {
-            return 'cc.users.index';
-        }
-
-        // Regular callers go to assignments
-        return 'cc.assignments.manage';
     }
 
     private function getRBLoginRedirect(array $user): string

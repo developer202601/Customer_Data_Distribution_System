@@ -175,6 +175,8 @@ class ProcessConfirmController extends Controller
             'call_center_staff_quota' => 'required|integer|min:0',
             'call_center_quota' => 'required|integer|min:0',
             'staff_quota' => 'required|integer|min:0',
+            'mediums' => 'sometimes|array',
+            'mediums.*' => 'string|in:FTTH,COPPER,LTE',
         ]);
         
         $userContext = $resolver->resolve($request);
@@ -200,7 +202,15 @@ class ProcessConfirmController extends Controller
             $activeMediums = ['FTTH'];
         }
 
+        $submittedMediums = $request->input('mediums');
+        if (is_array($submittedMediums) && ! empty($submittedMediums)) {
+            $validated['mediums'] = $submittedMediums;
+        } else {
+            $validated['mediums'] = $activeMediums;
+        }
+        /*
         $validated['mediums'] = $activeMediums;
+        */
 
         $defaults = $configuration->toArray();
         $normalize = static function (array $values): array {

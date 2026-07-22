@@ -18,14 +18,17 @@
 @section('content')
 <div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
                 <h1 class="process-preview-title mb-2">Assignments overview</h1>
                 <p class="text-muted mb-1">Choose which allocated dataset you want to review and download. The Retail &amp; Micro Business segments are assigned to calling units while other records are available only to download.</p>
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($dataset['row_count'] ?? 0) }} · Excluded: {{ number_format($dataset['excluded_count'] ?? 0) }}</p>
             </div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2 mt-1">
+                <a href="{{ route('process.assignments.reports') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
+                {{--
                 <a href="#" class="btn btn-outline-secondary" data-loader-off="1" onclick="history.back(); return false;">Back</a>
+                --}}
             </div>
         </div>
 

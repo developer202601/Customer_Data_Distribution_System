@@ -47,25 +47,37 @@
                             <div class="col-12">
                                 <div class="d-flex flex-wrap gap-4">
                                     <div class="form-check">
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_ftth" name="mediums[]" value="FTTH" {{ in_array('FTTH', $activeMediums) ? 'checked' : '' }}>
+                                        {{--
                                         <input class="form-check-input medium-checkbox" type="checkbox" id="medium_ftth" name="mediums[]" value="FTTH" {{ in_array('FTTH', $activeMediums) ? 'checked' : '' }} disabled>
+                                        --}}
                                         <label class="form-check-label" for="medium_ftth">
                                             FTTH
                                         </label>
                                     </div>
                                     <div class="form-check">
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_copper" name="mediums[]" value="COPPER" {{ in_array('COPPER', $activeMediums) ? 'checked' : '' }}>
+                                        {{--
                                         <input class="form-check-input medium-checkbox" type="checkbox" id="medium_copper" name="mediums[]" value="COPPER" {{ in_array('COPPER', $activeMediums) ? 'checked' : '' }} disabled>
+                                        --}}
                                         <label class="form-check-label" for="medium_copper">
                                             Copper
                                         </label>
                                     </div>
                                     <div class="form-check">
+                                        <input class="form-check-input medium-checkbox" type="checkbox" id="medium_lte" name="mediums[]" value="LTE" {{ in_array('LTE', $activeMediums) ? 'checked' : '' }}>
+                                        {{--
                                         <input class="form-check-input medium-checkbox" type="checkbox" id="medium_lte" name="mediums[]" value="LTE" {{ in_array('LTE', $activeMediums) ? 'checked' : '' }} disabled>
+                                        --}}
                                         <label class="form-check-label" for="medium_lte">
                                             LTE
                                         </label>
                                     </div>
                                 </div>
+                                <div class="form-text text-muted mt-2">These connection mediums can be modified by the Administrator for this process run.</div>
+                                {{--
                                 <div class="form-text text-muted mt-2">These connection mediums are configured by the Administrator and are read-only here.</div>
+                                --}}
                             </div>
                         </div>
 

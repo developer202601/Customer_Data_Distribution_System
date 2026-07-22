@@ -268,11 +268,11 @@ class MasterDatasetUploadController extends Controller
             $request->session()->put('master.dataset.process_id', $process->id);
             $request->session()->forget('master.dataset.staged_exclusions');
 
-            $request->session()->flash('status', 'Master dataset file uploaded successfully. Passed to download section for processing.');
+            $request->session()->flash('status', 'Master dataset file uploaded successfully. Passed to Credit Control Section for processing.');
 
             return response()->json([
                 'status' => 'ok',
-                'message' => 'Master dataset file uploaded successfully. Passed to download section for processing.',
+                'message' => 'Master dataset file uploaded successfully. Passed to Credit Control Section for processing.',
                 'process_id' => $process->id,
                 'redirect_url' => route('dashboard'),
                 // Previous redirect:

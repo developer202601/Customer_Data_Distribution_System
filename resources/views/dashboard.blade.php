@@ -35,8 +35,8 @@
         <div class="col-lg-6">
             <a href="{{ route('process.assignments.reports') }}" class="dashboard-card h-100" role="button" aria-label="Open past reports">
                 <div class="dashboard-card-body">
-                    <h2 class="dashboard-card-title">Past Reports</h2>
-                    <p class="dashboard-card-description">Here, you can find past generated reports and download them.</p>
+                    <h2 class="dashboard-card-title">View Reports</h2>
+                    <p class="dashboard-card-description">Here, you can find monthly reports and download them.</p>
                 </div>
             </a>
         </div>

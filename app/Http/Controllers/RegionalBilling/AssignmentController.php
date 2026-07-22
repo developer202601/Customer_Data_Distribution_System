@@ -869,7 +869,7 @@ class AssignmentController extends Controller
         }
 
         $gateUser = User::where('system', 'rb')
-            ->where('assignment', $region)
+            ->whereRaw('LOWER(TRIM(assignment)) = ?', [strtolower(trim($region))])
             ->where('enable_regional_review', 1)
             ->first();
 

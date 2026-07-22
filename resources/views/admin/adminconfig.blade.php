@@ -24,7 +24,8 @@
                     <div class="admin-config-btn-col config-admin-btn">
                         <button type="button" class="admin-config-btn is-active config-side-btn button" data-config-target="latest-bill-range">Bill Value Range</button>
                         <button type="button" class="admin-config-btn button" data-config-target="bill-arears-quota">No Of Accounts</button>
-                        {{-- <button type="button" class="admin-config-btn button" data-config-target="user-account">User Account</button> --}}
+                        <button type="button" class="admin-config-btn button" data-config-target="connection-mediums">Connection Mediums</button>
+                        <button type="button" class="admin-config-btn button" data-config-target="user-account">User Account</button>
                     </div>
                 </div>
 
@@ -103,13 +104,61 @@
                         </div>
                     </form>
 
-                    {{-- <div class="admin-config-form" data-config-block="user-account">
+                    <form action="{{ route('configurations.mediums') }}" method="POST" class="card shadow-sm border-0">
+                        @csrf
+                        @method('post')
+                        <input type="hidden" name="tab" value="connection-mediums" />
+                        <div class="admin-config-form" data-config-block="connection-mediums">
+                            <div class="card-body config-card">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                    <div>
+                                        <p class="admin-config-hint mb-1">Select the active Connection Mediums.</p>
+                                        <p class="text-muted mb-0 small">Current selections load from the database.</p>
+                                        @if(!empty($mediumsUpdated['timestamp']))
+                                            <div class="small text-muted mt-2">
+                                                <div>Last edited: {{ optional($mediumsUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
+                                                <div>By: {{ $mediumsUpdated['editor']->username ?? $mediumsUpdated['editor']->name ?? 'Unknown' }}</div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div class="admin-config-checkboxes flex-column align-items-start gap-2">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="mediums[]" id="admin_medium_ftth" value="FTTH" 
+                                            {{ (isset($configs['medium_ftth']) ? $configs['medium_ftth']->value == 1 : true) ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-semibold" for="admin_medium_ftth">
+                                            FTTH
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="mediums[]" id="admin_medium_copper" value="COPPER" 
+                                            {{ (isset($configs['medium_copper']) ? $configs['medium_copper']->value == 1 : false) ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-semibold" for="admin_medium_copper">
+                                            COPPER
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="mediums[]" id="admin_medium_lte" value="LTE" 
+                                            {{ (isset($configs['medium_lte']) ? $configs['medium_lte']->value == 1 : false) ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-semibold" for="admin_medium_lte">
+                                            LTE
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary px-4 admin-config-save-btn">Save</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="admin-config-form" data-config-block="user-account">
                         <div class="config-card">
                             <p class="admin-config-hint">Here you can change the user account</p>
 
                             <div class="user-account-panel">
                                 <div class="user-account-add">
-                                    <input type="text" id="user-account-input" class="user-acc-input admin-config-input" placeholder="Enter 6-digit ID" inputmode="numeric" autocomplete="off" />
+                                    <input type="text" id="user-account-input" class="user-acc-input admin-config-input" placeholder="Enter 6-digit ID" inputmode="numeric" autocomplete="off" maxlength="6" />
                                     <button type="button" class="btn btn-primary user-account-add-btn">Add</button>
                                 </div>
 
@@ -137,7 +186,7 @@
                             </div>
                         </div>
 
-                    </div> --}}
+                    </div>
 
                 </div>
             </div>
@@ -361,6 +410,10 @@
         box-shadow: var(--shadow-soft);
     }
 
+    .admin-config-form[data-config-block="user-account"] {
+        width: min(650px, 100%);
+    }
+
     .admin-config-visual-panel {
         background-color: transparent;
         color: var(--text-primary);
@@ -439,17 +492,16 @@
     .user-account-add {
         display: flex;
         gap: 12px;
-        justify-content: flex-end;
         align-items: center;
-        margin-bottom: 12px;
-        margin-right: 70px;
+        margin-bottom: 16px;
+        width: 100%;
     }
 
     .user-account-add input {
-        padding: 8px 10px;
+        flex: 1;
+        padding: 8px 16px;
         border: 1px solid var(--surface-border);
         border-radius: 6px;
-        min-width: 220px;
         background: var(--surface-card);
         color: var(--text-primary);
     }
@@ -802,6 +854,12 @@
                 return item;
             }
 
+            if (input) {
+                input.addEventListener('input', function() {
+                    this.value = this.value.replace(/[^0-9]/g, '');
+                });
+            }
+            
             addBtn.addEventListener('click', function() {
                 var val = normalizeUsername(input.value);
                 if (!val) return;

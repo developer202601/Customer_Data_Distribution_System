@@ -30,7 +30,12 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
     Route::get('/master/upload/validation-report/{token}', [MasterValidationReportController::class, 'download'])->name('master.validation.report.download');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
-    Route::get('/payment/upload', function () {return view('process.payment-upload');})->name('payment.upload');
+    Route::get('/payment/upload', function (\Illuminate\Http\Request $request) {
+        if ($request->session()->get('user.is_admin')) {
+            return redirect()->route('process.assignments.reports')->with('status', 'File uploads are reserved for normal users.');
+        }
+        return view('process.payment-upload');
+    })->name('payment.upload');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
     Route::get('/process/upload/progress/{token}', [ProcessFileController::class, 'progress'])->name('process.upload.progress');
@@ -76,6 +81,8 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/configurations/billrange', [BillRangeController::class, 'createRange'])->name('configurations.billrange');
 
     Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');
+
+    Route::post('/configurations/mediums', [BillRangeController::class, 'saveMediums'])->name('configurations.mediums');
 
     Route::prefix('cc')->name('cc.')->middleware('session.cc_user')->group(function () {
         Route::get('/', [CallCenterDashboardController::class, 'index'])->name('dashboard');

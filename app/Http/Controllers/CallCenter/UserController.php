@@ -40,7 +40,9 @@ class UserController extends Controller
         $usersQ->with('supervisorUser')
             ->withCount(['supervisedUsers', 'interactionsAsAgent', 'rowAssignments']);
         // If logged-in user is a supervisor, show callers for the supervisor's RTOM (exclude supervisor accounts)
-        if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
+        if (session('user.assignment') === 'super') {
+            $usersQ->where('supervisor', session('user')['id'] ?? null);
+        } elseif (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
             $assign = session('user.assignment') ?? '';
             $rtomPart = preg_replace('/^supervisor_/', '', $assign);
             $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);

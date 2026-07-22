@@ -72,7 +72,16 @@ class ProcessConfirmController extends Controller
             return redirect()->route('process.running.show');
         }
 
-        if ($process->status !== MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+        $validConfirmationStatuses = [
+            MasterDatasetProcessStatus::WAITING_CONFIRMATION,
+            'waiting_confirmation',
+            'awaiting_confirmation',
+            'staged',
+            'records_inserted',
+            'exclusions_applied',
+        ];
+
+        if (! in_array($process->status, $validConfirmationStatuses, true)) {
             // While the exclusions job is still running, show an HTML waiting page.
             return view('process.confirm-wait', [
                 'process' => $process,
@@ -83,12 +92,29 @@ class ProcessConfirmController extends Controller
         $copperCount = $this->computeMediumCount($process->id, 'copper');
         $lteCount = $this->computeMediumCount($process->id, 'lte');
 
+        // Fetch configurations for mediums
+        $mediumConfigs = \App\Models\Configurations::whereIn('config_name', ['medium_ftth', 'medium_copper', 'medium_lte'])
+            ->get()
+            ->keyBy('config_name');
+
+        $activeMediums = [];
+        if (isset($mediumConfigs['medium_ftth']) ? $mediumConfigs['medium_ftth']->value == 1 : true) {
+            $activeMediums[] = 'FTTH';
+        }
+        if (isset($mediumConfigs['medium_copper']) ? $mediumConfigs['medium_copper']->value == 1 : false) {
+            $activeMediums[] = 'COPPER';
+        }
+        if (isset($mediumConfigs['medium_lte']) ? $mediumConfigs['medium_lte']->value == 1 : false) {
+            $activeMediums[] = 'LTE';
+        }
+
         return view('process.confirm', [
             'process' => $process,
             'ftthCount' => $ftthCount,
             'copperCount' => $copperCount,
             'lteCount' => $lteCount,
             'assignmentConfig' => $configuration->toArray(),
+            'activeMediums' => $activeMediums,
         ]);
     }
 
@@ -130,7 +156,16 @@ class ProcessConfirmController extends Controller
         $processId = $request->session()->get('master.dataset.process_id');
         $process = MasterDatasetProcess::find($processId);
 
-        if (! $process || $process->status !== MasterDatasetProcessStatus::WAITING_CONFIRMATION) {
+        $validConfirmationStatuses = [
+            MasterDatasetProcessStatus::WAITING_CONFIRMATION,
+            'waiting_confirmation',
+            'awaiting_confirmation',
+            'staged',
+            'records_inserted',
+            'exclusions_applied',
+        ];
+
+        if (! $process || ! in_array($process->status, $validConfirmationStatuses, true)) {
             return redirect()->route('master.upload.create');
         }
 
@@ -140,11 +175,42 @@ class ProcessConfirmController extends Controller
             'call_center_staff_quota' => 'required|integer|min:0',
             'call_center_quota' => 'required|integer|min:0',
             'staff_quota' => 'required|integer|min:0',
-            'mediums' => 'required|array|min:1',
-            'mediums.*' => 'in:FTTH,COPPER,LTE',
+            'mediums' => 'sometimes|array',
+            'mediums.*' => 'string|in:FTTH,COPPER,LTE',
         ]);
         
         $userContext = $resolver->resolve($request);
+
+        // Fetch configurations for mediums
+        $mediumConfigs = \App\Models\Configurations::whereIn('config_name', ['medium_ftth', 'medium_copper', 'medium_lte'])
+            ->get()
+            ->keyBy('config_name');
+
+        $activeMediums = [];
+        if (isset($mediumConfigs['medium_ftth']) ? $mediumConfigs['medium_ftth']->value == 1 : true) {
+            $activeMediums[] = 'FTTH';
+        }
+        if (isset($mediumConfigs['medium_copper']) ? $mediumConfigs['medium_copper']->value == 1 : false) {
+            $activeMediums[] = 'COPPER';
+        }
+        if (isset($mediumConfigs['medium_lte']) ? $mediumConfigs['medium_lte']->value == 1 : false) {
+            $activeMediums[] = 'LTE';
+        }
+
+        // Default to FTTH if somehow all are off in database
+        if (empty($activeMediums)) {
+            $activeMediums = ['FTTH'];
+        }
+
+        $submittedMediums = $request->input('mediums');
+        if (is_array($submittedMediums) && ! empty($submittedMediums)) {
+            $validated['mediums'] = $submittedMediums;
+        } else {
+            $validated['mediums'] = $activeMediums;
+        }
+        /*
+        $validated['mediums'] = $activeMediums;
+        */
 
         $defaults = $configuration->toArray();
         $normalize = static function (array $values): array {

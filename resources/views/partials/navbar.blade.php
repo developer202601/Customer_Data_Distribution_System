@@ -20,17 +20,46 @@
             @endforeach
         </ul>
         <div class="ms-auto d-flex align-items-center" style="gap: 1rem;">
-            <span class="text-warning small d-none d-xl-inline-block" style="font-size: 0.75rem; font-weight: 500;">
-                <i class="fas fa-exclamation-triangle me-1"></i> Dark mode is experimental
-            </span>
             <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme" data-theme="light">
                 <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
                 <span class="theme-toggle__icon theme-toggle__icon--moon">☾</span>
                 <span class="visually-hidden">Toggle theme</span>
             </button>
+
             @php
                 $sessionUser = session('user');
+                $displayName = trim((string) ($sessionUser['name'] ?? $sessionUser['username'] ?? ''));
+                $username = trim((string) ($sessionUser['username'] ?? ''));
+                $systemCode = trim((string) ($sessionUser['system'] ?? ''));
+                $systemLabel = match ($systemCode) {
+                    'cc' => 'Call Center',
+                    'rb' => 'Regional Billing',
+                    'master' => 'Master',
+                    default => null,
+                };
+                if ($displayName === '' && $username !== '') {
+                    $displayName = $username;
+                }
+                if ($displayName === '') {
+                    $displayName = 'User';
+                }
+            @endphp
+            <div class="d-flex flex-column align-items-center justify-content-center rounded-pill border px-4 py-2 user-nav-badge" style="font-size: 1rem; line-height: 1.25; min-width: 8rem;">
+                <div class="d-flex align-items-center justify-content-center">
+                    <span class="fw-semibold user-nav-badge__name">{{ $displayName }}</span>
+                </div>
+                @if($username !== '' && $username !== $displayName)
+                    <span class="small user-nav-badge__meta">{{ $username }}</span>
+                @elseif($systemLabel)
+                    <span class="small user-nav-badge__meta">{{ $systemLabel }}</span>
+                @endif
+            </div>
+
+
+            @php
                 $showMinimalLogout = false;
+                $showMinimalLogout = false;
+                
                 if ($sessionUser && (isset($sessionUser['system']) && $sessionUser['system'] === 'cc')) {
                     $uid = $sessionUser['id'] ?? null;
                     if ($uid) {
@@ -49,6 +78,7 @@
                     }
                 }
             @endphp
+
             @if($showMinimalLogout)
                 <div class="d-flex align-items-center" style="gap: 1rem;">
                     <form action="{{ route('logout') }}" method="post" class="d-inline">

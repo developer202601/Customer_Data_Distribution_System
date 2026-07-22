@@ -124,8 +124,9 @@
                                 default => 'secondary',
                                 };
                                 $generatorName = $processRow->user?->username ?? $processRow->user_name ?? 'System';
-                                $isContinuable = ! in_array($statusRaw, ['ready', 'failed', 'canceled'], true);
-                                $actionLabel = $statusRaw === 'exports_pending' ? 'View assignments' : ($isContinuable ? 'Continue' : 'View assignments');
+                                $isContinuable = in_array($statusRaw, ['waiting_confirmation', 'awaiting_confirmation', 'staged', 'awaiting_exclusions'], true);
+                                $actionLabel = $isContinuable ? 'Start Process' : 'View assignments';
+                                $btnClass = $isContinuable ? 'btn-primary' : 'btn-outline-primary';
                                 @endphp
                                 <tr class="report-row-selectable">
                                     @if(session('user.is_admin'))
@@ -150,7 +151,7 @@
                                         <span class="badge bg-{{ $badgeColor }}">{{ $statusLabel }}</span>
                                     </td>
                                     <td class="text-end d-flex justify-content-end gap-2">
-                                        <a href="{{ route('process.assignments.report', ['process' => $processRow]) }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">{{ $actionLabel }}</a>
+                                        <a href="{{ route('process.assignments.report', ['process' => $processRow]) }}" class="btn {{ $btnClass }} btn-sm" data-loader-off="1">{{ $actionLabel }}</a>
 
                                         @if(!in_array($statusRaw, ['ready', 'canceled'], true))
                                         <form method="post" action="{{ route('process.assignments.cancel', ['process' => $processRow]) }}" class="d-inline" data-loader-off="1" onsubmit="return confirm('Cancel this dataset process?');">

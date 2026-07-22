@@ -22,7 +22,11 @@ class MasterDatasetExportCoordinator
         'call-center' => ['group' => 'group-a'],
         'staff' => ['group' => 'group-a'],
         'region-billing' => ['group' => 'region'],
+        'enterprise-government' => ['group' => 'group-b'],
+        'enterprise-large-medium-wholesale' => ['group' => 'group-b'],
+        /*
         'enterprise-wholesale' => ['group' => 'group-b'],
+        */
         'sme' => ['group' => 'group-b'],
         'vip' => ['group' => 'vip'],
         'excluded' => ['group' => 'exclusions'],

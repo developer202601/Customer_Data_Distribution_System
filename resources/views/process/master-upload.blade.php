@@ -23,7 +23,7 @@
                 <strong>Master file already uploaded.</strong>
                 <div class="small mb-0">Process #{{ $process->id }} is currently in status: {{ ucfirst(str_replace('_', ' ', (string) $process->status)) }}.</div>
             </div>
-            <a href="{{ route('process.confirm.create') }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">Continue to confirmation</a>
+             <a href="{{ route('process.exclusions.create') }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">Continue to exclusions</a>
         </div>
         @endif
 
@@ -838,7 +838,7 @@
                         validationMessages : [json?.message || 'Unable to submit uploaded file.'];
                 }
 
-                window.location.href = json?.redirect_url || @json(route('process.confirm.create'));
+                window.location.href = json?.redirect_url || @json(route('process.exclusions.create'));
             } catch (error) {
                 if (Array.isArray(error)) {
                     renderError(error);

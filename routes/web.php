@@ -4,7 +4,6 @@ use App\Http\Controllers\AssignmentController;
 use App\Http\Controllers\CallCenter\DashboardController as CallCenterDashboardController;
 use App\Http\Controllers\CallCenter\ReportController as CallCenterReportController;
 use App\Http\Controllers\CallCenter\UserController as CallCenterUserController;
-use App\Http\Controllers\DatasetReportsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
@@ -84,25 +83,6 @@ Route::middleware('session.auth')->group(function () {
         Route::get('/payments/list', [CallCenterDashboardController::class, 'paymentList'])->name('payments.list');
         Route::get('/caller/{id}/calls7', [CallCenterDashboardController::class, 'callerCalls7'])->name('caller.calls7');
 
-        // Supervisor dashboard
-        Route::get('/supervisor/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'supervisorDashboard'])->name('supervisor.dashboard');
-
-        // RTOM dashboard
-        Route::get('/rtom/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'rtomDashboard'])->name('rtom.dashboard');
-
-        // Call center staff assignment endpoints
-        Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
-        Route::get('/assignments/manage', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'manage'])->name('assignments.manage');
-        Route::post('/assignments/{user}/accept-all', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'acceptAll'])->name('assignments.acceptAll');
-        Route::post('/assignments/{user}/reject-all', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'rejectAll'])->name('assignments.rejectAll');
-        Route::get('/assignments/{user}/rows', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'userRows'])->name('assignments.userRows');
-        Route::get('/assignments/{assignment}/details', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'assignmentDetails'])->name('assignments.details');
-        Route::post('/assignments/{id}/claim', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'claim'])->name('assignments.claim');
-        Route::post('/assignments/{id}/complete', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'complete'])->name('assignments.complete');
-        Route::post('/assignments/{id}/interactions', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'storeInteraction'])->name('assignments.interactions.store');
-        Route::post('/assignments/{id}/accept', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'accept'])->name('assignments.accept');
-        Route::post('/assignments/{id}/reject', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'reject'])->name('assignments.reject');
-
         Route::middleware('session.cc_admin')->group(function () {
             Route::get('/users', [CallCenterUserController::class, 'index'])->name('users.index');
             Route::get('/users/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'createUserForm'])->name('users.create');
@@ -118,45 +98,10 @@ Route::middleware('session.auth')->group(function () {
             Route::delete('/users/{ccUser}', [CallCenterUserController::class, 'destroy'])->name('users.destroy');
             Route::get('/reports/history', [CallCenterReportController::class, 'history'])->name('reports.history');
             Route::get('/reports/{report}/summary', [CallCenterReportController::class, 'summary'])->name('reports.summary');
-            Route::get('/reports', [CallCenterReportController::class, 'index'])->name('reports');
-            Route::get('/reports/agent-details', [CallCenterReportController::class, 'getAgentDetails'])->name('reports.agentDetails');
-            // Region admin pages (RTOM management)
-            Route::get('/rtoms/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'dashboard'])->name('region.dashboard');
-            Route::get('/rtoms/reports/review', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'reviewReport'])->name('region.review');
-            Route::post('/rtoms/reports/{report}/rows/hide', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'hideRows'])->name('region.review.hide_rows');
-            Route::post('/rtoms/reports/{report}/pass', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'passReport'])->name('region.review.pass');
-            Route::post('/rtoms/review-preference', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateReviewPreference'])->name('region.review.preference');
-            Route::get('/rtoms', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'index'])->name('region.index');
-            Route::get('/rtoms/search', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'search'])->name('region.search');
-            Route::get('/rtoms/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'indexAssign'])->name('region.assign.index');
-            Route::get('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'showAssignForm'])->name('region.assign');
-            Route::post('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeAssignment'])->name('region.assign.store');
-            Route::get('/rtoms/create-admin', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'createAdminForm'])->name('region.create_admin');
-            Route::get('/rtoms/create-supervisor', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'createSupervisorForm'])->name('region.create_supervisor');
-            Route::post('/rtoms/admins', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeAdmin'])->name('region.store_admin');
-            Route::post('/rtoms/supervisors', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeSupervisor'])->name('region.store_supervisor');
-            Route::get('/rtoms/admins/{user}/edit', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'editAdminForm'])->name('region.edit_admin');
-            Route::put('/rtoms/admins/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateAdmin'])->name('region.update_admin');
-            Route::delete('/rtoms/admins/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroyAdmin'])->name('region.destroy_admin');
-            // Supervisor management (for RTOM users)
-            Route::get('/rtoms/supervisors/{user}/edit', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'editSupervisorForm'])->name('region.edit_supervisor');
-            Route::put('/rtoms/supervisors/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateSupervisor'])->name('region.update_supervisor');
-            Route::put('/rtoms/supervisors/{user}/disable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'disableSupervisor'])->name('region.disable_supervisor');
-            Route::put('/rtoms/supervisors/{user}/enable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'enableSupervisor'])->name('region.enable_supervisor');
-            Route::delete('/rtoms/supervisors/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroySupervisor'])->name('region.destroy_supervisor');
-            // Super admin pages (Region management)
             Route::get('/regions', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexRegions'])->name('super.regions');
             Route::get('/regions/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editRegionAdminForm'])->name('super.edit_region');
             Route::put('/regions/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateRegionAdmin'])->name('super.update_region');
             Route::get('/regions/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchRegions'])->name('super.regions.search');
-            // Region admins create RTOM admins only; regular user creation removed
-            Route::post('/reports/{report}/distribute', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'distribute'])->name('reports.distribute');
-            Route::post('/reports/{report}/distribute-supervisor', [\App\Http\Controllers\CallCenter\ReportController::class, 'distributeSupervisor'])->name('reports.distribute_supervisor');
-            Route::get('/reports/{report}/distribute/cancel/{token}', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'cancelDistribute'])->name('reports.distribute.cancel');
-            Route::post('/reports/{report}/recall', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recall'])->name('reports.recall');
-            Route::get('/reports/{report}/recall/preview', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recallPreview'])->name('reports.recall.preview');
-            Route::post('/reports/{report}/reassign', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'reassign'])->name('reports.reassign');
-            Route::get('/reports/{report}/download', [CallCenterReportController::class, 'download'])->name('reports.download');
         });
     });
 
@@ -230,10 +175,5 @@ Route::middleware('session.auth')->group(function () {
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.perform');
 
-//Route::post('/create/range', [AdminController::class, 'createRange'])->name('create.range');
-
 Route::get('/auth/microsoft', [AuthController::class, 'microsoftRedirect']);
 Route::get('/auth/microsoft/callback', [AuthController::class, 'microsoftCallback'])->name('microsoft.callback');
-
-// Route::get('/auth/microsoft', [AuthController::class, 'login2']);
-// Route::get('/auth/microsoft/callback', [AuthController::class, 'getLogin2']);

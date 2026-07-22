@@ -151,9 +151,12 @@ class AuthController extends Controller
         $assignment = $this->normalizeAssignment($user['assignment'] ?? null);
         $isAdmin = $user['is_admin'] ?? false;
 
-        // Super admins go to overview
+        // Super admins go to overview (temporarily redirected to region management)
         if ($assignment === 'super') {
+            return 'cc.super.regions';
+            /*
             return 'cc.dashboard';
+            */
         }
 
         // Regional admins go to region dashboard

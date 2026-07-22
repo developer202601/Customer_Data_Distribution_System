@@ -671,7 +671,10 @@ class AssignmentController extends Controller
     {
         $map = [
             'group-a' => ['call-center-staff', 'call-center', 'staff'],
+            'group-b' => ['enterprise-government', 'enterprise-large-medium-wholesale', 'sme'],
+            /*
             'group-b' => ['enterprise-wholesale', 'sme'],
+            */
             'exclusions' => ['excluded', 'excluded-copper-retail-micro'],
             'vip' => ['vip'],
             'region' => ['region-billing'],

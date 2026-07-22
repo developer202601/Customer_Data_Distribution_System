@@ -235,6 +235,34 @@
                         </thead>
                         <tbody>
                             @php
+                                $enterpriseGovCount = (int) ($groupB['enterprise_government']['count'] ?? 0);
+                                $enterpriseLmwCount = (int) ($groupB['enterprise_large_medium_wholesale']['count'] ?? 0);
+                                $smeCount = (int) ($groupB['sme']['count'] ?? 0);
+                            @endphp
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Enterprise - Government
+                                        <span class="text-muted">({{ number_format($enterpriseGovCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('group-b', 'enterprise-government', $enterpriseGovCount); @endphp
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Enterprise - Large/Medium/Wholesale
+                                        <span class="text-muted">({{ number_format($enterpriseLmwCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('group-b', 'enterprise-large-medium-wholesale', $enterpriseLmwCount); @endphp
+                                </td>
+                            </tr>
+                            {{--
+                            @php
                                 $enterpriseCount = (int) ($groupB['enterprise_wholesale']['count'] ?? 0);
                                 $smeCount = (int) ($groupB['sme']['count'] ?? 0);
                             @endphp
@@ -249,6 +277,7 @@
                                     @php $renderDownloadButtons('group-b', 'enterprise-wholesale', $enterpriseCount); @endphp
                                 </td>
                             </tr>
+                            --}}
                             <tr>
                                 <th scope="row">
                                     <div class="fw-semibold mb-0">

@@ -1213,6 +1213,18 @@ class MasterDatasetImporter
         $directory = $this->masterSourceDirectory($token);
         $this->disk->makeDirectory($directory);
 
+        $originalName = $archive->getClientOriginalName() ?: 'master.xlsx';
+        $filename = preg_replace('/[^A-Za-z0-9._-]+/', '_', $originalName);
+        $stored = $this->disk->putFileAs($directory, $archive, $filename);
+
+        if (! $stored) {
+            throw ValidationException::withMessages([
+                'upload' => 'Unable to store the uploaded master archive. Please try again.',
+            ]);
+        }
+
+        return $directory . '/' . $filename;
+        /*
         $filename = 'master.xlsx';
         $stored = $this->disk->putFileAs($directory, $archive, $filename);
 
@@ -1223,6 +1235,7 @@ class MasterDatasetImporter
         }
 
         return $directory . '/' . $filename;
+        */
     }
 
     private function extractWorkbook(string $zipPath, string $token): string

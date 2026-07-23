@@ -70,6 +70,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments/exports/status', [AssignmentController::class, 'exportStatus'])->name('process.assignments.exports.status');
     Route::delete('/process/assignments/reports/bulk', [AssignmentController::class, 'destroyBulk'])->name('process.assignments.destroyBulk');
     Route::delete('/process/assignments/reports/{process}', [AssignmentController::class, 'destroy'])->name('process.assignments.destroy');
+    Route::get('/process/assignments/reports/{process}/download-master', [AssignmentController::class, 'downloadOriginalMaster'])->name('process.assignments.download-master');
     // Consolidated into overview; group-specific pages removed
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

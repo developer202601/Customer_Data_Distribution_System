@@ -23,6 +23,7 @@ use RuntimeException;
 use Throwable;
 use ZipArchive;
 use Symfony\Component\Process\Process;
+use OpenSpout\Reader\XLSX\Reader;
 
 class MasterDatasetImporter
 {
@@ -215,6 +216,43 @@ class MasterDatasetImporter
     public function queue(UploadedFile $archive, ?array $userContext = null): MasterDatasetProcess
     {
         $token = (string) Str::uuid();
+        $diskName = config('filesystems.default', 'local');
+        $this->disk = Storage::disk($diskName);
+
+        $zipPath = $this->storeArchive($archive, $token);
+        $workbookAbsolute = $this->extractWorkbook($zipPath, $token);
+
+        try {
+            $this->validateWorkbookOpenSpout($workbookAbsolute);
+        } catch (\Throwable $e) {
+            // Clean up files on validation failure!
+            $this->disk->delete($zipPath);
+            if (is_file($workbookAbsolute)) {
+                @unlink($workbookAbsolute);
+            }
+            throw $e;
+        }
+
+        // Clean up extracted workbook if it was extracted from a zip, since we will extract it again in the background.
+        if (str_ends_with(strtolower($zipPath), '.zip') && is_file($workbookAbsolute)) {
+            @unlink($workbookAbsolute);
+        }
+
+        return MasterDatasetProcess::create([
+            'token' => $token,
+            'dataset_month' => now()->format('Ym'),
+            'arrears_date' => null,
+            'run_date_raw' => null,
+            'master_archive_path' => $zipPath,
+            'master_workbook_path' => $this->workbookPlaceholderPath($token),
+            'storage_disk' => $diskName,
+            'master_filesize' => $archive->getSize(),
+            'user_id' => $userContext['id'] ?? null,
+            'status' => 'awaiting_exclusions',
+            'failure_reason' => null,
+        ]);
+        /*
+        $token = (string) Str::uuid();
         $zipPath = $this->storeArchive($archive, $token);
 
         $disk = config('filesystems.default', 'local');
@@ -232,6 +270,7 @@ class MasterDatasetImporter
             'status' => 'awaiting_exclusions',
             'failure_reason' => null,
         ]);
+        */
     }
 
     /**
@@ -1328,5 +1367,198 @@ class MasterDatasetImporter
         }
 
         return $entries[0];
+    }
+
+    private function cellValueToString(mixed $val): string
+    {
+        if ($val === null) {
+            return '';
+        }
+        if ($val instanceof \DateTimeInterface) {
+            return $val->format('Y-m-d H:i:s');
+        }
+        if (is_object($val)) {
+            return method_exists($val, '__toString') ? (string) $val : '';
+        }
+        return (string) $val;
+    }
+
+    private function normalizeHeader(string $col): string
+    {
+        $value = strtoupper(trim($col));
+        $value = preg_replace('/\s+/', '_', $value);
+        
+        $out = '';
+        $lastUs = false;
+        $len = strlen($value);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $value[$i];
+            if (($ch >= 'A' && $ch <= 'Z') || ($ch >= '0' && $ch <= '9')) {
+                $out .= $ch;
+                $lastUs = false;
+            } else {
+                if (!$lastUs) {
+                    $out .= '_';
+                    $lastUs = true;
+                }
+            }
+        }
+        
+        $normalised = trim($out, '_');
+        while (str_contains($normalised, '__')) {
+            $normalised = str_replace('__', '_', $normalised);
+        }
+        
+        if ($normalised === 'RTO') {
+            return 'RTOM';
+        }
+        
+        return $normalised;
+    }
+
+    public function validateWorkbookOpenSpout(string $path): void
+    {
+        $reader = new Reader();
+        try {
+            $reader->open($path);
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages([
+                'upload' => ['Unable to open Excel workbook: ' . $e->getMessage()],
+            ]);
+        }
+
+        $headers = [];
+        $headerMap = [];
+        $arrearsCol = null;
+        $requiredHeaderIndices = [];
+        $productLabelIndex = null;
+        $seenProducts = [];
+        $errors = [];
+        $maxErrors = self::MAX_ROW_ERRORS;
+
+        $requiredColumns = array_merge(self::REQUIRED_COLUMNS, ['SLT_GL_SUB_SEGMENT']);
+
+        try {
+            foreach ($reader->getSheetIterator() as $sheetIndex => $sheet) {
+                if ($sheetIndex !== 1) {
+                    break;
+                }
+
+                $rowCount = 0;
+                foreach ($sheet->getRowIterator() as $row) {
+                    $rowCount++;
+                    $cells = $row->toArray();
+
+                    if ($rowCount === 1) {
+                        foreach ($cells as $index => $val) {
+                            $norm = $this->normalizeHeader(trim($this->cellValueToString($val)));
+                            if ($norm !== '') {
+                                $headers[$index] = $norm;
+                                $headerMap[$norm] = $index;
+                            }
+                        }
+
+                        $missing = [];
+                        foreach ($requiredColumns as $col) {
+                            if (!isset($headerMap[$col])) {
+                                $missing[] = $col === 'RTOM' ? 'RTO' : $col;
+                            } else {
+                                $requiredHeaderIndices[$col] = $headerMap[$col];
+                            }
+                        }
+
+                        if (!empty($missing)) {
+                            $errors[] = 'Missing required columns: ' . implode(', ', $missing);
+                        }
+
+                        foreach ($headers as $index => $norm) {
+                            if (str_starts_with($norm, 'NEW_ARREARS_')) {
+                                $arrearsCol = $index;
+                                break;
+                            }
+                        }
+
+                        if ($arrearsCol === null) {
+                            $errors[] = 'The spreadsheet must include a NEW_ARREARS_YYYYMMDD column.';
+                        }
+
+                        if (!empty($errors)) {
+                            break;
+                        }
+
+                        $productLabelIndex = $headerMap['PRODUCT_LABEL'] ?? null;
+                        continue;
+                    }
+
+                    $hasData = false;
+                    foreach ($cells as $val) {
+                        if ($val !== null && trim($this->cellValueToString($val)) !== '') {
+                            $hasData = true;
+                            break;
+                        }
+                    }
+
+                    if (!$hasData) {
+                        continue;
+                    }
+
+                    foreach ($requiredHeaderIndices as $colName => $colIndex) {
+                        $val = trim($this->cellValueToString($cells[$colIndex] ?? ''));
+                        if ($val === '') {
+                            $displayName = $colName === 'RTOM' ? 'RTO' : $colName;
+                            $errors[] = sprintf('Row %d, column %s: value is required.', $rowCount, $displayName);
+                            if (count($errors) >= $maxErrors) {
+                                break 2;
+                            }
+                        }
+                    }
+
+                    if ($arrearsCol !== null) {
+                        $arrearsVal = trim($this->cellValueToString($cells[$arrearsCol] ?? ''));
+                        if ($arrearsVal === '') {
+                            $errors[] = sprintf('Row %d, column NEW_ARREARS_*: value is required.', $rowCount);
+                            if (count($errors) >= $maxErrors) {
+                                break 2;
+                            }
+                        } else {
+                            $cleanArrears = preg_replace('/[ ,]/', '', $arrearsVal);
+                            if ($arrearsVal !== '-' && !is_numeric($cleanArrears)) {
+                                $errors[] = sprintf('Row %d, column NEW_ARREARS_*: expected numeric value or "-".', $rowCount);
+                                if (count($errors) >= $maxErrors) {
+                                    break 2;
+                                }
+                            }
+                        }
+                    }
+
+                    if ($productLabelIndex !== null) {
+                        $prodVal = trim($this->cellValueToString($cells[$productLabelIndex] ?? ''));
+                        if ($prodVal !== '') {
+                            $lowerProd = strtolower($prodVal);
+                            if (isset($seenProducts[$lowerProd])) {
+                                $firstSeen = $seenProducts[$lowerProd];
+                                $errors[] = sprintf('Row %d, column PRODUCT_LABEL: duplicate value already found at row %d. (value: %s)', $rowCount, $firstSeen, $prodVal);
+                                if (count($errors) >= $maxErrors) {
+                                    break 2;
+                                }
+                            } else {
+                                $seenProducts[$lowerProd] = $rowCount;
+                            }
+                        }
+                    }
+                }
+            }
+        } finally {
+            $reader->close();
+        }
+
+        if (!empty($errors)) {
+            if (count($errors) >= $maxErrors) {
+                $errors[] = sprintf('Showing first %d validation errors only.', $maxErrors);
+            }
+            throw ValidationException::withMessages([
+                'upload' => $errors,
+            ]);
+        }
     }
 }

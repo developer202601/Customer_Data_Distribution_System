@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\MasterDatasetUploadController;
 use App\Http\Controllers\MasterValidationReportController;
+use App\Http\Controllers\PaymentUploadController;
 use App\Http\Controllers\ProcessFileController;
 use App\Http\Controllers\ProcessRunningController;
 use App\Http\Controllers\ProcessStatusController;
@@ -36,6 +37,7 @@ Route::middleware('session.auth')->group(function () {
         }
         return view('process.payment-upload');
     })->name('payment.upload');
+    Route::post('/payments/update', [PaymentUploadController::class, 'update'])->name('payments.update');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
     Route::get('/process/upload/progress/{token}', [ProcessFileController::class, 'progress'])->name('process.upload.progress');

@@ -38,6 +38,9 @@ Route::middleware('session.auth')->group(function () {
         return view('process.payment-upload');
     })->name('payment.upload');
     Route::post('/payments/update', [PaymentUploadController::class, 'update'])->name('payments.update');
+    Route::get('/payments', [PaymentUploadController::class, 'index'])->name('payments.index');
+    Route::get('/payments/progress/{token}', [PaymentUploadController::class, 'progress'])->name('payments.progress');
+    Route::get('/payments/progress/stream/{token}', [PaymentUploadController::class, 'progressStream'])->name('payments.progress.stream');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
     Route::get('/process/upload/progress/{token}', [ProcessFileController::class, 'progress'])->name('process.upload.progress');

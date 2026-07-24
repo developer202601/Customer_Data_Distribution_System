@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
-from openpyxl import load_workbook
+import polars as pl
 
 def main():
     if len(sys.argv) < 2:
@@ -14,25 +14,14 @@ def main():
     file_path = sys.argv[1]
 
     try:
-        wb = load_workbook(file_path, read_only=True, data_only=True)
+        df = pl.read_excel(file_path, has_header=False)
+        rows = df.rows()
     except Exception as e:
         print(json.dumps({
             'status': 'error',
             'message': f'Failed to open workbook: {e}'
         }))
         sys.exit(1)
-
-    sheet = wb.active
-    if sheet is None:
-        sheet = wb[wb.sheetnames[0]]
-
-    rows = []
-    for row in sheet.iter_rows(values_only=True):
-        values = list(row)
-        if any(v is not None and str(v).strip() != '' for v in values):
-            rows.append(values)
-
-    wb.close()
 
     if not rows:
         print(json.dumps({

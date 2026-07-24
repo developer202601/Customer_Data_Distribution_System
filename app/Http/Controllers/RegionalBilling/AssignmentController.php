@@ -602,6 +602,7 @@ class AssignmentController extends Controller
             'address_name' => $r->address_name ?? null,
             'arrears' => $r->new_arrears_value ?? null,
             'bill' => $r->latest_bill_mny ?? null,
+            'payment_value' => $r->payments_value ?? null,
             'phone' => $r->mobile_contact_tel ?? null,
             'address' => $r->full_address ?? null,
             'rtom' => $r->rtom ?? null,

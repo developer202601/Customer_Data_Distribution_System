@@ -748,6 +748,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="mb-2"><strong>Sales person:</strong> ${data.sales_person ?? '—'}</div>
             <div class="mb-2"><strong>Sales channel:</strong> ${data.sales_channel ?? '—'}</div>
             <div class="mb-2"><strong>Full address:</strong> ${data.full_address ?? '—'}</div>
+            <div class="mb-2"><strong>Payment:</strong> ${data.payment_value ?? '—'}</div>
         `;
 
         const paymentsByInteraction = {};
@@ -789,7 +790,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const selName = document.getElementById('ccSelectedName');
         const selAmt = document.getElementById('ccSelectedAmounts');
         if (selName) selName.textContent = data.address_name || data.name || '';
-        if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+        if (selAmt) {
+            const paymentValue = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+            selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Payment: ${paymentValue}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+        }
 
         // If this row belongs to a previous report, keep interactions read-only and show reason text
         try {

@@ -22,6 +22,9 @@
                     </div>
                     <div>
                         <a href="{{ route('rb.reports.history') }}" class="btn btn-outline-primary rounded-pill px-4">View History</a>
+                        @if($selectedReport)
+                        <a href="{{ route('rb.reports.download', $selectedReport->id) }}" class="btn btn-outline-success rounded-pill px-4 ms-2">Download Excel</a>
+                        @endif
                     </div>
                 </div>
 

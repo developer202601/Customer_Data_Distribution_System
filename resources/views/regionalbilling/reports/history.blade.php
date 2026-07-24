@@ -44,7 +44,10 @@
                                         <td>{{ $report->token ?? 'Report #' . $report->id }}</td>
                                         <td>{{ $report->created_at?->format('d M Y H:i') ?? '—' }}</td>
                                         <td>{{ $report->row_count ?? 0 }}</td>
-                                        <td><a href="{{ route('rb.reports.summary', $report) }}" class="btn btn-sm btn-outline-primary">View</a></td>
+                                        <td>
+                                            <a href="{{ route('rb.reports.summary', $report) }}" class="btn btn-sm btn-outline-primary">View</a>
+                                            <a href="{{ route('rb.reports.download', $report->id) }}" class="btn btn-sm btn-outline-success">Download</a>
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>

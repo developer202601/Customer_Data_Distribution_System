@@ -20,7 +20,7 @@
                         <h1 class="process-upload-title mb-0">Review Report Rows</h1>
                         <p class="text-muted small mb-0">Hide unwanted rows before they are distributed to lower levels.</p>
                     </div>
-                    <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2" data-loader-off="1">
                         <a href="{{ route('rb.region.dashboard') }}" class="btn btn-outline-secondary rounded-pill px-4">Back to Dashboard</a>
                         @if(!empty($selectedReport) && $selectedReport->id)
                         <a href="{{ route('rb.reports.download', $selectedReport->id) }}" class="btn btn-outline-success rounded-pill px-4">Download Excel</a>

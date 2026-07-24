@@ -83,6 +83,7 @@ Route::middleware('session.auth')->group(function () {
     Route::put('/admin/users/{user}/status', [AdminController::class, 'updateUserStatus'])->name('admin.updateUserStatus');
     Route::put('/admin/users/{user}/name', [AdminController::class, 'updateUserName'])->name('admin.updateUserName');
     Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.deleteUser');
+    Route::post('/admin/process-queues', [AdminController::class, 'processQueues'])->name('admin.processQueues');
     Route::post('/configurations/billrange', [BillRangeController::class, 'createRange'])->name('configurations.billrange');
 
     Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');

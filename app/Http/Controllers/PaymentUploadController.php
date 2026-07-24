@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\ProcessPaymentUpload;
 use App\Models\PaymentUpload;
+use App\Support\PaymentIngestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -47,10 +47,25 @@ class PaymentUploadController extends Controller
 
         $userId = (int) data_get($request->session()->get('user'), 'id', 0);
 
+        $upload = PaymentUpload::create([
+            'token' => $token,
+            'user_id' => $userId,
+            'original_name' => $originalName,
+            'status' => 'processing',
+            'progress' => 1,
+            'message' => 'Opening Excel workbook…',
+            'processed_rows' => 0,
+            'total_rows' => null,
+            'matched' => 0,
+            'updated' => 0,
+            'not_found' => 0,
+            'started_at' => time(),
+        ]);
+
         Cache::put(self::PROGRESS_CACHE_PREFIX . $token, [
-            'status' => 'queued',
-            'progress' => 0,
-            'message' => 'Waiting for an available worker…',
+            'status' => 'processing',
+            'progress' => 1,
+            'message' => 'Opening Excel workbook…',
             'processed_rows' => 0,
             'total_rows' => null,
             'matched' => 0,
@@ -61,7 +76,33 @@ class PaymentUploadController extends Controller
             'last_updated_at' => now()->toIso8601String(),
         ], now()->addMinutes(60));
 
-        ProcessPaymentUpload::dispatch($token, $path, $originalName, $userId);
+        $service = new PaymentIngestionService();
+        $storedPath = $path;
+        $originalNameForService = $originalName;
+        $userIdForService = $userId;
+        $tokenForService = $token;
+
+        register_shutdown_function(function () use ($service, $storedPath, $originalNameForService, $userIdForService, $tokenForService) {
+            try {
+                $service->run($tokenForService, $storedPath, $originalNameForService, $userIdForService);
+            } catch (\Throwable $e) {
+                Cache::put('process:payment:upload:' . $tokenForService, [
+                    'status' => 'failed',
+                    'progress' => 100,
+                    'message' => 'Payment processing failed.',
+                    'error' => $e->getMessage(),
+                    'finished_at' => time(),
+                ], now()->addMinutes(60));
+
+                PaymentUpload::where('token', $tokenForService)->update([
+                    'status' => 'failed',
+                    'progress' => 100,
+                    'message' => 'Payment processing failed.',
+                    'error' => $e->getMessage(),
+                    'finished_at' => time(),
+                ]);
+            }
+        });
 
         return response()->json([
             'status' => 'ok',

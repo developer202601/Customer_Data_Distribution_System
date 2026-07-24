@@ -501,6 +501,7 @@ class AssignmentController extends Controller
                     'address_name' => optional($row)->address_name,
                     'arrears' => optional($row)->new_arrears_value,
                     'bill' => optional($row)->latest_bill_mny,
+                    'payment_value' => optional($row)->payments_value,
                     'call_count' => $callCount,
                     'called_in_period' => $calledInPeriod,
                     'latest_outcome' => $latestOutcome,

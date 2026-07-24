@@ -25,7 +25,7 @@
                         <div class="d-flex align-items-center gap-3">
                             <div>
                                 <h1 class="process-upload-title mb-1">Payment Files Upload</h1>
-                                <p class="text-muted mb-0">Upload a Microsoft Excel (.xlsx) workbook with exact headers: <code>ACCOUNT_NUM</code> and <code>ACCOUNT_PAYMENT_MNY</code>.</p>
+                                <p class="text-muted mb-0">Upload a Microsoft Excel (.xlsx) workbook with exact headers: <code>ACCOUNT_NUM</code>, <code>ACCOUNT_PAYMENT_MNY</code>, and <code>DATASET_MONTH</code>.</p>
                             </div>
                         </div>
                         <div class="d-flex gap-2">
@@ -63,7 +63,7 @@
                         <input type="file" class="visually-hidden" id="upload" name="upload" accept=".xlsx" required>
                         <label for="upload" class="process-dropzone-content text-center" tabindex="0" role="button">
                             <p class="process-dropzone-title mb-1">Drag and drop file or click to browse</p>
-                            <p class="text-muted mb-0" id="payment-dropzone-helper">Upload your Payment Excel workbook (.xlsx) with exact headers ACCOUNT_NUM and ACCOUNT_PAYMENT_MNY.</p>
+                            <p class="text-muted mb-0" id="payment-dropzone-helper">Upload your Payment Excel workbook (.xlsx) with exact headers ACCOUNT_NUM, ACCOUNT_PAYMENT_MNY, and DATASET_MONTH.</p>
                         </label>
                     </div>
 
@@ -188,7 +188,7 @@
         }
         hideProgress();
         if (dropzoneHelper) {
-            dropzoneHelper.textContent = 'Upload your Payment Excel workbook (.xlsx) with exact headers ACCOUNT_NUM and ACCOUNT_PAYMENT_MNY.';
+            dropzoneHelper.textContent = 'Upload your Payment Excel workbook (.xlsx) with exact headers ACCOUNT_NUM, ACCOUNT_PAYMENT_MNY, and DATASET_MONTH.';
         }
         if (errorAlert) {
             errorAlert.classList.add('d-none');
@@ -511,9 +511,6 @@
                     <td>${updated !== null ? updated : '—'}</td>
                     <td>${message}</td>
                     <td>${meta || '—'}</td>
-                    <td>
-                        <button type="button" class="btn btn-sm btn-outline-primary" data-token="${upload.token}" data-check-progress="1">Check progress</button>
-                    </td>
                 </tr>
             `;
         }).join('');
@@ -521,18 +518,17 @@
         historyBlock.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-sm mb-0">
-                    <thead>
-                        <tr>
-                            <th>File</th>
-                            <th>Started</th>
-                            <th>Status</th>
-                            <th>Progress</th>
-                            <th>Updated</th>
-                            <th>Message</th>
-                            <th>Details</th>
-                            <th></th>
-                        </tr>
-                    </thead>
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Started</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>Updated</th>
+                                <th>Message</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
                     <tbody>${rows}</tbody>
                 </table>
             </div>
@@ -580,117 +576,6 @@
 
     if (historyBlock) {
         loadHistory(1);
-    }
-
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('button[data-check-progress="1"]');
-        if (!btn) {
-            return;
-        }
-
-        const token = btn.getAttribute('data-token');
-        if (!token) {
-            return;
-        }
-
-        const progressUrl = @json(route('payments.progress', ['token' => '__TOKEN__'])).replace('__TOKEN__', encodeURIComponent(token));
-        const streamUrl = @json(route('payments.progress.stream', ['token' => '__TOKEN__'])).replace('__TOKEN__', encodeURIComponent(token));
-
-        btn.disabled = true;
-        btn.textContent = 'Tracking…';
-
-        if (typeof window.EventSource !== 'undefined') {
-            const source = new EventSource(streamUrl);
-
-            source.addEventListener('message', (event) => {
-                try {
-                    const payload = JSON.parse(event.data);
-                    updateHistoryRow(token, payload);
-                    if (['complete', 'failed', 'canceled'].includes(payload.status)) {
-                        source.close();
-                        btn.disabled = false;
-                        btn.textContent = 'Check progress';
-                    }
-                } catch (err) {
-                    console.error('Failed to parse history progress payload', err);
-                }
-            });
-
-            source.addEventListener('error', () => {
-                source.close();
-                btn.disabled = false;
-                btn.textContent = 'Check progress';
-            });
-        } else {
-            const interval = setInterval(() => {
-                fetch(progressUrl, { headers: { 'Accept': 'application/json' } })
-                    .then((res) => res.json())
-                    .then((payload) => {
-                        updateHistoryRow(token, payload);
-                        if (['complete', 'failed', 'canceled'].includes(payload.status)) {
-                            clearInterval(interval);
-                            btn.disabled = false;
-                            btn.textContent = 'Check progress';
-                        }
-                    })
-                    .catch(() => {
-                        clearInterval(interval);
-                        btn.disabled = false;
-                        btn.textContent = 'Check progress';
-                    });
-            }, 2000);
-
-            setTimeout(() => {
-                clearInterval(interval);
-                btn.disabled = false;
-                btn.textContent = 'Check progress';
-            }, 600000);
-        }
-    });
-
-    function updateHistoryRow(token, payload) {
-        const btn = document.querySelector(`button[data-token="${token}"][data-check-progress="1"]`);
-        if (!btn) {
-            return;
-        }
-
-        const row = btn.closest('tr');
-        if (!row) {
-            return;
-        }
-
-        const status = payload.status || 'processing';
-        const progress = typeof payload.progress === 'number' ? payload.progress : 0;
-        const message = payload.message || 'Processing…';
-        const matched = typeof payload.matched === 'number' ? payload.matched : null;
-        const updated = typeof payload.updated === 'number' ? payload.updated : null;
-        const notFound = typeof payload.not_found === 'number' ? payload.notFound : null;
-        const processedRows = typeof payload.processed_rows === 'number' ? payload.processed_rows : null;
-        const totalRows = typeof payload.total_rows === 'number' ? payload.total_rows : null;
-
-        let meta = '';
-        if (processedRows !== null && totalRows !== null && totalRows > 0) {
-            meta = `${processedRows} / ${totalRows} rows`;
-        } else if (processedRows !== null) {
-            meta = `${processedRows} rows`;
-        }
-
-        if (matched !== null && updated !== null && notFound !== null && status === 'complete') {
-            meta = `Matched: ${matched} • Updated: ${updated} • Not found: ${notFound}`;
-        }
-
-        const cells = row.querySelectorAll('td');
-        if (cells.length >= 7) {
-            cells[2].innerHTML = status === 'complete'
-                ? '<span class="badge bg-success">Complete</span>'
-                : status === 'failed'
-                    ? '<span class="badge bg-danger">Failed</span>'
-                    : '<span class="badge bg-warning text-dark">Processing</span>';
-            cells[3].textContent = `${progress}%`;
-            cells[4].textContent = updated !== null ? updated : '—';
-            cells[5].textContent = message;
-            cells[6].textContent = meta || '—';
-        }
     }
 })();
 </script>

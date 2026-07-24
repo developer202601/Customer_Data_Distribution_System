@@ -35,14 +35,17 @@ def main():
 
     account_num_index = None
     payment_mny_index = None
+    dataset_month_index = None
 
     for idx, header in enumerate(upper_headers):
         if header == 'ACCOUNT_NUM':
             account_num_index = idx
         if header == 'ACCOUNT_PAYMENT_MNY':
             payment_mny_index = idx
+        if header == 'DATASET_MONTH':
+            dataset_month_index = idx
 
-    if account_num_index is None or payment_mny_index is None:
+    if account_num_index is None or payment_mny_index is None or dataset_month_index is None:
         found = ', '.join(header_row[:20])
         print(json.dumps({
             'status': 'error',
@@ -59,6 +62,7 @@ def main():
         'headers': header_row,
         'account_num_index': account_num_index,
         'payment_mny_index': payment_mny_index,
+        'dataset_month_index': dataset_month_index,
         'total_rows': len(data_rows),
         'data': data_rows
     }))

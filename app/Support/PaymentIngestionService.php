@@ -108,18 +108,39 @@ class PaymentIngestionService
 
         $accountNumIndex = $result['account_num_index'] ?? null;
         $paymentValueIndex = $result['payment_mny_index'] ?? null;
+        $datasetMonthIndex = $result['dataset_month_index'] ?? null;
         $dataRows = $result['data'] ?? [];
         $totalRows = (int) ($result['total_rows'] ?? 0);
 
+        $datasetMonth = null;
+        if ($datasetMonthIndex !== null && !empty($dataRows)) {
+            $firstMonthValue = trim((string) ($dataRows[0][$datasetMonthIndex] ?? ''));
+            if ($firstMonthValue !== '') {
+                $datasetMonth = $firstMonthValue;
+            }
+        }
+
+        $processId = null;
+        if ($datasetMonth !== null) {
+            $process = \App\Models\MasterDatasetProcess::query()
+                ->where('dataset_month', $datasetMonth)
+                ->latest('id')
+                ->first();
+
+            if ($process) {
+                $processId = $process->id;
+            }
+        }
+
         $this->updateProgress($token, [
             'total_rows' => $totalRows,
-            'message' => 'Processing payment rows…',
+            'message' => $processId ? 'Processing payment rows…' : 'Processing payment rows (no dataset month match)…',
             'progress' => 10,
         ]);
 
         PaymentUpload::where('token', $token)->update([
             'total_rows' => $totalRows,
-            'message' => 'Processing payment rows…',
+            'message' => $processId ? 'Processing payment rows…' : 'Processing payment rows (no dataset month match)…',
             'progress' => 10,
         ]);
 
@@ -130,7 +151,7 @@ class PaymentIngestionService
         $chunkSize = 1000;
 
         foreach (array_chunk($dataRows, $chunkSize) as $chunk) {
-            [$m, $u, $n] = $this->processChunk($chunk, $accountNumIndex, $paymentValueIndex);
+            [$m, $u, $n] = $this->processChunk($chunk, $accountNumIndex, $paymentValueIndex, $processId);
             $matched += $m;
             $updated += $u;
             $notFound += $n;
@@ -179,7 +200,7 @@ class PaymentIngestionService
         }
     }
 
-    private function processChunk(array $chunk, ?int $accountNumIndex, ?int $paymentValueIndex): array
+    private function processChunk(array $chunk, ?int $accountNumIndex, ?int $paymentValueIndex, ?int $processId = null): array
     {
         $matched = 0;
         $updated = 0;
@@ -200,7 +221,12 @@ class PaymentIngestionService
             return [$matched, $updated, $notFound];
         }
 
-        $masterRows = \App\Models\MasterDatasetRow::whereIn('account_num', $accountNumbers)->get()->keyBy('account_num');
+        $query = \App\Models\MasterDatasetRow::whereIn('account_num', $accountNumbers);
+        if ($processId !== null) {
+            $query->where('process_id', $processId);
+        }
+
+        $masterRows = $query->get()->keyBy('account_num');
 
         foreach ($chunk as $cells) {
             if ($accountNumIndex === null || !isset($cells[$accountNumIndex])) {

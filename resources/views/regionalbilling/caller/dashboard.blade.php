@@ -86,13 +86,14 @@
                             <div class="table-responsive">
                                 <table class="table mb-0">
                                     <thead>
-                                        <tr>
-                                            <th>Report</th>
-                                            <th>Account</th>
-                                            <th>Customer Ref</th>
-                                            <th>Arrears</th>
-                                            <th>Status</th>
-                                        </tr>
+                                    <tr>
+                                        <th>Report</th>
+                                        <th>Account</th>
+                                        <th>Customer Ref</th>
+                                        <th>Arrears</th>
+                                        <th>Payment</th>
+                                        <th>Status</th>
+                                    </tr>
                                     </thead>
                                     <tbody>
                                         @foreach($recentAssignments as $assignment)
@@ -102,6 +103,7 @@
                                                 <td>{{ $row?->account_num ?? '—' }}</td>
                                                 <td>{{ $row?->customer_ref ?? '—' }}</td>
                                                 <td>{{ $row?->new_arrears_value ?? '—' }}</td>
+                                                <td class="text-danger">{{ $row?->payments_value !== null ? number_format((float) $row->payments_value, 2) : '—' }}</td>
                                                 <td>{{ $assignment->status ?? '—' }}</td>
                                             </tr>
                                         @endforeach

@@ -122,6 +122,7 @@
                     <th style="width: 40px;"></th>
                     <th>Account Number</th>
                     <th>Arrears</th>
+                    <th>Payment</th>
                     <th>Phone</th>
                     <th>Customer Ref</th>
                     <th>Status</th>
@@ -144,6 +145,7 @@
                         </td>
                         <td>{{ $row->account_num ?? '—' }}</td>
                         <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
+                        <td class="text-danger">{{ $row->payments_value !== null ? number_format((float) $row->payments_value, 2) : '—' }}</td>
                         <td>{{ $row->mobile_contact_tel ?? '—' }}</td>
                         <td>{{ $row->customer_ref ?? '—' }}</td>
                         <td>
@@ -169,7 +171,7 @@
                         </td>
                     </tr>
                     <tr class="d-none" id="more-{{ $row->id }}">
-                        <td colspan="7" class="bg-light">
+                        <td colspan="8" class="bg-light">
                             <div class="small">
                                 <strong>Address:</strong> {{ $row->full_address ?? '—' }}<br>
                                 <strong>Address Name:</strong> {{ $row->address_name ?? '—' }}<br>

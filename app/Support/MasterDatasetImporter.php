@@ -48,6 +48,7 @@ class MasterDatasetImporter
         'LATEST_BILL_MNY',
         'LATEST_PRODUCT_STATUS',
         'SLT_BUSINESS_LINE_VALUE',
+        'SLT_GL_SUB_SEGMENT',
     ];
     private const REQUIRED_ROW_COLUMNS = [
         'RUN_DATE',
@@ -218,8 +219,11 @@ class MasterDatasetImporter
         $zipPath = $this->storeArchive($archive, $token);
 
         $disk = config('filesystems.default', 'local');
+        $this->disk = Storage::disk($disk);
 
-        return MasterDatasetProcess::create([
+        $workbookAbsolute = $this->extractWorkbook($zipPath, $token);
+
+        $process = MasterDatasetProcess::create([
             'token' => $token,
             'dataset_month' => now()->format('Ym'),
             'arrears_date' => null,
@@ -229,9 +233,26 @@ class MasterDatasetImporter
             'storage_disk' => $disk,
             'master_filesize' => $archive->getSize(),
             'user_id' => $userContext['id'] ?? null,
-            'status' => 'awaiting_exclusions',
+            'status' => 'validating',
             'failure_reason' => null,
         ]);
+
+        try {
+            $this->validateWithPolars($process, $workbookAbsolute);
+        } catch (\Throwable $e) {
+            $this->disk->delete($zipPath);
+            if ($this->isTemporaryWorkbookPath($workbookAbsolute) && file_exists((string) $workbookAbsolute)) {
+                @unlink($workbookAbsolute);
+            }
+            $process->delete();
+            throw $e;
+        }
+
+        if (str_ends_with(strtolower($zipPath), '.zip') && is_file($workbookAbsolute)) {
+            @unlink($workbookAbsolute);
+        }
+
+        return $process;
     }
 
     /**
@@ -251,9 +272,14 @@ class MasterDatasetImporter
             throw new ProcessCanceledException('Dataset processing canceled by user.');
         }
 
+        if ($process->status === MasterDatasetProcessStatus::READY || $process->status === MasterDatasetProcessStatus::AWAITING_EXCLUSIONS) {
+            return $process->fresh();
+        }
+        /*
         if ($process->status === MasterDatasetProcessStatus::READY) {
             return $process->fresh();
         }
+        */
 
         $diskName = $process->storage_disk ?: config('filesystems.default', 'local');
         $this->disk = Storage::disk($diskName);

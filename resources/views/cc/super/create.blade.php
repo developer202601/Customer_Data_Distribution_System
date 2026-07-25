@@ -11,7 +11,7 @@
                     <div>
                         <p class="text-uppercase text-muted mb-1">Call Center Administration</p>
                         <h1 class="process-upload-title mb-0">Create New Region User</h1>
-                        <p class="text-muted small mb-0">Creates a region admin user (Region Admin) and assigns them to a region from the last two reports.</p>
+                        <p class="text-muted small mb-0">Creates a region admin user (Region Admin) and assigns them to a region from the last two reports, or a custom region name.</p>
                     </div>
                 </div>
 

@@ -117,8 +117,7 @@ class SuperAdminController extends Controller
         }
 
         $roles = ['region' => 'Region Admin'];
-        //$systems = ['cc' => 'Call Center', 'rb' => 'Regional Billing Centre'];
-        $systems = ['rb' => 'Regional Billing Centre'];
+        $systems = ['cc' => 'Call Center', 'rb' => 'Regional Billing Centre'];
 
         $lastTwoProcessIds = MasterDatasetRow::select('process_id')
             ->distinct()
@@ -147,33 +146,39 @@ class SuperAdminController extends Controller
         }
 
         $request->validate([
-            'username' => 'required|string|size:6|unique:users,username',
-            'name' => 'nullable|string|max:255',
-            'region' => 'required|string|max:45',
-            'system' => 'required|in:cc,rb',
+            'username'      => 'required|string|size:6|unique:users,username',
+            'name'          => 'nullable|string|max:255',
+            'region'        => 'required|string|max:45',
+            'region_source' => 'required|in:list,custom',
+            'system'        => 'required|in:cc,rb',
         ]);
 
-        $lastTwoProcessIds = MasterDatasetRow::select('process_id')
-            ->distinct()
-            ->orderBy('process_id', 'desc')
-            ->limit(2)
-            ->pluck('process_id')
-            ->toArray();
+        $region       = trim($request->input('region'));
+        $regionSource = $request->input('region_source');
 
-        $allowedRegions = [];
-        if (! empty($lastTwoProcessIds)) {
-            $allowedRegions = MasterDatasetRow::whereIn('process_id', $lastTwoProcessIds)
-                ->whereNotNull('region')
-                ->pluck('region')
-                ->unique()
-                ->values()
+        if ($regionSource === 'list') {
+            $lastTwoProcessIds = MasterDatasetRow::select('process_id')
+                ->distinct()
+                ->orderBy('process_id', 'desc')
+                ->limit(2)
+                ->pluck('process_id')
                 ->toArray();
-        }
 
-        $region = $request->input('region');
-        if (! in_array($region, $allowedRegions, true)) {
-            return back()->withErrors(['region' => 'Selected region is not available from the last two reports.']);
+            $allowedRegions = [];
+            if (! empty($lastTwoProcessIds)) {
+                $allowedRegions = MasterDatasetRow::whereIn('process_id', $lastTwoProcessIds)
+                    ->whereNotNull('region')
+                    ->pluck('region')
+                    ->unique()
+                    ->values()
+                    ->toArray();
+            }
+
+            if (! in_array($region, $allowedRegions, true)) {
+                return back()->withErrors(['region' => 'Selected region is not available from the last two reports.']);
+            }
         }
+        // custom source: region already validated as required|string|max:45 — no further check needed
 
         $system = $request->input('system');
         

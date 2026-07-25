@@ -121,9 +121,6 @@ class ReportController extends Controller
             'hidden_count' => count($hiddenRowIds),
             'pending_regions' => [],
         ];
-        if ($selectedReport) {
-            $regionalReviewStatus['pending_regions'] = $this->pendingRegionalReviews($selectedReport);
-        }
 
         $hasInteractions = false;
         if ($selectedReport) {
@@ -153,7 +150,7 @@ class ReportController extends Controller
             'reports' => $reports,
             'selectedReport' => $selectedReport,
             'ccUsers' => $ccUsers,
-            'currentSupervisorId' => $currentSupervisorId,
+            'currentSupervisorId' => null,
             'allowedRowIds' => $allowedRowIds,
             'rejectedAssignments' => $rejectedAssignments,
             'acceptedAssignments' => $acceptedAssignments,
@@ -553,82 +550,6 @@ class ReportController extends Controller
         }
 
         return $total;
-    }
-
-    private function pendingRegionalReviews(CallCenterReport $report): array
-    {
-        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values();
-        if ($rowIds->isEmpty()) {
-            return [];
-        }
-
-        $regionsInReport = DB::table('master_dataset_rows')
-            ->whereIn('id', $rowIds->all())
-            ->whereNotNull('region')
-            ->selectRaw('LOWER(TRIM(region)) as region_key')
-            ->distinct()
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        if (empty($regionsInReport)) {
-            return [];
-        }
-
-        $enabledRegions = DB::table('users')
-            ->where('system', 'cc')
-            ->where('admin_prev', 1)
-            ->where('status', 1)
-            ->where('enable_regional_review', 1)
-            ->whereNotNull('enable_regional_review_enabled_at')
-            ->where('enable_regional_review_enabled_at', '<=', $report->created_at)
-            ->whereNotNull('assignment')
-            ->where('assignment', '<>', 'super')
-            ->where('assignment', 'not like', 'rtom_%')
-            ->where('assignment', 'not like', 'supervisor_%')
-            ->where('assignment', 'not like', 'caller_%')
-            ->select('assignment')
-            ->distinct()
-            ->get();
-
-        $regionLabelByKey = [];
-        foreach ($enabledRegions as $regionRow) {
-            $label = trim((string) ($regionRow->assignment ?? ''));
-            if ($label === '') {
-                continue;
-            }
-
-            $key = strtolower($label);
-            $regionLabelByKey[$key] = $label;
-        }
-        $enabledRegionKeys = array_keys($regionLabelByKey);
-
-        $required = array_values(array_unique(array_intersect($regionsInReport, $enabledRegionKeys)));
-        if (empty($required)) {
-            return [];
-        }
-
-        $reviewed = DB::table('call_center_report_region_reviews')
-            ->where('call_center_report_id', $report->id)
-            ->whereNotNull('reviewed_at')
-            ->selectRaw('LOWER(TRIM(region_name)) as region_key')
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        $pendingKeys = array_values(array_diff($required, $reviewed));
-        if (empty($pendingKeys)) {
-            return [];
-        }
-
-        $pendingLabels = [];
-        foreach ($pendingKeys as $key) {
-            $pendingLabels[] = $regionLabelByKey[$key] ?? $key;
-        }
-
-        return array_values(array_unique($pendingLabels));
     }
 
     public function getAgentDetails(Request $request)

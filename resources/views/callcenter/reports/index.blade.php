@@ -104,10 +104,6 @@
                 <div class="alert alert-warning mt-4">{{ $errors->first('reassign') }}</div>
                 @endif
                 @if($selectedReport)
-                @php
-                    $pendingRegionalReviews = $regionalReviewStatus['pending_regions'] ?? [];
-                    $hiddenRegionalRows = (int) ($regionalReviewStatus['hidden_count'] ?? 0);
-                @endphp
                 <div class="row g-3 mt-3">
                     <div class="col-md-6">
                         <div class="card bg-light border-0 h-100 rounded-4">
@@ -134,23 +130,13 @@
                         </div>
                     </div>
                 </div>
-                @if($hiddenRegionalRows > 0)
-                <div class="alert alert-secondary mt-3 mb-0">
-                    {{ number_format($hiddenRegionalRows) }} row(s) are currently hidden by regional review and will not be distributed.
-                </div>
-                @endif
-                @if(!empty($pendingRegionalReviews))
-                <div class="alert alert-warning mt-3 mb-0">
-                    Distribution is blocked until regional review is passed for: {{ implode(', ', $pendingRegionalReviews) }}.
-                </div>
-                @endif
                 <div class="row mt-4">
-                    @if(! ($allAssigned ?? false) && (($distributableRows ?? 0) > 0) && empty($pendingRegionalReviews))
+                    @if(! ($allAssigned ?? false) && (($distributableRows ?? 0) > 0))
                     <div class="col-12">
                         <div class="card border-0 rounded-4 bg-white shadow-sm">
                             <div class="card-body">
                                 <p class="text-uppercase text-muted small mb-3">Distribute rows to call center users</p>
-                                <form method="post" action="{{ (session('user.assignment') && Str::startsWith(session('user.assignment'), 'supervisor_')) ? route('cc.reports.distribute_supervisor', $selectedReport->id) : route('cc.reports.distribute', $selectedReport->id) }}" class="row g-2 align-items-center">
+                                <form method="post" action="{{ route('cc.reports.distribute', $selectedReport->id) }}" class="row g-2 align-items-center">
                                     @csrf
                                     <div class="col-md-6">
                                         <label class="small text-muted">Select users</label>

@@ -125,35 +125,32 @@ Route::middleware('session.auth')->group(function () {
             Route::get('/reports', [CallCenterReportController::class, 'index'])->name('reports');
             Route::get('/reports/agent-details', [CallCenterReportController::class, 'getAgentDetails'])->name('reports.agentDetails');
 
-            Route::get('/region/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'dashboard'])->name('region.dashboard');
-            Route::get('/region/review', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'reviewReport'])->name('region.review');
-            Route::post('/region/review/hide-rows', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'hideRows'])->name('region.review.hide_rows');
-            Route::post('/region/review/pass', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'passReport'])->name('region.review.pass');
-            Route::post('/region/review-preference', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateReviewPreference'])->name('region.review.preference');
-
-            Route::get('/region/callers', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'callers'])->name('region.callers');
-            Route::get('/region/callers/create', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'createCallerForm'])->name('region.callers.create');
-            Route::post('/region/callers', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeCaller'])->name('region.callers.store');
-            Route::get('/region/callers/{user}/edit', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'editCaller'])->name('region.callers.edit');
-            Route::put('/region/callers/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateCaller'])->name('region.callers.update');
-            Route::delete('/region/callers/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroyCaller'])->name('region.callers.destroy');
-            Route::put('/region/callers/{user}/enable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'enableCaller'])->name('region.callers.enable');
-            Route::put('/region/callers/{user}/disable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'disableCaller'])->name('region.callers.disable');
-            Route::get('/region/callers/search', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'searchCallers'])->name('region.callers.search');
+            // Segment admin routes (replaces cc region admin)
+            Route::get('/segment/dashboard', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'dashboard'])->name('segment.dashboard');
+            Route::get('/segment/callers', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'callers'])->name('segment.callers');
+            Route::get('/segment/callers/create', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'createCallerForm'])->name('segment.callers.create');
+            Route::post('/segment/callers', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'storeCaller'])->name('segment.callers.store');
+            Route::get('/segment/callers/{user}/edit', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'editCaller'])->name('segment.callers.edit');
+            Route::put('/segment/callers/{user}', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'updateCaller'])->name('segment.callers.update');
+            Route::delete('/segment/callers/{user}', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'destroyCaller'])->name('segment.callers.destroy');
+            Route::put('/segment/callers/{user}/enable', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'enableCaller'])->name('segment.callers.enable');
+            Route::put('/segment/callers/{user}/disable', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'disableCaller'])->name('segment.callers.disable');
 
             Route::post('/reports/{report}/distribute', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'distribute'])->name('reports.distribute');
             Route::post('/reports/{report}/recall', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recall'])->name('reports.recall');
             Route::get('/reports/{report}/recall/preview', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recallPreview'])->name('reports.recall.preview');
             Route::post('/reports/{report}/reassign', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'reassign'])->name('reports.reassign');
             Route::get('/reports/{report}/download', [CallCenterReportController::class, 'download'])->name('reports.download');
-            Route::post('/reports/{report}/exclude-file', [CallCenterReportController::class, 'submitExcludeFile'])->name('reports.exclude_file');
-            Route::post('/reports/{report}/include-file', [CallCenterReportController::class, 'submitIncludeFile'])->name('reports.include_file');
-            Route::post('/reports/{report}/unlock', [CallCenterReportController::class, 'unlockReview'])->name('reports.unlock');
 
-            Route::get('/regions', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexRegions'])->name('super.regions');
-            Route::get('/regions/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editRegionAdminForm'])->name('super.edit_region');
-            Route::put('/regions/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateRegionAdmin'])->name('super.update_region');
-            Route::get('/regions/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchRegions'])->name('super.regions.search');
+            // Super admin segment management routes (replaces cc.super.regions)
+            Route::get('/segments', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexSegments'])->name('super.segments');
+            Route::get('/segments/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editSegmentAdminForm'])->name('super.edit_segment');
+            Route::put('/segments/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateSegmentAdmin'])->name('super.update_segment');
+            Route::get('/segments/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchSegments'])->name('super.segments.search');
+
+            // CC super admin can also create RB region admins
+            Route::get('/rb-region/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'createRbRegionForm'])->name('super.rb_region.create');
+            Route::post('/rb-region', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'storeRbRegion'])->name('super.rb_region.store');
         });
     });
 

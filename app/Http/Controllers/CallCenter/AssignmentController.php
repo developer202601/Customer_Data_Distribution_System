@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Redirect;
 
 class AssignmentController extends Controller
 {
-    private function ensureRegionAdmin(): array
+    private function ensureSegmentAdmin(): array
     {
         $sessionUser = session('user');
         if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'cc') {
@@ -25,14 +25,24 @@ class AssignmentController extends Controller
         }
 
         $assignment = strtolower(trim((string) ($sessionUser['assignment'] ?? '')));
-        if ($assignment === 'super' || str_starts_with($assignment, 'caller_') || str_starts_with($assignment, 'supervisor_') || str_starts_with($assignment, 'rtom_')) {
+        if (! str_starts_with($assignment, 'segment_')) {
             abort(403);
         }
 
         return [
             'sessionUser' => $sessionUser,
-            'region' => $sessionUser['assignment'],
+            'assignment'  => $assignment,
         ];
+    }
+
+    private function segmentBucketLabel(string $assignment): string
+    {
+        return match ($assignment) {
+            'segment_ccs' => 'call center staff',
+            'segment_cc'  => 'call center',
+            'segment_s'   => 'staff',
+            default       => '',
+        };
     }
 
     public function index(Request $request)
@@ -757,23 +767,19 @@ class AssignmentController extends Controller
 
         $report = CallCenterReport::callCenter()->findOrFail((int) $reportId);
 
-        $pendingRegions = $this->pendingRegionalReviews($report);
-        if (! empty($pendingRegions)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])
-                ->withErrors(['reassign' => 'Distribution is blocked. Pending regional review: ' . implode(', ', $pendingRegions)]);
-        }
-
         $userIds = array_values(array_filter((array) $request->input('user_ids', []), fn($v) => is_numeric($v) && (int)$v > 0));
         $perUser = $request->input('per_user', null);
 
-        $sessionAssignment = $session['assignment'] ?? '';
-        $isRegionAdmin = preg_match('/^[A-Z_]+$/', $sessionAssignment) && !str_starts_with($sessionAssignment, 'caller_') && !str_starts_with($sessionAssignment, 'supervisor_') && !str_starts_with($sessionAssignment, 'rtom_') && $sessionAssignment !== 'super';
+        $sessionAssignment = strtolower(trim((string) ($session['assignment'] ?? '')));
+        $isSegmentAdmin    = str_starts_with($sessionAssignment, 'segment_');
 
-        if (empty($userIds) && $isRegionAdmin) {
-            $regionAdminId = (int) ($session['id'] ?? 0);
+        // Auto-fetch callers belonging to this segment admin if none selected
+        if (empty($userIds) && $isSegmentAdmin) {
+            $segmentAdminId  = (int) ($session['id'] ?? 0);
+            $callerAssignment = 'caller_' . substr($sessionAssignment, strlen('segment_'));
             $userIds = User::where('system', 'cc')
-                ->where('assignment', 'like', 'caller_%')
-                ->where('supervisor', $regionAdminId)
+                ->where('assignment', $callerAssignment)
+                ->where('supervisor', $segmentAdminId)
                 ->where('status', 1)
                 ->pluck('id')
                 ->map(fn($id) => (int) $id)
@@ -788,6 +794,26 @@ class AssignmentController extends Controller
                 ->withErrors(['reassign' => 'Select at least one user to distribute to.']);
         }
 
+        // Scope row IDs to this segment's bucket when distributing as segment admin
+        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values()->all();
+
+        if ($isSegmentAdmin) {
+            $bucketLabel = $this->segmentBucketLabel($sessionAssignment);
+            if ($bucketLabel !== '' && ! empty($rowIds)) {
+                $rowIds = \App\Models\MasterDatasetRow::whereIn('id', $rowIds)
+                    ->whereRaw('LOWER(TRIM(assigned_to)) = ?', [$bucketLabel])
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
+                    ->values()
+                    ->all();
+            }
+        }
+
+        if (empty($rowIds)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])
+                ->withErrors(['reassign' => 'No rows available for your segment in this report.']);
+        }
+
         if (!empty($userIds)) {
             try {
                 User::whereIn('id', $userIds)->update(['fixed' => 1]);
@@ -796,7 +822,7 @@ class AssignmentController extends Controller
         }
 
         if (!empty($userIds)) {
-            DB::transaction(function () use ($userId, $userIds, $reportId) {
+            DB::transaction(function () use ($userIds, $reportId) {
                 foreach ($userIds as $uid) {
                     $priorIds = CallCenterAssignment::callCenter()->where('assigned_user_id', (int) $uid)
                         ->where('call_center_report_id', '<>', (int) $reportId)
@@ -949,81 +975,5 @@ class AssignmentController extends Controller
         });
 
         return $candidate->refresh();
-    }
-
-    private function pendingRegionalReviews(CallCenterReport $report): array
-    {
-        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values();
-        if ($rowIds->isEmpty()) {
-            return [];
-        }
-
-        $regionsInReport = DB::table('master_dataset_rows')
-            ->whereIn('id', $rowIds->all())
-            ->whereNotNull('region')
-            ->selectRaw('LOWER(TRIM(region)) as region_key')
-            ->distinct()
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        if (empty($regionsInReport)) {
-            return [];
-        }
-
-        $enabledRegions = DB::table('users')
-            ->where('system', 'cc')
-            ->where('admin_prev', 1)
-            ->where('status', 1)
-            ->where('enable_regional_review', 1)
-            ->whereNotNull('enable_regional_review_enabled_at')
-            ->where('enable_regional_review_enabled_at', '<=', $report->created_at)
-            ->whereNotNull('assignment')
-            ->where('assignment', '<>', 'super')
-            ->where('assignment', 'not like', 'rtom_%')
-            ->where('assignment', 'not like', 'supervisor_%')
-            ->where('assignment', 'not like', 'caller_%')
-            ->select('assignment')
-            ->distinct()
-            ->get();
-
-        $regionLabelByKey = [];
-        foreach ($enabledRegions as $regionRow) {
-            $label = trim((string) ($regionRow->assignment ?? ''));
-            if ($label === '') {
-                continue;
-            }
-
-            $key = strtolower($label);
-            $regionLabelByKey[$key] = $label;
-        }
-        $enabledRegionKeys = array_keys($regionLabelByKey);
-
-        $required = array_values(array_unique(array_intersect($regionsInReport, $enabledRegionKeys)));
-        if (empty($required)) {
-            return [];
-        }
-
-        $reviewed = DB::table('call_center_report_region_reviews')
-            ->where('call_center_report_id', $report->id)
-            ->whereNotNull('reviewed_at')
-            ->selectRaw('LOWER(TRIM(region_name)) as region_key')
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        $pendingKeys = array_values(array_diff($required, $reviewed));
-        if (empty($pendingKeys)) {
-            return [];
-        }
-
-        $pendingLabels = [];
-        foreach ($pendingKeys as $key) {
-            $pendingLabels[] = $regionLabelByKey[$key] ?? $key;
-        }
-
-        return array_values(array_unique($pendingLabels));
     }
 }

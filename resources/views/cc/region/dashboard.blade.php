@@ -86,24 +86,24 @@
 
                 <div data-mode="latest">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">RTO Breakdown (Latest Report)</h6>
-                        <input type="search" class="form-control form-control-sm" id="latestRtomSearch" placeholder="Search RTOs..." style="width: 300px;">
+                        <h6 class="mb-0">Caller Breakdown (Latest Report)</h6>
+                        <input type="search" class="form-control form-control-sm" id="latestCallerSearch" placeholder="Search callers..." style="width: 300px;">
                     </div>
                     <div class="table-responsive cc-table-container">
                         <table class="table align-middle mb-0">
                             <thead>
                                 <tr>
-                                    <th>RTO</th>
+                                    <th>Caller</th>
                                     <th>Total</th>
                                     <th>Assigned</th>
                                     <th>Paid</th>
                                     <th class="text-end">Paid Amount</th>
                                 </tr>
                             </thead>
-                            <tbody id="latestRtomTableBody">
-                                @forelse($latestRtomBreakdown as $r)
-                                <tr class="rtom-row" data-rtom="{{ $r['rtom'] }}" data-supervisors="{{ json_encode($r['supervisor_profits']) }}" style="cursor: pointer;">
-                                    <td>{{ $r['rtom'] }}</td>
+                            <tbody id="latestCallerTableBody">
+                                @forelse($latestCallerBreakdown as $r)
+                                <tr class="caller-row" data-caller="{{ $r['agent'] }}">
+                                    <td>{{ $r['agent'] }}</td>
                                     <td>{{ $r['total'] }}</td>
                                     <td>{{ $r['assigned'] }}</td>
                                     <td>{{ $r['paid'] }}</td>
@@ -119,24 +119,24 @@
 
                 <div data-mode="all-time" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">RTO Breakdown (All-Time)</h6>
-                        <input type="search" class="form-control form-control-sm" id="allTimeRtomSearch" placeholder="Search RTOs..." style="width: 300px;">
+                        <h6 class="mb-0">Caller Breakdown (All-Time)</h6>
+                        <input type="search" class="form-control form-control-sm" id="allTimeCallerSearch" placeholder="Search callers..." style="width: 300px;">
                     </div>
                     <div class="table-responsive cc-table-container">
                         <table class="table align-middle mb-0">
                             <thead>
                                 <tr>
-                                    <th>RTO</th>
+                                    <th>Caller</th>
                                     <th>Total</th>
                                     <th>Assigned</th>
                                     <th>Paid</th>
                                     <th class="text-end">Paid Amount</th>
                                 </tr>
                             </thead>
-                            <tbody id="allTimeRtomTableBody">
-                                @forelse($allTimeRtomBreakdown as $r)
-                                <tr class="rtom-row" data-rtom="{{ $r['rtom'] }}" data-supervisors="{{ json_encode($r['supervisor_profits']) }}" style="cursor: pointer;">
-                                    <td>{{ $r['rtom'] }}</td>
+                            <tbody id="allTimeCallerTableBody">
+                                @forelse($allTimeCallerBreakdown as $r)
+                                <tr class="caller-row" data-caller="{{ $r['agent'] }}">
+                                    <td>{{ $r['agent'] }}</td>
                                     <td>{{ $r['total'] }}</td>
                                     <td>{{ $r['assigned'] }}</td>
                                     <td>{{ $r['paid'] }}</td>
@@ -182,96 +182,25 @@ document.addEventListener('DOMContentLoaded', function () {
     // default to latest
     setRegionViewMode('latest');
 
-    // RTOM search functionality
-    function setupSearch(searchInputId, tableBodyId) {
+    // Caller search functionality
+    function setupCallerSearch(searchInputId, tableBodyId) {
         const searchInput = document.getElementById(searchInputId);
         const tableBody = document.getElementById(tableBodyId);
-        const rows = tableBody.querySelectorAll('.rtom-row');
+        const rows = tableBody.querySelectorAll('.caller-row');
 
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
             
             rows.forEach(row => {
-                const rtomName = row.cells[0].textContent.toLowerCase();
-                const shouldShow = rtomName.includes(searchTerm);
+                const callerName = row.cells[0].textContent.toLowerCase();
+                const shouldShow = callerName.includes(searchTerm);
                 row.style.display = shouldShow ? '' : 'none';
             });
         });
     }
 
-    setupSearch('latestRtomSearch', 'latestRtomTableBody');
-    setupSearch('allTimeRtomSearch', 'allTimeRtomTableBody');
-
-    // RTOM row click for supervisor profit chart
-    document.querySelectorAll('.rtom-row').forEach(row => {
-        row.addEventListener('click', function() {
-            const rtom = this.dataset.rtom;
-            const supervisors = JSON.parse(this.dataset.supervisors || '[]');
-
-            if (supervisors.length === 0) {
-                alert('No supervisors found for this RTO.');
-                return;
-            }
-
-            // Show modal
-            const modal = document.getElementById('supervisorProfitModal');
-            modal.querySelector('.modal-title').textContent = `Supervisor Profits for RTO: ${rtom}`;
-            modal.style.display = 'block';
-
-            // Destroy previous chart if it exists
-            if (supervisorProfitChart) {
-                supervisorProfitChart.destroy();
-            }
-
-            // Prepare chart data
-            const labels = supervisors.map(s => s.name);
-            const data = supervisors.map(s => s.profit);
-
-            const ctx = document.getElementById('supervisorProfitChart').getContext('2d');
-            supervisorProfitChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Profit Margin ($)',
-                        data: data,
-                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    indexAxis: 'y', // Horizontal bar chart
-                    responsive: true,
-                    scales: {
-                        x: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        });
-    });
-
-    // Close modal
-    document.querySelector('.btn-close').addEventListener('click', function() {
-        document.getElementById('supervisorProfitModal').style.display = 'none';
-    });
-
-    // Close modal functionality
-    document.querySelectorAll('[data-bs-dismiss="modal"]').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const modal = this.closest('.modal');
-            modal.style.display = 'none';
-        });
-    });
-
-    window.addEventListener('click', function(event) {
-        const modal = document.getElementById('supervisorProfitModal');
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
+    setupCallerSearch('latestCallerSearch', 'latestCallerTableBody');
+    setupCallerSearch('allTimeCallerSearch', 'allTimeCallerTableBody');
 });
 </script>
 

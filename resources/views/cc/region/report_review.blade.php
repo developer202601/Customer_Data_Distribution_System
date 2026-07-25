@@ -18,8 +18,7 @@
                         <div>
                             <p class="text-uppercase text-muted mb-1">Call Center — Region: {{ $region }}</p>
                             <h1 class="process-upload-title mb-0">Review Report Rows</h1>
-                            <p class="text-muted small mb-0">Hide unwanted rows before they are distributed to supervisors
-                                and callers.</p>
+                            <p class="text-muted small mb-0">Hide unwanted rows before they are distributed to callers.</p>
                         </div>
                         <a href="{{ route('cc.region.dashboard') }}"
                             class="btn btn-outline-secondary rounded-pill px-4">Back to Dashboard</a>
@@ -132,8 +131,7 @@
                             <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
                                 <form method="post" action="{{ route('cc.region.review.pass', $selectedReport->id) }}">
                                     @csrf
-                                    <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">Pass to
-                                        Supervisors</button>
+                                    <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">Pass Report</button>
                                 </form>
                                 @if(!empty($reviewRecord?->reviewed_at))
                                     <span class="small text-success">Passed at

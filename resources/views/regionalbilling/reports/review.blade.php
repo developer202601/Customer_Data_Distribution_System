@@ -172,6 +172,88 @@
                                 margin-bottom: 0.5rem;
                             }
                         </style>
+
+                        {{-- Exclude File Modal --}}
+                        <div class="modal fade" id="excludeFileModal" tabindex="-1" aria-labelledby="excludeFileModalLabel" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content rounded-4 border-0 shadow">
+                                    <div class="modal-header border-0 pb-0">
+                                        <h5 class="modal-title fw-semibold" id="excludeFileModalLabel">Upload Exclude File</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <form id="excludeFileForm" method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" data-loader-off="1">
+                                        @csrf
+                                        <div class="modal-body">
+                                            <p class="text-muted small mb-3">
+                                                Upload an <strong>.xlsx</strong> workbook with an <code>ACCOUNT_NUM</code> column.
+                                                Any matching rows will be hidden from the review set.
+                                            </p>
+                                            <div class="mb-3">
+                                                <label for="excludeFileInput" class="form-label small fw-semibold">Select file</label>
+                                                <input
+                                                    type="file"
+                                                    id="excludeFileInput"
+                                                    name="exclude_file"
+                                                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                                    class="form-control"
+                                                    required
+                                                />
+                                            </div>
+                                            <div id="excludeFileModalError" class="alert alert-danger d-none mb-0 small"></div>
+                                            <div id="excludeFileModalSuccess" class="alert alert-success d-none mb-0 small"></div>
+                                        </div>
+                                        <div class="modal-footer border-0 pt-0">
+                                            <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" id="excludeFileSubmitBtn" class="btn btn-danger rounded-pill px-4">
+                                                <span id="excludeFileBtnText">Submit</span>
+                                                <span id="excludeFileSpinner" class="spinner-border spinner-border-sm ms-1 d-none" role="status" aria-hidden="true"></span>
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Include File Modal --}}
+                        <div class="modal fade" id="includeFileModal" tabindex="-1" aria-labelledby="includeFileModalLabel" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content rounded-4 border-0 shadow">
+                                    <div class="modal-header border-0 pb-0">
+                                        <h5 class="modal-title fw-semibold" id="includeFileModalLabel">Upload Inclusion File</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <form id="includeFileForm" method="post" action="{{ route('rb.reports.include_file', $selectedReport->id) }}" enctype="multipart/form-data" data-loader-off="1">
+                                        @csrf
+                                        <div class="modal-body">
+                                            <p class="text-muted small mb-3">
+                                                Upload an <strong>.xlsx</strong> workbook with a <code>CUSTOMER_REF</code>, <code>ACCOUNT_NUM</code>, or <code>PRODUCT_LABEL</code> column.
+                                                Only matching rows will remain visible — everything else will be hidden.
+                                            </p>
+                                            <div class="mb-3">
+                                                <label for="includeFileInput" class="form-label small fw-semibold">Select file</label>
+                                                <input
+                                                    type="file"
+                                                    id="includeFileInput"
+                                                    name="include_file"
+                                                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                                    class="form-control"
+                                                    required
+                                                />
+                                            </div>
+                                            <div id="includeFileModalError" class="alert alert-danger d-none mb-0 small"></div>
+                                            <div id="includeFileModalSuccess" class="alert alert-success d-none mb-0 small"></div>
+                                        </div>
+                                        <div class="modal-footer border-0 pt-0">
+                                            <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                                            <button type="submit" id="includeFileSubmitBtn" class="btn btn-success rounded-pill px-4">
+                                                <span id="includeFileBtnText">Submit</span>
+                                                <span id="includeFileSpinner" class="spinner-border spinner-border-sm ms-1 d-none" role="status" aria-hidden="true"></span>
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
                     @else
                         @if(!empty($reviewOptIn) && !empty($reviewEnabledAt))
                             <div class="alert alert-info mb-0">No reviewable reports found for your region after {{ $reviewEnabledAt->format('Y-m-d H:i') }}.</div>
@@ -374,16 +456,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const target = Array.from(selectedRows.values()).filter(function (x) { return x.visibility === (action === 'hide' ? 'visible' : 'hidden'); });
         if (!target.length) return;
 
-        const actionInput = bulkForm.querySelector('input[name="action"]');
-        if (actionInput) actionInput.value = action;
-
-        const fd = new FormData(bulkForm);
-        const rowIds = Array.from(fd.getAll('row_ids[]')).map(function (value) { return String(value || '').trim(); }).filter(function (value) { return value !== ''; });
-        if (!rowIds.length) {
-            console.error('Bulk action missing row_ids', action, target);
-            return;
-        }
-
         const isLocked = bulkActionsDock?.getAttribute('data-locked') === '1';
         if (isLocked) {
             showToast('Review is locked. Unlock it to change row visibility.', true);
@@ -392,6 +464,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const bulkActionUrl = bulkForm.getAttribute('action');
         if (!bulkActionUrl) return;
+
+        // Build FormData from the selectedRows Map (not from DOM checkboxes, which may not
+        // reflect the full cross-page selection tracked in the Map).
+        const rowIds = target.map(function (x) { return String(x.id); });
+        const fd = new FormData();
+        // Include the CSRF token from the form
+        const csrfInput = bulkForm.querySelector('input[name="_token"]');
+        if (csrfInput) fd.append('_token', csrfInput.value);
+        fd.append('action', action);
+        rowIds.forEach(function (id) { fd.append('row_ids[]', id); });
+
         console.log('Bulk action submitting', action, bulkActionUrl, rowIds);
 
         const res = await fetch(bulkActionUrl, {
@@ -413,6 +496,122 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (bulkHideBtn) bulkHideBtn.addEventListener('click', function () { postBulkAction('hide'); });
     if (bulkUnhideBtn) bulkUnhideBtn.addEventListener('click', function () { postBulkAction('unhide'); });
+
+    // -------------------------------------------------------------------------
+    // Exclude / Include file modal AJAX submissions
+    // -------------------------------------------------------------------------
+    function setupFileModal(opts) {
+        // opts: { formId, errorId, successId, submitBtnId, btnTextId, spinnerId, fileInputId, modalId }
+        const form        = document.getElementById(opts.formId);
+        const errorEl     = document.getElementById(opts.errorId);
+        const successEl   = document.getElementById(opts.successId);
+        const submitBtn   = document.getElementById(opts.submitBtnId);
+        const btnText     = document.getElementById(opts.btnTextId);
+        const spinner     = document.getElementById(opts.spinnerId);
+        const modalEl     = document.getElementById(opts.modalId);
+        if (!form || !modalEl) return;
+
+        // Reset state whenever the modal opens
+        modalEl.addEventListener('show.bs.modal', function () {
+            form.reset();
+            if (errorEl)   { errorEl.textContent = '';   errorEl.classList.add('d-none'); }
+            if (successEl) { successEl.textContent = ''; successEl.classList.add('d-none'); }
+            if (submitBtn) submitBtn.disabled = false;
+            if (btnText)   btnText.textContent = 'Submit';
+            if (spinner)   spinner.classList.add('d-none');
+        });
+
+        form.addEventListener('submit', async function (ev) {
+            ev.preventDefault();
+
+            const fileInput = document.getElementById(opts.fileInputId);
+            if (!fileInput || !fileInput.files.length) {
+                if (errorEl) { errorEl.textContent = 'Please select a file.'; errorEl.classList.remove('d-none'); }
+                return;
+            }
+
+            // Show spinner, disable submit
+            if (submitBtn) submitBtn.disabled = true;
+            if (btnText)   btnText.textContent = 'Uploading…';
+            if (spinner)   spinner.classList.remove('d-none');
+            if (errorEl)   { errorEl.textContent = '';   errorEl.classList.add('d-none'); }
+            if (successEl) { successEl.textContent = ''; successEl.classList.add('d-none'); }
+
+            function restoreBtn() {
+                if (submitBtn) submitBtn.disabled = false;
+                if (btnText)   btnText.textContent = 'Submit';
+                if (spinner)   spinner.classList.add('d-none');
+            }
+
+            let res, data;
+            try {
+                const fd = new FormData(form);
+                res = await fetch(form.getAttribute('action'), {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    body: fd
+                });
+                data = await res.json().catch(() => null);
+            } catch (err) {
+                restoreBtn();
+                if (errorEl) { errorEl.textContent = 'Network error. Please check your connection and try again.'; errorEl.classList.remove('d-none'); }
+                return;
+            }
+
+            restoreBtn();
+
+            if (!res.ok) {
+                const msg = data?.message
+                    || (data?.errors ? Object.values(data.errors).flat().join(' ') : null)
+                    || 'Upload failed. Please try again.';
+                if (errorEl) { errorEl.textContent = msg; errorEl.classList.remove('d-none'); }
+                return;
+            }
+
+            // Success — close modal immediately, then toast + refresh table
+            const msg = data?.message || 'File processed successfully.';
+            const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+            // Wait for the modal to fully close before refreshing the table.
+            // Running fetchTable during Bootstrap's close animation can interrupt
+            // the backdrop removal, leaving the overlay stuck on screen.
+            modalEl.addEventListener('hidden.bs.modal', function onHidden() {
+                modalEl.removeEventListener('hidden.bs.modal', onHidden);
+                // Safety: ensure body is fully cleaned up
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                document.querySelectorAll('.modal-backdrop').forEach(function (el) { el.remove(); });
+                showToast(msg);
+                fetchTable(currentPage);
+            });
+
+            bsModal.hide();
+        });
+    }
+
+    setupFileModal({
+        formId:      'excludeFileForm',
+        errorId:     'excludeFileModalError',
+        successId:   'excludeFileModalSuccess',
+        submitBtnId: 'excludeFileSubmitBtn',
+        btnTextId:   'excludeFileBtnText',
+        spinnerId:   'excludeFileSpinner',
+        fileInputId: 'excludeFileInput',
+        modalId:     'excludeFileModal',
+    });
+
+    setupFileModal({
+        formId:      'includeFileForm',
+        errorId:     'includeFileModalError',
+        successId:   'includeFileModalSuccess',
+        submitBtnId: 'includeFileSubmitBtn',
+        btnTextId:   'includeFileBtnText',
+        spinnerId:   'includeFileSpinner',
+        fileInputId: 'includeFileInput',
+        modalId:     'includeFileModal',
+    });
 
     document.addEventListener('change', function (ev) {
         if (ev.target?.id === 'showHiddenRowsToggle') {

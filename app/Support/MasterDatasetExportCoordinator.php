@@ -217,6 +217,7 @@ class MasterDatasetExportCoordinator
                     'file_hash' => $hash,
                 ]);
 
+                /*
                 if ($bucket === 'call-center-staff') {
                     $this->recordReport($freshProcess, $query, CallCenterReport::REPORT_TYPE_CALL_CENTER);
                 }
@@ -224,6 +225,7 @@ class MasterDatasetExportCoordinator
                 if ($bucket === 'region-billing') {
                     $this->recordReport($freshProcess, $query, CallCenterReport::REPORT_TYPE_REGIONAL_BILLING);
                 }
+                */
             } catch (Throwable $exception) {
                 $meta = $record->meta ?? [];
                 $meta['error'] = $exception->getMessage();
@@ -304,11 +306,31 @@ class MasterDatasetExportCoordinator
         return array_keys(self::EXPORT_BUCKETS);
     }
 
+    public function passBucket(MasterDatasetProcess $process, string $bucket): void
+    {
+        $query = $this->viewService->bucketQuery($process, $bucket);
+
+        if ($bucket === 'region-billing') {
+            $this->recordReport($process, $query, CallCenterReport::REPORT_TYPE_REGIONAL_BILLING);
+        } else {
+            $this->recordReport($process, $query, CallCenterReport::REPORT_TYPE_CALL_CENTER);
+        }
+    }
+
     private function recordReport(MasterDatasetProcess $process, Builder $query, string $reportType): void
     {
         $rowIds = (clone $query)->pluck('id')->map(function ($value) {
             return is_numeric($value) ? (int) $value : $value;
         })->toArray();
+
+        $existingReport = CallCenterReport::where('master_dataset_process_id', $process->id)
+            ->where('report_type', $reportType)
+            ->first();
+
+        if ($existingReport) {
+            $existingRowIds = is_array($existingReport->row_ids) ? $existingReport->row_ids : [];
+            $rowIds = array_values(array_unique(array_merge($existingRowIds, $rowIds)));
+        }
 
         $report = CallCenterReport::updateOrCreate([
             'master_dataset_process_id' => $process->id,

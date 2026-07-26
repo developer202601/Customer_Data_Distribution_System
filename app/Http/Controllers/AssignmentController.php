@@ -691,6 +691,36 @@ class AssignmentController extends Controller
         */
     }
 
+    public function pass(Request $request, MasterDatasetProcess $process): RedirectResponse
+    {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        if (! $isAdmin) {
+            abort(403);
+        }
+
+        if ($process->status !== MasterDatasetProcessStatus::READY) {
+            return redirect()->back()->withErrors(['process' => 'Dataset is not ready yet.']);
+        }
+
+        $bucket = $request->input('bucket');
+        $allowed = ['call-center-staff', 'call-center', 'staff', 'region-billing'];
+        if (! in_array($bucket, $allowed, true)) {
+            return redirect()->back()->withErrors(['process' => 'Invalid section.']);
+        }
+
+        $this->exportCoordinator->passBucket($process, $bucket);
+
+        $label = match ($bucket) {
+            'call-center-staff' => 'Call Center Staff',
+            'call-center' => 'Call Center',
+            'staff' => 'Staff',
+            'region-billing' => 'Region Billing Centre',
+            default => '',
+        };
+
+        return redirect()->back()->with('status', "Dataset records successfully passed to {$label}.");
+    }
+
     private function bucketAllowed(string $group, string $bucket): bool
     {
         $map = [

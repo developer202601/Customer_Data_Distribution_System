@@ -281,9 +281,20 @@ class ReportController extends Controller
             return redirect()->route('cc.super.segments');
         }
 
+        $bucketLabel = match ($sessionAssignment) {
+            'segment_ccs' => 'call center staff',
+            'segment_cc'  => 'call center',
+            'segment_s'   => 'staff',
+            default       => '',
+        };
+
         $reports = CallCenterReport::callCenter()->with('process')
             ->orderByDesc('created_at')
             ->get();
+
+        if ($bucketLabel !== '') {
+            $reports = $reports->filter(fn($report) => $report->hasRowsForBucket($bucketLabel));
+        }
 
         $assignmentStats = CallCenterAssignment::callCenter()->selectRaw(
             'call_center_report_id,

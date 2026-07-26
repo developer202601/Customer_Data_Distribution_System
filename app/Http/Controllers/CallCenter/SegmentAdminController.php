@@ -74,7 +74,8 @@ class SegmentAdminController extends Controller
 
         $latestReport = CallCenterReport::callCenter()
             ->latest('created_at')
-            ->first();
+            ->get()
+            ->first(fn($report) => $report->hasRowsForBucket($bucketLabel));
 
         $latestTotal    = 0;
         $latestAssigned = 0;

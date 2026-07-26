@@ -183,6 +183,7 @@
                         <thead>
                             <tr>
                                 <th scope="col" class="align-middle">Assigned Unit</th>
+                                <th scope="col" class="text-center align-middle" style="width: 250px;">Release Action</th>
                                 <th scope="col" class="text-end align-middle">Download</th>
                             </tr>
                         </thead>
@@ -196,13 +197,69 @@
                                         <span class="text-muted">({{ number_format($quotaCount) }})</span>
                                     </div>
                                 </th>
+                                <td class="text-center align-middle">
+                                    @php
+                                        $passed = false;
+                                        $releasedAtStr = '';
+                                        if ($key === 'region-billing') {
+                                            $rep = \App\Models\CallCenterReport::where('master_dataset_process_id', $process->id)
+                                                ->where('report_type', \App\Models\CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+                                                ->first();
+                                            $passed = (bool) $rep;
+                                            if ($rep) {
+                                                $releasedAtStr = $rep->created_at->format('Y-m-d H:i:s');
+                                            }
+                                        } else {
+                                            $report = \App\Models\CallCenterReport::where('master_dataset_process_id', $process->id)
+                                                ->where('report_type', \App\Models\CallCenterReport::REPORT_TYPE_CALL_CENTER)
+                                                ->first();
+                                            if ($report && is_array($report->row_ids) && !empty($report->row_ids)) {
+                                                $bucketLabel = match($key) {
+                                                    'call-center-staff' => 'call center staff',
+                                                    'call-center' => 'call center',
+                                                    'staff' => 'staff',
+                                                    default => '',
+                                                };
+                                                $passed = \App\Models\MasterDatasetRow::where('process_id', $process->id)
+                                                    ->whereRaw('LOWER(TRIM(assigned_to)) = ?', [$bucketLabel])
+                                                    ->whereIn('id', $report->row_ids)
+                                                    ->exists();
+                                                if ($passed) {
+                                                    $assign = \App\Models\CallCenterAssignment::where('call_center_report_id', $report->id)
+                                                        ->whereHas('row', fn($q) => $q->whereRaw('LOWER(TRIM(assigned_to)) = ?', [$bucketLabel]))
+                                                        ->orderBy('id', 'asc')
+                                                        ->first();
+                                                    $releasedAtStr = $assign ? $assign->created_at->format('Y-m-d H:i:s') : $report->created_at->format('Y-m-d H:i:s');
+                                                }
+                                            }
+                                        }
+                                        $labelName = match($key) {
+                                            'call-center-staff' => 'Call Center Staff',
+                                            'call-center' => 'Call Center',
+                                            'staff' => 'Staff',
+                                            'region-billing' => 'Region Billing Centre',
+                                            default => 'Section',
+                                        };
+                                    @endphp
+                                    @if($quotaCount === 0)
+                                        <span class="btn btn-outline-secondary btn-sm disabled" aria-disabled="true" style="opacity:0.6; border-radius:50px;">Unavailable</span>
+                                    @elseif($passed)
+                                        <span class="text-muted" style="font-weight: 500;">Released {{ $releasedAtStr }}</span>
+                                    @else
+                                        <form method="post" action="{{ route('process.assignments.pass', ['process' => $process]) }}" class="d-inline">
+                                            @csrf
+                                            <input type="hidden" name="bucket" value="{{ $key }}">
+                                            <button type="submit" class="btn btn-primary btn-sm" style="border-radius:50px;">Release Records</button>
+                                        </form>
+                                    @endif
+                                </td>
                                 <td class="text-end align-middle">
                                     @php $renderDownloadButtons('group-a', $key, $quotaCount); @endphp
                                 </td>
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="2" class="text-center py-4 text-muted">No retail &amp; micro quotas available. Upload a dataset to continue.</td>
+                                <td colspan="3" class="text-center py-4 text-muted">No retail &amp; micro quotas available. Upload a dataset to continue.</td>
                             </tr>
                             @endforelse
                             <tr>
@@ -212,6 +269,29 @@
                                         <span class="text-muted">({{ number_format($regionCount) }})</span>
                                     </div>
                                 </th>
+                                <td class="text-center align-middle">
+                                    @php
+                                        $key = 'region-billing';
+                                        $quotaCount = (int) $regionCount;
+                                        $rep = \App\Models\CallCenterReport::where('master_dataset_process_id', $process->id)
+                                            ->where('report_type', \App\Models\CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+                                            ->first();
+                                        $passed = (bool) $rep;
+                                        $releasedAtStr = $rep ? $rep->created_at->format('Y-m-d H:i:s') : '';
+                                        $labelName = 'Region Billing Centre';
+                                    @endphp
+                                    @if($quotaCount === 0)
+                                        <span class="btn btn-outline-secondary btn-sm disabled" aria-disabled="true" style="opacity:0.6; border-radius:50px;">Unavailable</span>
+                                    @elseif($passed)
+                                        <span class="text-muted" style="font-weight: 500;">Released {{ $releasedAtStr }}</span>
+                                    @else
+                                        <form method="post" action="{{ route('process.assignments.pass', ['process' => $process]) }}" class="d-inline">
+                                            @csrf
+                                            <input type="hidden" name="bucket" value="{{ $key }}">
+                                            <button type="submit" class="btn btn-primary btn-sm" style="border-radius:50px;">Release Records</button>
+                                        </form>
+                                    @endif
+                                </td>
                                 <td class="text-end align-middle">
                                     @php $renderDownloadButtons('region', 'region-billing', (int) $regionCount); @endphp
                                 </td>

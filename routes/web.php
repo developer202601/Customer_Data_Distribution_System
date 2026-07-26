@@ -78,6 +78,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments/reports/{process}/download-master', [AssignmentController::class, 'downloadOriginalMaster'])->name('process.assignments.download-master');
     // Consolidated into overview; group-specific pages removed
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
+    Route::post('/process/assignments/pass/{process}', [AssignmentController::class, 'pass'])->name('process.assignments.pass');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
     Route::post('/admin/users', [AdminController::class, 'createUser'])->name('admin.createUser');

@@ -68,4 +68,14 @@ class CallCenterReport extends Model
             'assignment_id'
         );
     }
+
+    public function hasRowsForBucket(string $bucketLabel): bool
+    {
+        if (empty($this->row_ids)) {
+            return false;
+        }
+        return \App\Models\MasterDatasetRow::whereIn('id', $this->row_ids)
+            ->whereRaw('LOWER(TRIM(assigned_to)) = ?', [strtolower(trim($bucketLabel))])
+            ->exists();
+    }
 }

@@ -220,6 +220,103 @@ class SuperAdminController extends Controller
             ->with('status', 'Assignment updated.');
     }
 
+    // -------------------------------------------------------------------------
+    // RB region admin management (CC super admin view of existing RB region admins)
+    // -------------------------------------------------------------------------
+
+    public function indexRbRegions()
+    {
+        $this->ensureSuper();
+
+        $q              = request()->query('q');
+        $selectedRegion = request()->query('region');
+
+        $regionAdmins = $this->buildRbRegionQuery($q, $selectedRegion)->get();
+
+        $regions = User::where('system', 'rb')
+            ->where('admin_prev', 1)
+            ->where('assignment', '!=', 'super')
+            ->where('assignment', 'not like', 'rtom_%')
+            ->where('assignment', 'not like', 'caller_%')
+            ->where('assignment', 'not like', 'supervisor_%')
+            ->distinct()
+            ->orderBy('assignment')
+            ->pluck('assignment')
+            ->values();
+
+        return view('cc.super.rb_regions', compact('regionAdmins', 'regions', 'q', 'selectedRegion'));
+    }
+
+    public function searchRbRegions(Request $request)
+    {
+        $this->ensureSuper();
+
+        $q              = $request->query('q');
+        $selectedRegion = $request->query('region');
+
+        $regionAdmins = $this->buildRbRegionQuery($q, $selectedRegion)->get();
+
+        return view('cc.super._rb_region_rows', compact('regionAdmins'));
+    }
+
+    public function editRbRegionForm(User $user)
+    {
+        $this->ensureSuper();
+        $this->assertIsRbRegionAdmin($user);
+
+        return view('cc.super.edit_rb_region', compact('user'));
+    }
+
+    public function updateRbRegion(Request $request, User $user)
+    {
+        $this->ensureSuper();
+        $this->assertIsRbRegionAdmin($user);
+
+        $request->validate([
+            'name' => 'nullable|string|max:45',
+        ]);
+
+        $user->name = $request->input('name');
+        $user->save();
+
+        return redirect()->route('cc.super.rb_regions')->with('status', 'RB region admin updated.');
+    }
+
+    private function buildRbRegionQuery(?string $q, ?string $region)
+    {
+        $query = User::where('system', 'rb')
+            ->where('admin_prev', 1)
+            ->where('assignment', '!=', 'super')
+            ->where('assignment', 'not like', 'rtom_%')
+            ->where('assignment', 'not like', 'caller_%')
+            ->where('assignment', 'not like', 'supervisor_%');
+
+        if (! empty($q)) {
+            $query->where(function ($w) use ($q) {
+                $w->where('username', 'like', "%{$q}%")
+                  ->orWhere('name', 'like', "%{$q}%");
+            });
+        }
+
+        if (! empty($region)) {
+            $query->where('assignment', $region);
+        }
+
+        return $query->orderBy('assignment')->orderBy('username');
+    }
+
+    private function assertIsRbRegionAdmin(User $user): void
+    {
+        if ($user->system !== 'rb'
+            || ! $user->admin_prev
+            || $user->assignment === 'super'
+            || str_starts_with((string) ($user->assignment ?? ''), 'rtom_')
+            || str_starts_with((string) ($user->assignment ?? ''), 'caller_')
+            || str_starts_with((string) ($user->assignment ?? ''), 'supervisor_')) {
+            abort(404);
+        }
+    }
+
     /** Expose segment labels for use in views */
     public static function segmentLabels(): array
     {

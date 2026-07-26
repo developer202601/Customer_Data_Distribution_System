@@ -21,8 +21,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|\Illuminate\Http\RedirectResponse
     {
+        // Reports are owned by segment admins only — super admins are redirected
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        if ($sessionAssignment === 'super') {
+            return redirect()->route('cc.super.segments');
+        }
+
         $reports = CallCenterReport::callCenter()->with('process')
             ->orderByDesc('created_at')
             ->get();
@@ -55,10 +61,25 @@ class ReportController extends Controller
             ->get()
             : collect();
 
-        $ccUsers = User::where('system', 'cc')
-            ->where('assignment', 'like', 'caller_%')
-            ->orderBy('username')
-            ->get();
+        $sessionUser    = session('user');
+        $sessionAssignment = strtolower(trim((string) ($sessionUser['assignment'] ?? '')));
+        $isSegmentAdmin = str_starts_with($sessionAssignment, 'segment_');
+        $isSuperAdmin   = $sessionAssignment === 'super';
+
+        // Segment admins only see their own callers; super admins see no callers
+        // (super admins observe reports but do not distribute — segment admins do that)
+        if ($isSegmentAdmin) {
+            $callerAssignment = 'caller_' . substr($sessionAssignment, strlen('segment_'));
+            $segmentAdminId   = (int) ($sessionUser['id'] ?? 0);
+            $ccUsers = User::where('system', 'cc')
+                ->where('assignment', $callerAssignment)
+                ->where('supervisor', $segmentAdminId)
+                ->where('status', 1)
+                ->orderBy('username')
+                ->get();
+        } else {
+            $ccUsers = collect();
+        }
 
         $pendingCounts = [];
         foreach ($ccUsers as $u) {
@@ -116,6 +137,38 @@ class ReportController extends Controller
         $anyAssigned = $assignedCount > 0;
         $allAssigned = $selectedReport ? ($effectiveRowCount > 0 && $assignedCount >= $effectiveRowCount) : false;
         $distributableRows = $selectedReport ? max(0, $effectiveRowCount - $assignedCount) : 0;
+        $bucketRowCount = $effectiveRowCount; // overridden below for segment admins
+
+        // For segment admins, restrict distributable count to their bucket rows only
+        if ($isSegmentAdmin && $selectedReport && ! empty($allowedRowIds)) {
+            $bucketLabel = match ($sessionAssignment) {
+                'segment_ccs' => 'call center staff',
+                'segment_cc'  => 'call center',
+                'segment_s'   => 'staff',
+                default       => '',
+            };
+            if ($bucketLabel !== '') {
+                $bucketRowIds = \App\Models\MasterDatasetRow::whereIn('id', $allowedRowIds)
+                    ->whereRaw('LOWER(TRIM(assigned_to)) = ?', [$bucketLabel])
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
+                    ->values()
+                    ->all();
+                $bucketAssigned = CallCenterAssignment::callCenter()
+                    ->where('call_center_report_id', $selectedReport->id)
+                    ->whereIn('master_dataset_row_id', $bucketRowIds)
+                    ->whereNotNull('assigned_user_id')
+                    ->count();
+                $distributableRows = max(0, count($bucketRowIds) - $bucketAssigned);
+                $allAssigned = count($bucketRowIds) > 0 && $bucketAssigned >= count($bucketRowIds);
+                $anyAssigned = $bucketAssigned > 0;
+                $bucketRowCount = count($bucketRowIds);
+            } else {
+                // Unknown segment — nothing to distribute
+                $distributableRows = 0;
+                $allAssigned = false;
+            }
+        }
 
         $regionalReviewStatus = [
             'hidden_count' => count($hiddenRowIds),
@@ -150,7 +203,9 @@ class ReportController extends Controller
             'reports' => $reports,
             'selectedReport' => $selectedReport,
             'ccUsers' => $ccUsers,
-            'currentSupervisorId' => null,
+            'isSegmentAdmin' => $isSegmentAdmin,
+            'currentSupervisorId' => $isSegmentAdmin ? ($sessionUser['id'] ?? null) : null,
+            'bucketRowCount' => $bucketRowCount ?? $effectiveRowCount,
             'allowedRowIds' => $allowedRowIds,
             'rejectedAssignments' => $rejectedAssignments,
             'acceptedAssignments' => $acceptedAssignments,
@@ -219,8 +274,13 @@ class ReportController extends Controller
         ]);
     }
 
-    public function history(): View
+    public function history(): View|\Illuminate\Http\RedirectResponse
     {
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        if ($sessionAssignment === 'super') {
+            return redirect()->route('cc.super.segments');
+        }
+
         $reports = CallCenterReport::callCenter()->with('process')
             ->orderByDesc('created_at')
             ->get();
@@ -288,8 +348,13 @@ class ReportController extends Controller
         ]);
     }
 
-    public function summary(CallCenterReport $report): View
+    public function summary(CallCenterReport $report): View|\Illuminate\Http\RedirectResponse
     {
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        if ($sessionAssignment === 'super') {
+            return redirect()->route('cc.super.segments');
+        }
+
         $label = $this->formatReportLabel($report);
         $assignments = CallCenterAssignment::callCenter()->with(['agent', 'row', 'interactions.agent'])
             ->where('call_center_report_id', $report->id)

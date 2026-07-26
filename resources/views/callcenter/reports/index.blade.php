@@ -120,22 +120,26 @@
                     <div class="col-md-6">
                         <div class="card bg-light border-0 h-100 rounded-4">
                             <div class="card-body">
-                                <p class="text-uppercase text-muted small mb-1">Call Center rows captured</p>
-                                @if(session('user.assignment') && Str::startsWith(session('user.assignment'), 'supervisor_'))
-                                <h2 class="h4 mb-0">{{ number_format(count($allowedRowIds ?? [])) }}</h2>
-                                @else
-                                <h2 class="h4 mb-0">{{ number_format($selectedReport->row_count) }}</h2>
-                                @endif
+                                <p class="text-uppercase text-muted small mb-1">
+                                    {{ ($isSegmentAdmin ?? false) ? 'Your bucket rows' : 'Call Center rows captured' }}
+                                </p>
+                                <h2 class="h4 mb-0">{{ number_format($bucketRowCount ?? $selectedReport->row_count) }}</h2>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="row mt-4">
-                    @if(! ($allAssigned ?? false) && (($distributableRows ?? 0) > 0))
+                    @if(($isSegmentAdmin ?? false) && ! ($allAssigned ?? false) && (($distributableRows ?? 0) > 0))
                     <div class="col-12">
                         <div class="card border-0 rounded-4 bg-white shadow-sm">
                             <div class="card-body">
                                 <p class="text-uppercase text-muted small mb-3">Distribute rows to call center users</p>
+                                @if($ccUsers->isEmpty())
+                                    <div class="alert alert-info mb-0">
+                                        You have <strong>{{ $distributableRows }}</strong> rows ready to distribute, but no active callers are assigned to you yet.
+                                        Create callers first, then come back to distribute.
+                                    </div>
+                                @else
                                 <form method="post" action="{{ route('cc.reports.distribute', $selectedReport->id) }}" class="row g-2 align-items-center">
                                     @csrf
                                     <div class="col-md-6">
@@ -301,6 +305,7 @@
                                         updateShares();
                                     });
                                 </script>
+                                @endif {{-- end $ccUsers check --}}
                             </div>
                         </div>
                     </div>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\CallCenter;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\DistributeCallCenterReport;
 use App\Jobs\ReassignCallCenterRows;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterInteraction;
@@ -763,6 +764,13 @@ class AssignmentController extends Controller
         $session = session('user');
         if (! $session) {
             abort(403);
+        }
+
+        $sessionAssignment = strtolower(trim((string) ($session['assignment'] ?? '')));
+
+        // Only segment admins may distribute — super admins observe only
+        if (! str_starts_with($sessionAssignment, 'segment_')) {
+            abort(403, 'Only segment admins can distribute rows to callers.');
         }
 
         $report = CallCenterReport::callCenter()->findOrFail((int) $reportId);

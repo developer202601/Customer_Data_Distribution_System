@@ -94,6 +94,7 @@ Route::middleware('session.auth')->group(function () {
         Route::post('/profile/name', [CallCenterUserController::class, 'setName'])->name('profile.setName');
 
         Route::get('/caller/dashboard', [CallCenterDashboardController::class, 'callerDashboard'])->name('caller.dashboard');
+        Route::get('/payments/list', [CallCenterDashboardController::class, 'listPayments'])->name('payments.list');
 
         Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
         Route::get('/assignments/manage', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'manage'])->name('assignments.manage');
@@ -151,6 +152,12 @@ Route::middleware('session.auth')->group(function () {
             // CC super admin can also create RB region admins
             Route::get('/rb-region/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'createRbRegionForm'])->name('super.rb_region.create');
             Route::post('/rb-region', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'storeRbRegion'])->name('super.rb_region.store');
+
+            // CC super admin: manage existing RB region admins
+            Route::get('/rb-regions', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexRbRegions'])->name('super.rb_regions');
+            Route::get('/rb-regions/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchRbRegions'])->name('super.rb_regions.search');
+            Route::get('/rb-regions/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editRbRegionForm'])->name('super.rb_regions.edit');
+            Route::put('/rb-regions/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateRbRegion'])->name('super.rb_regions.update');
         });
     });
 

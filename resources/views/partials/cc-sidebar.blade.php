@@ -17,9 +17,6 @@
                 <a class="nav-link{{ $ccRouteName === 'cc.super.segments' ? ' active' : '' }}"
                     href="{{ route('cc.super.segments') }}"
                     aria-current="{{ $ccRouteName === 'cc.super.segments' ? 'page' : '' }}">Segment Admins</a>
-                <a class="nav-link{{ str_starts_with($ccRouteName, 'cc.reports') ? ' active' : '' }}"
-                    href="{{ route('cc.reports') }}"
-                    aria-current="{{ str_starts_with($ccRouteName, 'cc.reports') ? 'page' : '' }}">Reports</a>
                 <a class="nav-link{{ $ccRouteName === 'process.assignments.reports' ? ' active' : '' }}"
                     href="{{ route('process.assignments.reports') }}"
                     aria-current="{{ $ccRouteName === 'process.assignments.reports' ? 'page' : '' }}">View Datasets</a>

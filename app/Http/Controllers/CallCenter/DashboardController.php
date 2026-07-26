@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
@@ -104,6 +105,38 @@ class DashboardController extends Controller
             'unassigned_callers_month' => $unassignedThisMonth,
             'unassigned_callers_month_count' => $unassignedThisMonth->count(),
         ]);
+    }
+
+    public function listPayments(Request $request): JsonResponse
+    {
+        $type = $request->query('type', 'pending');
+        $now = Carbon::now();
+        $monthStart = $now->copy()->startOfMonth();
+        $monthEnd = $now->copy()->endOfMonth();
+
+        $query = CallCenterInteraction::query()
+            ->where('paid', false)
+            ->whereNotNull('payment_expected_at')
+            ->with(['agent'])
+            ->orderBy('payment_expected_at');
+
+        if ($type === 'overdue') {
+            $query->where('payment_expected_at', '<', $now);
+        } else {
+            $query->whereBetween('payment_expected_at', [$monthStart->toDateString(), $monthEnd->toDateString()]);
+        }
+
+        $items = $query->limit(200)->get()->map(function ($interaction) {
+            return [
+                'account'            => $interaction->account_number,
+                'assignment_id'      => $interaction->assignment_id,
+                'payment_expected_at'=> optional($interaction->payment_expected_at)->toDateString(),
+                'assigned_user_id'   => $interaction->agent_id,
+                'assigned_user_name' => optional($interaction->agent)->name,
+            ];
+        });
+
+        return response()->json(['items' => $items]);
     }
 
     public function callerDashboard(): View

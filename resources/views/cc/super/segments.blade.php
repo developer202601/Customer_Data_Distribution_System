@@ -21,6 +21,7 @@
                         <p class="text-muted small mb-0">Three segments: Call Center Staff, Call Center, Staff.</p>
                     </div>
                     <div class="d-flex gap-2">
+                        <a href="{{ route('cc.super.rb_regions') }}" class="btn btn-outline-secondary rounded-pill px-4">RB Region Admins</a>
                         <a href="{{ route('cc.super.rb_region.create') }}" class="btn btn-outline-primary rounded-pill px-4">Add RB Region Admin</a>
                         <a href="{{ route('cc.users.create') }}" class="btn btn-outline-success rounded-pill px-4">Add Segment Admin</a>
                     </div>

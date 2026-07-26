@@ -88,11 +88,12 @@ class PythonIngestionService
 
     private function assertPythonDependencies(string $pythonBinary): void
     {
+        $env = $this->buildPythonEnv();
         $check = new Process([
             $pythonBinary,
             '-c',
             'import polars; import pymysql',
-        ], base_path());
+        ], base_path(), $env);
         $check->setTimeout(60);
         $check->run();
 
@@ -169,8 +170,21 @@ class PythonIngestionService
         $username = (string) ($connection['username'] ?? env('DB_USERNAME', ''));
         $password = (string) ($connection['password'] ?? env('DB_PASSWORD', ''));
 
-        // Merge current process env so PATH, VIRTUAL_ENV, etc remain available.
-        $baseEnv = array_merge($_SERVER ?? [], $_ENV ?? []);
+        // Merge actual OS environment variables to preserve SystemRoot/System32 on Windows/IIS
+        $systemEnv = is_array(getenv()) ? getenv() : [];
+        $baseEnv = array_merge($systemEnv, $_SERVER ?? [], $_ENV ?? []);
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            if (empty($baseEnv['SystemRoot'])) {
+                $baseEnv['SystemRoot'] = getenv('SystemRoot') ?: 'C:\\Windows';
+            }
+            if (empty($baseEnv['windir'])) {
+                $baseEnv['windir'] = getenv('windir') ?: 'C:\\Windows';
+            }
+            if (empty($baseEnv['PATH'])) {
+                $baseEnv['PATH'] = getenv('PATH') ?: 'C:\\Windows\\system32;C:\\Windows';
+            }
+        }
 
         return array_merge($baseEnv, [
             'CDDS_DB_CONNECTION' => $connectionName,

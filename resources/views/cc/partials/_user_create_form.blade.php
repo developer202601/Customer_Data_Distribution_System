@@ -51,7 +51,7 @@
                     <option value="">— Select RTOM —</option>
                     @foreach($rtoms as $rtom)
                         <option value="{{ $rtom }}" {{ old('rtom') === $rtom ? 'selected' : '' }}>
-                            {{ $rtom }}
+                            {{ strtoupper($rtom) }}
                         </option>
                     @endforeach
                 </select>

@@ -14,7 +14,7 @@
 <tr>
     <td>{{ $user->username }}</td>
     <td>{{ $user->name ?: '—' }}</td>
-    <td>{{ $assignment ?: '—' }}</td>
+    <td>{{ $assignment ? strtoupper($assignment) : '—' }}</td>
     <td>{{ $user->status ? 'Active' : 'Disabled' }}</td>
     <td class="text-end">
         <div class="d-inline-flex gap-1">

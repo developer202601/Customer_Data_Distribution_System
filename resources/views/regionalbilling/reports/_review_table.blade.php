@@ -183,7 +183,7 @@
                             <div class="small">
                                 <strong>Address:</strong> {{ $row->full_address ?? '—' }}<br>
                                 <strong>Address Name:</strong> {{ $row->address_name ?? '—' }}<br>
-                                <strong>RTOM:</strong> {{ $row->rtom ?? '—' }}<br>
+                                <strong>RTOM:</strong> {{ $row->rtom ? strtoupper($row->rtom) : '—' }}<br>
                                 <strong>Region:</strong> {{ $row->region ?? '—' }}<br>
                                 <strong>Sales Person:</strong> {{ $row->sales_person ?? '—' }}<br>
                                 <strong>Sales Channel:</strong> {{ $row->sales_channel ?? '—' }}

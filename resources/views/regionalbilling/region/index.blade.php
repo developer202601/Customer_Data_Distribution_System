@@ -33,7 +33,7 @@
                                 <select name="rtom" class="form-select form-select-sm text-white">
                                     <option value="">All RTOs</option>
                                     @foreach(($rtoms ?? collect()) as $r)
-                                        <option value="{{ $r }}" {{ (string)($selectedRtom ?? request('rtom')) === (string)$r ? 'selected' : '' }}>{{ $r }}</option>
+                                        <option value="{{ $r }}" {{ (string)($selectedRtom ?? request('rtom')) === (string)$r ? 'selected' : '' }}>{{ strtoupper($r) }}</option>
                                     @endforeach
                                 </select>
                                 <button type="submit" class="btn btn-primary btn-sm text-white">Search</button>

@@ -16,9 +16,6 @@ class SuperAdminController extends Controller
             abort(403);
         }
 
-        $roles = ['region' => 'Region Admin'];
-        $systems = ['cc' => 'Call Center', 'rb' => 'Regional Billing Centre'];
-
         $lastTwoProcessIds = MasterDatasetRow::select('process_id')
             ->distinct()
             ->orderBy('process_id', 'desc')
@@ -35,7 +32,7 @@ class SuperAdminController extends Controller
                 ->values();
         }
 
-        return view('regionalbilling.super.create', compact('roles', 'regions', 'systems'));
+        return view('regionalbilling.super.create', compact('regions'));
     }
 
     public function storeUser(Request $request)
@@ -46,49 +43,50 @@ class SuperAdminController extends Controller
         }
 
         $request->validate([
-            'username' => 'required|string|size:6|unique:users,username',
-            'name' => 'nullable|string|max:255',
-            'region' => 'required|string|max:45',
-            'system' => 'required|in:cc,rb',
+            'username'      => 'required|string|size:6|unique:users,username',
+            'name'          => 'nullable|string|max:255',
+            'region'        => 'required|string|max:45',
+            'region_source' => 'required|in:list,custom',
         ]);
 
-        $lastTwoProcessIds = MasterDatasetRow::select('process_id')
-            ->distinct()
-            ->orderBy('process_id', 'desc')
-            ->limit(2)
-            ->pluck('process_id')
-            ->toArray();
+        $region       = trim($request->input('region'));
+        $regionSource = $request->input('region_source');
 
-        $allowedRegions = [];
-        if (! empty($lastTwoProcessIds)) {
-            $allowedRegions = MasterDatasetRow::whereIn('process_id', $lastTwoProcessIds)
-                ->whereNotNull('region')
-                ->pluck('region')
-                ->unique()
-                ->values()
+        if ($regionSource === 'list') {
+            $lastTwoProcessIds = MasterDatasetRow::select('process_id')
+                ->distinct()
+                ->orderBy('process_id', 'desc')
+                ->limit(2)
+                ->pluck('process_id')
                 ->toArray();
+
+            $allowedRegions = [];
+            if (! empty($lastTwoProcessIds)) {
+                $allowedRegions = MasterDatasetRow::whereIn('process_id', $lastTwoProcessIds)
+                    ->whereNotNull('region')
+                    ->pluck('region')
+                    ->unique()
+                    ->values()
+                    ->toArray();
+            }
+
+            if (! in_array($region, $allowedRegions, true)) {
+                return back()->withErrors(['region' => 'Selected region is not available from the last two reports.']);
+            }
         }
 
-        $region = $request->input('region');
-        if (! in_array($region, $allowedRegions, true)) {
-            return back()->withErrors(['region' => 'Selected region is not available from the last two reports.']);
-        }
-
-        $system = $request->input('system');
-        
         $user = new User();
-        $user->username = $request->input('username');
-        $user->name = $request->input('name');
-        $user->system = $system;
+        $user->username   = $request->input('username');
+        $user->name       = $request->input('name');
+        $user->system     = 'rb';
         $user->admin_prev = 1;
         $user->assignment = $region;
-        $user->status = 1;
+        $user->status     = 1;
         $user->supervisor = $sessionUser['id'] ?? null;
         $user->created_at = now();
         $user->save();
 
-        $systemLabel = $system === 'cc' ? 'Call Center' : 'Regional Billing Centre';
-        return redirect()->route('rb.regions.index')->with('status', "User created as {$systemLabel} region admin");
+        return redirect()->route('rb.regions.index')->with('status', "RB region admin created for {$region}.");
     }
 
     public function indexAssign()

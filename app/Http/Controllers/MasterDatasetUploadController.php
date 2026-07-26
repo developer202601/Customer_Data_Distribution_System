@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessExclusionUpload;
+use App\Jobs\ProcessMasterIngestion;
 use App\Models\MasterDatasetProcess;
 use App\Support\ChunkedUploadManager;
 use App\Support\MasterDatasetAssignmentConfiguration;
@@ -264,6 +265,13 @@ class MasterDatasetUploadController extends Controller
             );
 
             $process = $workflow->queueMasterArchive($uploadedFile, $userContext);
+
+            // Dispatch background master ingestion (Phase 1) job
+            ProcessMasterIngestion::dispatch($process->id, $userContext);
+            /*
+            // Ingest and validate master spreadsheet synchronously
+            $process = $workflow->ingestMasterSynchronously($process, $userContext);
+            */
 
             $request->session()->put('master.dataset.process_id', $process->id);
             $request->session()->forget('master.dataset.staged_exclusions');

@@ -151,7 +151,12 @@
                                         <span class="badge bg-{{ $badgeColor }}">{{ $statusLabel }}</span>
                                     </td>
                                     <td class="text-end d-flex justify-content-end gap-2">
+                                        <a href="{{ route('process.assignments.download-master', ['process' => $processRow]) }}" class="btn btn-success btn-sm d-inline-flex align-items-center gap-1" data-loader-off="1" title="Download original uploaded master Excel workbook">
+                                            Download 
+                                        </a>
+                                        @if(in_array($statusRaw, ['ready', 'awaiting_exclusions', 'waiting_confirmation'], true))
                                         <a href="{{ route('process.assignments.report', ['process' => $processRow]) }}" class="btn {{ $btnClass }} btn-sm" data-loader-off="1">{{ $actionLabel }}</a>
+                                        @endif
 
                                         @if(!in_array($statusRaw, ['ready', 'canceled'], true))
                                         <form method="post" action="{{ route('process.assignments.cancel', ['process' => $processRow]) }}" class="d-inline" data-loader-off="1" onsubmit="return confirm('Cancel this dataset process?');">

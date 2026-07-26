@@ -39,9 +39,11 @@
                                 @endif
                             </div>
                             <div class="text-end">
+                                @if(($processRow->status ?? '') === 'ready')
                                 <a href="{{ route('process.assignments.report', ['process' => $processRow]) }}" class="btn btn-outline-primary" data-loader-off="1">
                                     View assignments
                                 </a>
+                                @endif
                                 <p class="text-muted small mb-0">{{ $processRow->exports->count() }} report files</p>
                             </div>
                         </div>

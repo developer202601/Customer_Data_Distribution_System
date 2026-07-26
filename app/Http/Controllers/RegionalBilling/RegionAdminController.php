@@ -342,4 +342,156 @@ class RegionAdminController extends Controller
 
         return view('regionalbilling.region.rtom_dashboard', compact('rtom', 'callers'));
     }
+
+    // -------------------------------------------------------------------------
+    // RB super admin: region admin list/search/edit
+    // These back the rb.regions.* routes used by the RB super admin side.
+    // -------------------------------------------------------------------------
+
+    protected function ensureRbSuper(): void
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'rb' || ($sessionUser['assignment'] ?? null) !== 'super') {
+            abort(403);
+        }
+    }
+
+    public function indexRegions()
+    {
+        $this->ensureRbSuper();
+
+        $q              = request()->query('q');
+        $selectedRegion = request()->query('region');
+        $selectedSystem = request()->query('system');
+
+        $query = User::where('admin_prev', 1)
+            ->whereIn('system', ['cc', 'rb'])
+            ->where(function ($w) {
+                $w->where(function ($sq) {
+                    // RB region admins: assignment is a region string (not super/rtom_/caller_/segment_/supervisor_)
+                    $sq->where('system', 'rb')
+                       ->where('assignment', '!=', 'super')
+                       ->where('assignment', 'not like', 'rtom_%')
+                       ->where('assignment', 'not like', 'caller_%')
+                       ->where('assignment', 'not like', 'supervisor_%');
+                })->orWhere(function ($sq) {
+                    // CC region-style admins: segment_ prefix
+                    $sq->where('system', 'cc')
+                       ->where('assignment', 'like', 'segment_%');
+                });
+            });
+
+        if (! empty($q)) {
+            $query->where(function ($w) use ($q) {
+                $w->where('username', 'like', "%{$q}%")
+                  ->orWhere('name', 'like', "%{$q}%");
+            });
+        }
+
+        if (! empty($selectedSystem)) {
+            $query->where('system', $selectedSystem);
+        }
+
+        if (! empty($selectedRegion)) {
+            $query->where('assignment', $selectedRegion);
+        }
+
+        $regionAdmins = $query->orderBy('assignment')->orderBy('username')->get();
+
+        $regions = User::where('system', 'rb')
+            ->where('admin_prev', 1)
+            ->where('assignment', '!=', 'super')
+            ->where('assignment', 'not like', 'rtom_%')
+            ->where('assignment', 'not like', 'caller_%')
+            ->where('assignment', 'not like', 'supervisor_%')
+            ->distinct()
+            ->pluck('assignment')
+            ->sort()
+            ->values();
+
+        return view('regionalbilling.super.regions', compact('regionAdmins', 'regions', 'q', 'selectedRegion', 'selectedSystem'));
+    }
+
+    public function searchRegions(Request $request)
+    {
+        $this->ensureRbSuper();
+
+        $q              = $request->query('q');
+        $selectedRegion = $request->query('region');
+        $selectedSystem = $request->query('system');
+
+        $query = User::where('admin_prev', 1)
+            ->whereIn('system', ['cc', 'rb'])
+            ->where(function ($w) {
+                $w->where(function ($sq) {
+                    $sq->where('system', 'rb')
+                       ->where('assignment', '!=', 'super')
+                       ->where('assignment', 'not like', 'rtom_%')
+                       ->where('assignment', 'not like', 'caller_%')
+                       ->where('assignment', 'not like', 'supervisor_%');
+                })->orWhere(function ($sq) {
+                    $sq->where('system', 'cc')
+                       ->where('assignment', 'like', 'segment_%');
+                });
+            });
+
+        if (! empty($q)) {
+            $query->where(function ($w) use ($q) {
+                $w->where('username', 'like', "%{$q}%")
+                  ->orWhere('name', 'like', "%{$q}%");
+            });
+        }
+
+        if (! empty($selectedSystem)) {
+            $query->where('system', $selectedSystem);
+        }
+
+        if (! empty($selectedRegion)) {
+            $query->where('assignment', $selectedRegion);
+        }
+
+        $regionAdmins = $query->orderBy('assignment')->orderBy('username')->get();
+
+        return view('regionalbilling.super._rows', compact('regionAdmins'));
+    }
+
+    public function editRegionAdminForm(User $user)
+    {
+        $this->ensureRbSuper();
+
+        // Only allow editing RB region admins (not super/rtom/caller/supervisor)
+        if ($user->system !== 'rb'
+            || ! $user->admin_prev
+            || in_array($user->assignment, ['super'], true)
+            || str_starts_with((string) ($user->assignment ?? ''), 'rtom_')
+            || str_starts_with((string) ($user->assignment ?? ''), 'caller_')
+            || str_starts_with((string) ($user->assignment ?? ''), 'supervisor_')) {
+            abort(404);
+        }
+
+        return view('regionalbilling.super.edit_region', compact('user'));
+    }
+
+    public function updateRegionAdmin(Request $request, User $user)
+    {
+        $this->ensureRbSuper();
+
+        if ($user->system !== 'rb'
+            || ! $user->admin_prev
+            || in_array($user->assignment, ['super'], true)
+            || str_starts_with((string) ($user->assignment ?? ''), 'rtom_')
+            || str_starts_with((string) ($user->assignment ?? ''), 'caller_')
+            || str_starts_with((string) ($user->assignment ?? ''), 'supervisor_')) {
+            abort(404);
+        }
+
+        $request->validate([
+            'name' => 'nullable|string|max:45',
+        ]);
+
+        $user->name = $request->input('name');
+        $user->save();
+
+        return redirect()->route('rb.regions.index')->with('status', 'Region admin updated.');
+    }
 }

@@ -14,7 +14,7 @@ class DashboardController extends Controller
 
         if (!empty($sessionUser) && (($sessionUser['system'] ?? null) === 'cc')) {
             if (($sessionUser['assignment'] ?? null) === 'super') {
-                $target = 'cc.super.regions';
+                $target = 'cc.super.segments';
             } else {
                 $target = ($sessionUser['is_admin'] ?? false) ? 'cc.users.index' : 'cc.dashboard';
             }

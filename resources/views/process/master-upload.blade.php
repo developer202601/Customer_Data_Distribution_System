@@ -840,6 +840,9 @@
 
                 window.location.href = json?.redirect_url || @json(route('process.exclusions.create'));
             } catch (error) {
+                if (window.CDDSLoader) {
+                    window.CDDSLoader.hide();
+                }
                 if (Array.isArray(error)) {
                     renderError(error);
                 } else {

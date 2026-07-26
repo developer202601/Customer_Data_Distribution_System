@@ -1,6 +1,6 @@
 @extends('layouts.cc')
 
-@section('title', 'Assign')
+@section('title', 'Assign Role')
 
 @section('content')
 <div class="process-upload py-4">
@@ -10,46 +10,55 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                     <div>
                         <p class="text-uppercase text-muted mb-1">Call Center Administration</p>
-                        <h1 class="process-upload-title mb-0">Assign Role for {{ $user->username }}</h1>
+                        <h1 class="process-upload-title mb-0">Assign Role: {{ $user->username }}</h1>
                     </div>
-                    <div class="d-flex gap-2">
-                        <a href="{{ route('cc.users.assign.index') }}" class="btn btn-outline-success rounded-pill px-4">Assign Users</a>
-                    </div>
+                    <a href="{{ route('cc.users.assign.index') }}" class="btn btn-outline-secondary rounded-pill px-4">Back</a>
                 </div>
 
-                @if ($errors->any())
+                @if($errors->any())
                     <div class="alert alert-danger">
                         <ul class="mb-0">
-                            @foreach ($errors->all() as $error)
+                            @foreach($errors->all() as $error)
                                 <li>{{ $error }}</li>
                             @endforeach
                         </ul>
                     </div>
                 @endif
 
-                <form method="POST" action="{{ route('cc.users.assign.store', $user) }}">
-        @csrf
+                <form method="post" action="{{ route('cc.users.assign.store', $user) }}">
+                    @csrf
 
-        <div class="form-group position-relative">
-            <label for="role-input">Privilege</label>
-                 <input id="role-input" type="text" class="form-control" placeholder="Click to choose role" autocomplete="off" readonly
-                     value="{{ old('role') ? ($roles[old('role')] ?? old('role')) : ($user->assignment === 'super' ? $roles['super'] : $roles['region']) }}">
-            <input id="role" name="role" type="hidden" value="{{ old('role') ?? ($user->assignment === 'super' ? 'super' : 'region') }}">
-            <div id="role-suggestions" class="list-group position-absolute w-100" style="z-index:1050; display:none; max-height:240px; overflow:auto;"></div>
-        </div>
+                    <div class="form-group mb-3">
+                        <label for="role">Role <span class="text-danger">*</span></label>
+                        <select id="role" name="role" class="form-select" required onchange="toggleSegment(this.value)">
+                            <option value="">— Select role —</option>
+                            <option value="super" {{ old('role', $user->assignment === 'super' ? 'super' : '') === 'super' ? 'selected' : '' }}>
+                                Super Admin
+                            </option>
+                            <option value="segment" {{ old('role', str_starts_with($user->assignment ?? '', 'segment_') ? 'segment' : '') === 'segment' ? 'selected' : '' }}>
+                                Segment Admin
+                            </option>
+                        </select>
+                    </div>
 
-        <div class="form-group" id="region-box" style="margin-top:1rem; {{ (old('role') ?? ($user->assignment !== 'super' ? 'region' : '')) === 'region' ? '' : 'display:none' }}">
-            <label for="region-input">Region (from last 2 reports)</label>
-            <input id="region-input" type="text" class="form-control" placeholder="Type 1-2 characters to search..." autocomplete="off"
-                   value="{{ old('region', $user->assignment) }}">
-            <input id="region" name="region" type="hidden" value="{{ old('region', $user->assignment) }}">
-            <div id="region-suggestions" class="list-group position-absolute w-100" style="z-index:1050; display:none; max-height:320px; overflow:auto;"></div>
-        </div>
+                    <div class="form-group mb-4" id="segment-box"
+                        style="{{ old('role', str_starts_with($user->assignment ?? '', 'segment_') ? 'segment' : '') === 'segment' ? '' : 'display:none' }}">
+                        <label for="segment">Segment <span class="text-danger">*</span></label>
+                        <select id="segment" name="segment" class="form-select">
+                            <option value="">— Select segment —</option>
+                            @foreach($segments as $key => $label)
+                                <option value="{{ $key }}"
+                                    {{ old('segment', $user->assignment) === $key ? 'selected' : '' }}>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div class="d-flex gap-2 mt-4">
-                    <button class="btn btn-warning rounded-pill px-4">Save</button>
-                    <a href="{{ route('cc.users.assign.index') }}" class="btn btn-outline-secondary px-4">Cancel</a>
-                </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning rounded-pill px-4">Save</button>
+                        <a href="{{ route('cc.users.assign.index') }}" class="btn btn-outline-secondary px-4">Cancel</a>
+                    </div>
                 </form>
             </div>
         </div>
@@ -57,107 +66,8 @@
 </div>
 
 <script nonce="{{ $cspNonce ?? '' }}">
-    // Data from server
-    const ROLES = @json(array_map(function($k) use ($roles) { return ['key' => $k, 'label' => $roles[$k]]; }, array_keys($roles)));
-    const REGIONS = @json($regions->values());
-
-    // Role typeahead
-    (function(){
-        const input = document.getElementById('role-input');
-        const hidden = document.getElementById('role');
-        const box = document.getElementById('role-suggestions');
-
-        function render(items) {
-            if (!items.length) { box.style.display='none'; box.innerHTML=''; return; }
-            box.innerHTML = items.map(it => `
-                <button type="button" class="list-group-item list-group-item-action">${it.label}</button>
-            `).join('');
-            box.style.display='block';
-        }
-
-        // show defined roles when clicked/focused (no free typing)
-        input.addEventListener('click', function(){
-            render(ROLES);
-        });
-        input.addEventListener('focus', function(){
-            render(ROLES);
-        });
-
-        box.addEventListener('click', function(ev){
-            const btn = ev.target.closest('button');
-            if (!btn) return;
-            const label = btn.textContent.trim();
-            const roleObj = ROLES.find(r => r.label === label);
-            if (roleObj) {
-                input.value = roleObj.label;
-                hidden.value = roleObj.key;
-            } else {
-                input.value = label;
-                hidden.value = label;
-            }
-            box.style.display='none';
-        });
-
-        document.addEventListener('click', function(e){ if (!input.contains(e.target) && !box.contains(e.target)) box.style.display='none'; });
-    })();
-
-    // Region typeahead
-    (function(){
-        const input = document.getElementById('region-input');
-        const hidden = document.getElementById('region');
-        const box = document.getElementById('region-suggestions');
-
-        function render(items) {
-            if (!items.length) { box.style.display='none'; box.innerHTML=''; return; }
-            box.innerHTML = items.map(it => `
-                <button type="button" class="list-group-item list-group-item-action">${it}</button>
-            `).join('');
-            box.style.display='block';
-        }
-
-        input.addEventListener('input', function(){
-            const q = this.value.trim();
-            if (q.length < 1) { box.style.display='none'; return; }
-            const matches = REGIONS.filter(r => r.toLowerCase().includes(q.toLowerCase()));
-            render(matches);
-        });
-
-        input.addEventListener('focus', function(){
-            const q = this.value.trim();
-            if (q.length >= 1) {
-                const matches = REGIONS.filter(r => r.toLowerCase().includes(q.toLowerCase()));
-                render(matches);
-            }
-        });
-
-        box.addEventListener('click', function(ev){
-            const btn = ev.target.closest('button');
-            if (!btn) return;
-            const val = btn.textContent.trim();
-            input.value = val;
-            hidden.value = val;
-            box.style.display='none';
-        });
-
-        document.addEventListener('click', function(e){ if (!input.contains(e.target) && !box.contains(e.target)) box.style.display='none'; });
-    })();
-
-    // Show/hide region box when role hidden input changes (keeps previous behavior)
-    (function(){
-        const hiddenRole = document.getElementById('role');
-        const regionBox = document.getElementById('region-box');
-        function update() {
-            if (hiddenRole.value === 'region') regionBox.style.display = '';
-            else regionBox.style.display = 'none';
-        }
-        // update on load
-        update();
-        // also update when hidden value changes via programmatic selection
-        const obs = new MutationObserver(update);
-        obs.observe(hiddenRole, { attributes: true, attributeFilter: ['value'] });
-        // ensure clicking suggestions sets hidden value and update runs
-        document.getElementById('role-suggestions').addEventListener('click', update);
-    })();
+function toggleSegment(role) {
+    document.getElementById('segment-box').style.display = role === 'segment' ? '' : 'none';
+}
 </script>
-
 @endsection

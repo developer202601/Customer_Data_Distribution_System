@@ -25,7 +25,7 @@
                         <button type="button" class="admin-config-btn is-active config-side-btn button" data-config-target="latest-bill-range">Bill Value Range</button>
                         <button type="button" class="admin-config-btn button" data-config-target="bill-arears-quota">No Of Accounts</button>
                         <button type="button" class="admin-config-btn button" data-config-target="connection-mediums">Connection Mediums</button>
-                        <button type="button" class="admin-config-btn button" data-config-target="user-account">User Account</button>
+                        <button type="button" class="admin-config-btn button" data-config-target="user-account">IT User Accounts</button>
                     </div>
                 </div>
 
@@ -154,7 +154,7 @@
 
                     <div class="admin-config-form" data-config-block="user-account">
                         <div class="config-card">
-                            <p class="admin-config-hint">Here you can change the user account</p>
+                            <p class="admin-config-hint">Here you can edit the IT section user accounts</p>
 
                             <div class="user-account-panel">
                                 <div class="user-account-add">

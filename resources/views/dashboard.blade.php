@@ -52,8 +52,8 @@
         <div class="col-lg-6">
             <a href="{{ route('master.upload.create') }}" class="dashboard-card h-100" role="button" aria-label="Start master dataset upload">
                 <div class="dashboard-card-body">
-                    <h2 class="dashboard-card-title">Master Dataset Workflow</h2>
-                    <p class="dashboard-card-description">Upload the monthly master dataset, review import stats, and continue to the exclusion step.</p>
+                    <h2 class="dashboard-card-title">Upload Master Dataset</h2>
+                    <p class="dashboard-card-description">Upload the monthly master dataset</p>
                 </div>
             </a>
         </div>
@@ -61,7 +61,7 @@
             <a href="{{ route('payment.upload') }}" class="dashboard-card h-100" role="button" aria-label="Open payment files upload page">
                 <div class="dashboard-card-body">
                     <h2 class="dashboard-card-title">Payment Files Upload</h2>
-                    <p class="dashboard-card-description">Upload the monthly payment files and review the import statistics.</p>
+                    <p class="dashboard-card-description">Upload the monthly payment files</p>
                 </div>
             </a>
         </div>

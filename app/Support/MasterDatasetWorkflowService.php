@@ -25,6 +25,16 @@ class MasterDatasetWorkflowService
         return $this->importer->queue($masterArchive, $userContext);
     }
 
+    // /**
+    //  * Ingest and validate the master spreadsheet synchronously.
+    //  */
+    // public function ingestMasterSynchronously(MasterDatasetProcess $process, ?array $userContext = null): MasterDatasetProcess
+    // {
+    //     $processed = $this->importer->processStoredArchive($process, $userContext, true)->fresh();
+    //     $processed = MasterDatasetProcessStatus::set($processed, MasterDatasetProcessStatus::AWAITING_EXCLUSIONS);
+    //     return $processed;
+    // }
+
     /**
      * Ingest master dataset and apply exclusions, but pause before assignment.
      */

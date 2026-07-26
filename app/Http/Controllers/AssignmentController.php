@@ -104,6 +104,13 @@ class AssignmentController extends Controller
 
         $reportGroups = $this->reportGroups();
 
+        // Determine whether all group-a and region-billing exports are ready.
+        // Used by the view to enable/disable the pass buttons.
+        $requiredBuckets = ['call-center-staff', 'call-center', 'staff', 'region-billing'];
+        $exportsReady = collect($requiredBuckets)->every(
+            fn ($bucket) => ($exports[$bucket]['status'] ?? null) === 'ready'
+        );
+
         // AJAX fragment for search results (pagination without full reload)
         if ($request->ajax()) {
             return view('process.assignments.partials.overview-results', [
@@ -121,6 +128,7 @@ class AssignmentController extends Controller
             'vip' => $this->viewService->vipSummary($process),
             'region' => $this->viewService->regionSummary($process),
             'exports' => $exports,
+            'exportsReady' => $exportsReady,
             'search' => $search,
             'rows' => $rows,
             'assignmentLabels' => $this->viewService->assignmentLabelMap(),

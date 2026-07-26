@@ -47,6 +47,12 @@ class MasterDatasetProcess extends Model
         'assignment_config_ftth_count',
         'assignment_config_set_by_user_id',
         'assignment_config_set_at',
+
+        // Manual pass timestamps — set when the admin clicks the respective pass button
+        'passed_ccs_at',
+        'passed_cc_at',
+        'passed_s_at',
+        'passed_rb_at',
     ];
 
     protected $casts = [
@@ -68,6 +74,12 @@ class MasterDatasetProcess extends Model
         'assignment_config_ftth_count' => 'integer',
         'assignment_config_set_by_user_id' => 'integer',
         'assignment_config_set_at' => 'datetime',
+
+        // Pass timestamps
+        'passed_ccs_at' => 'datetime',
+        'passed_cc_at'  => 'datetime',
+        'passed_s_at'   => 'datetime',
+        'passed_rb_at'  => 'datetime',
     ];
 
     public function rows(): HasMany

@@ -217,13 +217,9 @@ class MasterDatasetExportCoordinator
                     'file_hash' => $hash,
                 ]);
 
-                if ($bucket === 'call-center-staff') {
-                    $this->recordReport($freshProcess, $query, CallCenterReport::REPORT_TYPE_CALL_CENTER);
-                }
-
-                if ($bucket === 'region-billing') {
-                    $this->recordReport($freshProcess, $query, CallCenterReport::REPORT_TYPE_REGIONAL_BILLING);
-                }
+                // CallCenterReport records are no longer created automatically here.
+                // They are created on demand when the admin clicks the per-segment
+                // pass buttons on the assignments overview page (PassReportController).
             } catch (Throwable $exception) {
                 $meta = $record->meta ?? [];
                 $meta['error'] = $exception->getMessage();
@@ -308,7 +304,7 @@ class MasterDatasetExportCoordinator
     {
         $rowIds = (clone $query)->pluck('id')->map(function ($value) {
             return is_numeric($value) ? (int) $value : $value;
-        })->toArray();
+        })->unique()->values()->all();
 
         $report = CallCenterReport::updateOrCreate([
             'master_dataset_process_id' => $process->id,

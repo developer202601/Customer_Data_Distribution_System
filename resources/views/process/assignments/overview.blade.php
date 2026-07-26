@@ -145,6 +145,94 @@
         </div>
         @endif
 
+        {{-- ------------------------------------------------------------------ --}}
+        {{-- Pass to Calling Units card                                           --}}
+        {{-- ------------------------------------------------------------------ --}}
+        @php
+            $passButtons = [
+                [
+                    'label'       => 'Call Center Staff',
+                    'route'       => 'process.assignments.pass-ccs',
+                    'timestamp'   => $process->passed_ccs_at,
+                    'btnId'       => 'btn-pass-ccs',
+                ],
+                [
+                    'label'       => 'Call Center',
+                    'route'       => 'process.assignments.pass-cc',
+                    'timestamp'   => $process->passed_cc_at,
+                    'btnId'       => 'btn-pass-cc',
+                ],
+                [
+                    'label'       => 'Staff',
+                    'route'       => 'process.assignments.pass-s',
+                    'timestamp'   => $process->passed_s_at,
+                    'btnId'       => 'btn-pass-s',
+                ],
+                [
+                    'label'       => 'Regional Billing',
+                    'route'       => 'process.assignments.pass-rb',
+                    'timestamp'   => $process->passed_rb_at,
+                    'btnId'       => 'btn-pass-rb',
+                ],
+            ];
+        @endphp
+
+        @if(session('user.is_admin'))
+        <div class="card mb-4 shadow-sm" style="border-radius:1rem;">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">Pass to Calling Units</h2>
+                        <p class="text-muted small mb-0">
+                            Segment admins and RB users see their records only after the respective pass is triggered.
+                            @if(! $exportsReady)
+                                <span class="badge text-bg-warning ms-1">Waiting for exports</span>
+                            @endif
+                        </p>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    @foreach($passButtons as $btn)
+                    <div class="col-12 col-sm-6 col-xl-3">
+                        @if($btn['timestamp'])
+                            {{-- Already passed --}}
+                            <div class="d-flex flex-column gap-1">
+                                <button type="button" class="btn btn-success w-100" disabled>
+                                    ✓ {{ $btn['label'] }} passed
+                                </button>
+                                <small class="text-muted text-center">
+                                    {{ \Illuminate\Support\Carbon::parse($btn['timestamp'])->format('Y-m-d H:i') }}
+                                </small>
+                            </div>
+                        @elseif(! $exportsReady)
+                            {{-- Exports not ready yet --}}
+                            <button type="button"
+                                    class="btn btn-outline-secondary w-100"
+                                    disabled
+                                    title="All exports must be ready before passing.">
+                                Pass — {{ $btn['label'] }}
+                            </button>
+                        @else
+                            {{-- Ready to pass --}}
+                            <form method="POST"
+                                  action="{{ route($btn['route'], $process) }}"
+                                  onsubmit="return confirm('Pass {{ $btn['label'] }} records to calling units?');">
+                                @csrf
+                                <button type="submit"
+                                        id="{{ $btn['btnId'] }}"
+                                        class="btn btn-primary w-100">
+                                    Pass — {{ $btn['label'] }}
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+        @endif
+
         @php
             $exportStatuses = $exports ?? [];
             $groupAQuotas = $groupA['quotas'] ?? [];

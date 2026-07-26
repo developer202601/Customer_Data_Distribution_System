@@ -20,13 +20,18 @@ class DistributeCallCenterReport implements ShouldQueue
     public array $userIds;
     public ?int $perUserCount;
     public ?string $cancelToken = null;
+    /** Pre-filtered row IDs from the calling segment admin. When non-empty, these
+     *  are used instead of the full report->row_ids, ensuring each segment admin
+     *  only distributes their own bucket rows to callers. */
+    public array $segmentRowIds = [];
 
-    public function __construct(int $reportId, array $userIds = [], ?int $perUserCount = null, ?string $cancelToken = null)
+    public function __construct(int $reportId, array $userIds = [], ?int $perUserCount = null, ?string $cancelToken = null, array $segmentRowIds = [])
     {
         $this->reportId = $reportId;
         $this->userIds = array_values(array_filter($userIds, fn ($id) => is_numeric($id) && $id > 0));
         $this->perUserCount = $perUserCount !== null ? (int) $perUserCount : null;
         $this->cancelToken = $cancelToken;
+        $this->segmentRowIds = array_values(array_filter($segmentRowIds, fn ($id) => is_numeric($id) && (int) $id > 0));
     }
 
     public function handle(): void
@@ -67,6 +72,13 @@ class DistributeCallCenterReport implements ShouldQueue
         $reportType = $report->report_type ?? CallCenterReport::REPORT_TYPE_CALL_CENTER;
         if (empty($rowIds)) {
             return;
+        }
+
+        // If the controller supplied a pre-filtered segment row list, use it instead
+        // of the full report row set. This ensures each segment admin's distribution
+        // only touches their own bucket rows.
+        if (! empty($this->segmentRowIds)) {
+            $rowIds = $this->segmentRowIds;
         }
 
         // Remove rows hidden by regional review before supervisor/caller distribution.
@@ -164,14 +176,14 @@ class DistributeCallCenterReport implements ShouldQueue
                 ];
 
                 if (count($batch) >= $batchSize) {
-                    DB::table('call_center_row_assignments')->insert($batch);
+                    DB::table('call_center_row_assignments')->insertOrIgnore($batch);
                     $batch = [];
                 }
             }
         }
 
         if (! empty($batch)) {
-            DB::table('call_center_row_assignments')->insert($batch);
+            DB::table('call_center_row_assignments')->insertOrIgnore($batch);
         }
     }
 }

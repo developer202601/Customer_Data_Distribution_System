@@ -849,7 +849,7 @@ class AssignmentController extends Controller
             });
         }
 
-        Bus::dispatchSync(new DistributeCallCenterReport($reportId, $userIds, $perUser));
+        Bus::dispatchSync(new DistributeCallCenterReport($reportId, $userIds, $perUser, null, $rowIds));
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['dispatched' => true]);

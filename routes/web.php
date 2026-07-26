@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\MasterDatasetUploadController;
 use App\Http\Controllers\MasterValidationReportController;
+use App\Http\Controllers\PassReportController;
 use App\Http\Controllers\PaymentUploadController;
 use App\Http\Controllers\ProcessFileController;
 use App\Http\Controllers\ProcessRunningController;
@@ -78,6 +79,12 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments/reports/{process}/download-master', [AssignmentController::class, 'downloadOriginalMaster'])->name('process.assignments.download-master');
     // Consolidated into overview; group-specific pages removed
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
+
+    // Manual pass-to-calling-units routes — each triggers report creation for the given segment/system
+    Route::post('/process/assignments/{process}/pass-ccs', [PassReportController::class, 'passCCS'])->name('process.assignments.pass-ccs');
+    Route::post('/process/assignments/{process}/pass-cc',  [PassReportController::class, 'passCC'])->name('process.assignments.pass-cc');
+    Route::post('/process/assignments/{process}/pass-s',   [PassReportController::class, 'passS'])->name('process.assignments.pass-s');
+    Route::post('/process/assignments/{process}/pass-rb',  [PassReportController::class, 'passRB'])->name('process.assignments.pass-rb');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
     Route::post('/admin/users', [AdminController::class, 'createUser'])->name('admin.createUser');

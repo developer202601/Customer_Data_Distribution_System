@@ -227,14 +227,30 @@ class ReportController extends Controller
     {
         $report = CallCenterReport::callCenter()->findOrFail($id);
 
-        $export = DatasetExport::where('token', $report->token)
-            ->where('bucket', 'call-center-staff')
-            ->first();
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        $bucketMap = [
+            'segment_ccs' => 'call-center-staff',
+            'segment_cc'  => 'call-center',
+            'segment_s'   => 'staff',
+        ];
+        $preferredBucket = $bucketMap[$sessionAssignment] ?? null;
+
+        $export = null;
+        if ($preferredBucket) {
+            $export = DatasetExport::where('token', $report->token)
+                ->where('bucket', $preferredBucket)
+                ->first();
+        }
 
         if (! $export) {
             $export = DatasetExport::where('token', $report->token)
-                ->where('bucket', 'call-center')
-                ->firstOrFail();
+                ->whereIn('bucket', ['call-center-staff', 'call-center', 'staff'])
+                ->orderByRaw("FIELD(bucket, 'call-center-staff', 'call-center', 'staff')")
+                ->first();
+        }
+
+        if (! $export) {
+            abort(404, 'Export file not found for this report.');
         }
 
         $disk = $export->file_disk ?: config('filesystems.default', 'local');

@@ -91,6 +91,19 @@
         </div>
     </div>
 
+    <div id="bulkActionsDock" class="bulk-actions-dock mb-3" data-locked="{{ !empty($isLocked) ? '1' : '0' }}">
+        <div class="bulk-actions-card card bg-light border-primary p-3 rounded-4 shadow-sm mb-3" id="bulkActionsCard">
+            <div class="small text-muted mb-1" id="bulkActionsSelectionHint">Select rows to manage visibility.</div>
+            <div class="small text-warning-emphasis mb-2 d-none" id="bulkActionsMixedHint">Both visible and hidden rows are selected. Choose the correct action below.</div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-outline-danger btn-sm bulk-action-btn d-none" data-action="hide" id="bulkHideBtn">Hide Selected Rows</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm bulk-action-btn d-none" data-action="unhide" id="bulkUnhideBtn">Unhide Selected Rows</button>
+                <button type="button" class="btn btn-outline-primary btn-sm d-none" id="bulkClearSelectionBtn">Clear selection</button>
+                <span class="small text-muted d-none" id="bulkActionsCountBadge"></span>
+            </div>
+        </div>
+    </div>
+
     <!-- Bulk actions rows form wrapper -->
     <form id="bulkRowsForm" method="post" action="{{ route('rb.reports.hide_rows', $selectedReport->id) }}">
         @csrf

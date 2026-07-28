@@ -588,8 +588,17 @@ class ReportController extends Controller
 
         $rtomsWithDetails = [];
         if ($selectedReport && isset($regionRowIds) && !empty($regionRowIds)) {
-            // Get unique RTOMs and their record counts for this region in this report
-            $rtomCounts = MasterDatasetRow::whereIn('id', $regionRowIds)
+            // Get all unique RTOMs in the region for this report
+            $allRtoms = MasterDatasetRow::whereIn('id', $regionRowIds)
+                ->whereNotNull('rtom')
+                ->where('rtom', '<>', '')
+                ->distinct()
+                ->pluck('rtom')
+                ->all();
+
+            $visibleRowIds = array_values(array_diff($regionRowIds, $hiddenRowIds));
+
+            $visibleCounts = empty($visibleRowIds) ? [] : MasterDatasetRow::whereIn('id', $visibleRowIds)
                 ->whereNotNull('rtom')
                 ->where('rtom', '<>', '')
                 ->select('rtom', DB::raw('count(*) as count'))
@@ -604,7 +613,8 @@ class ReportController extends Controller
                 ->get()
                 ->keyBy(fn($p) => strtolower(trim($p->rtom)));
 
-            foreach ($rtomCounts as $rtomName => $count) {
+            foreach ($allRtoms as $rtomName) {
+                $count = $visibleCounts[$rtomName] ?? 0;
                 $passRecord = $rtomPasses->get(strtolower(trim($rtomName)));
                 $rtomsWithDetails[] = [
                     'name' => $rtomName,

@@ -56,6 +56,48 @@ class RegionAdminController extends Controller
         return strtoupper(trim(str_replace('_', ' ', str_replace('rtom_', '', $assignment))));
     }
 
+    protected function getRtomAdminRegion(User $user): ?string
+    {
+        $currentUser = $user->supervisor ? User::find($user->supervisor) : null;
+        while ($currentUser) {
+            $currentAssignment = $currentUser->assignment ?? null;
+            if ($currentAssignment && !str_starts_with($currentAssignment, 'caller_') && !str_starts_with($currentAssignment, 'rtom_') && !str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
+                return $currentAssignment;
+            }
+            $currentUser = $currentUser->supervisor ? User::find($currentUser->supervisor) : null;
+        }
+
+        $assignment = strtolower(trim((string) $user->assignment));
+        $rtomValue = preg_replace('/^rtom_/', '', $assignment);
+        return $rtomValue ? $this->deriveRegionFromRtom($rtomValue) : null;
+    }
+
+    protected function deriveRegionFromRtom(string $rtomValue): ?string
+    {
+        $query = MasterDatasetRow::query();
+
+        $latestProcessId = MasterDatasetRow::query()->max('process_id');
+        if ($latestProcessId) {
+            $query->where('process_id', $latestProcessId);
+        }
+
+        $region = $query
+            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
+            ->whereNotNull('region')
+            ->where('region', '<>', '')
+            ->value('region');
+
+        if (! $region) {
+            $region = MasterDatasetRow::query()
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
+                ->whereNotNull('region')
+                ->where('region', '<>', '')
+                ->value('region');
+        }
+
+        return $region;
+    }
+
     protected function regionRtoms(string $region)
     {
         $lastTwo = MasterDatasetRow::select('process_id')
@@ -335,9 +377,27 @@ class RegionAdminController extends Controller
         $rtom = $this->ensureRtomAdmin();
         $rtomAdminId = session('user')['id'] ?? null;
 
+        $dbUser = User::find($rtomAdminId);
+        $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
+
+        $supervisorIds = [$rtomAdminId];
+        if ($region) {
+            $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+            $rtomValue = substr($sessionAssignment, 5);
+            $sharedUsers = User::where('system', 'rb')
+                ->where('status', 1)
+                ->where('assignment', 'rtom_' . $rtomValue)
+                ->get();
+            foreach ($sharedUsers as $user) {
+                if ($this->getRtomAdminRegion($user) === $region && $user->id !== $rtomAdminId) {
+                    $supervisorIds[] = (int) $user->id;
+                }
+            }
+        }
+
         $callers = User::where('system', 'rb')
             ->where('assignment', 'like', 'caller_%')
-            ->where('supervisor', $rtomAdminId)
+            ->whereIn('supervisor', $supervisorIds)
             ->get();
 
         return view('regionalbilling.region.rtom_dashboard', compact('rtom', 'callers'));

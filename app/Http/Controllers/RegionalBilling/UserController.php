@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\RegionalBilling;
 
 use App\Http\Controllers\Controller;
+use App\Models\MasterDatasetRow;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -33,6 +34,93 @@ class UserController extends Controller
         ];
     }
 
+    private function getSharedRtomSupervisorIds(): array
+    {
+        $sessionUser = session('user');
+        $currentUserId = (int) ($sessionUser['id'] ?? 0);
+        if ($currentUserId <= 0) {
+            return [];
+        }
+
+        $assignment = strtolower(trim((string) ($sessionUser['assignment'] ?? '')));
+        if (! str_starts_with($assignment, 'rtom_')) {
+            return [$currentUserId];
+        }
+
+        $dbUser = User::find($currentUserId);
+        $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
+        if (! $region) {
+            return [$currentUserId];
+        }
+
+        $rtomValue = substr($assignment, 5);
+        $sharedUsers = User::where('system', 'rb')
+            ->where('status', 1)
+            ->where('assignment', 'rtom_' . $rtomValue)
+            ->get();
+
+        $ids = [$currentUserId];
+        foreach ($sharedUsers as $user) {
+            if ($this->getRtomAdminRegion($user) === $region && $user->id !== $currentUserId) {
+                $ids[] = (int) $user->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    protected function getRtomAdminRegion(User $user): ?string
+    {
+        $currentUser = $user->supervisor ? User::find($user->supervisor) : null;
+        while ($currentUser) {
+            $currentAssignment = $currentUser->assignment ?? null;
+            if ($currentAssignment && !str_starts_with($currentAssignment, 'caller_') && !str_starts_with($currentAssignment, 'rtom_') && !str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
+                return $currentAssignment;
+            }
+            $currentUser = $currentUser->supervisor ? User::find($currentUser->supervisor) : null;
+        }
+
+        $assignment = strtolower(trim((string) $user->assignment));
+        $rtomValue = preg_replace('/^rtom_/', '', $assignment);
+        return $rtomValue ? $this->deriveRegionFromRtom($rtomValue) : null;
+    }
+
+    protected function deriveRegionFromRtom(string $rtomValue): ?string
+    {
+        $query = MasterDatasetRow::query();
+
+        $latestProcessId = MasterDatasetRow::query()->max('process_id');
+        if ($latestProcessId) {
+            $query->where('process_id', $latestProcessId);
+        }
+
+        $region = $query
+            ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
+            ->whereNotNull('region')
+            ->where('region', '<>', '')
+            ->value('region');
+
+        if (! $region) {
+            $region = MasterDatasetRow::query()
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
+                ->whereNotNull('region')
+                ->where('region', '<>', '')
+                ->value('region');
+        }
+
+        return $region;
+    }
+
+    private function isCallerSharedByRtomAdmin(User $user): bool
+    {
+        if ($user->system !== 'rb' || ! str_starts_with((string) ($user->assignment ?? ''), 'caller_')) {
+            return false;
+        }
+
+        $supervisorIds = $this->getSharedRtomSupervisorIds();
+        return in_array((int) ($user->supervisor ?? 0), $supervisorIds, true);
+    }
+
     public function index(Request $request)
     {
         $ctx = $this->ensureRbAdminContext();
@@ -40,8 +128,9 @@ class UserController extends Controller
 
         $users = User::where('system', 'rb')
             ->when($ctx['isRtomAdmin'], function ($query) use ($sessionUser) {
-                $query->where('assignment', 'like', 'caller_%')
-                    ->where('supervisor', $sessionUser['id'] ?? null);
+                $query->where('assignment', 'like', 'caller_%');
+                $supervisorIds = $this->getSharedRtomSupervisorIds();
+                $query->whereIn('supervisor', $supervisorIds);
             })
             ->orderBy('id')
             ->get();
@@ -59,7 +148,7 @@ class UserController extends Controller
         }
 
         if ($ctx['isRtomAdmin']) {
-            if (! str_starts_with((string) $user->assignment, 'caller_') || (int) $user->supervisor !== (int) ($ctx['sessionUser']['id'] ?? 0)) {
+            if (! $this->isCallerSharedByRtomAdmin($user)) {
                 abort(404);
             }
         }
@@ -76,7 +165,7 @@ class UserController extends Controller
         }
 
         if ($ctx['isRtomAdmin']) {
-            if (! str_starts_with((string) $user->assignment, 'caller_') || (int) $user->supervisor !== (int) ($ctx['sessionUser']['id'] ?? 0)) {
+            if (! $this->isCallerSharedByRtomAdmin($user)) {
                 abort(404);
             }
         }
@@ -100,7 +189,7 @@ class UserController extends Controller
         }
 
         if ($ctx['isRtomAdmin']) {
-            if (! str_starts_with((string) $user->assignment, 'caller_') || (int) $user->supervisor !== (int) ($ctx['sessionUser']['id'] ?? 0)) {
+            if (! $this->isCallerSharedByRtomAdmin($user)) {
                 abort(404);
             }
         }
@@ -120,7 +209,7 @@ class UserController extends Controller
         }
 
         if ($ctx['isRtomAdmin']) {
-            if (! str_starts_with((string) $user->assignment, 'caller_') || (int) $user->supervisor !== (int) ($ctx['sessionUser']['id'] ?? 0)) {
+            if (! $this->isCallerSharedByRtomAdmin($user)) {
                 abort(404);
             }
         }
@@ -166,7 +255,7 @@ class UserController extends Controller
         }
 
         if ($ctx['isRtomAdmin']) {
-            if (! str_starts_with((string) $user->assignment, 'caller_') || (int) $user->supervisor !== (int) ($ctx['sessionUser']['id'] ?? 0)) {
+            if (! $this->isCallerSharedByRtomAdmin($user)) {
                 abort(404);
             }
         }

@@ -653,15 +653,20 @@ class AssignmentController extends Controller
         });
 
         $grouped = $sorted->groupBy(function (MasterDatasetProcess $item) {
-            if ($item->run_date) {
-                $date = Carbon::parse($item->run_date);
-            } elseif ($item->dataset_month) {
+            $date = null;
+            if ($item->dataset_month) {
                 try {
-                    $date = Carbon::createFromFormat('Ym', (string) $item->dataset_month);
+                    if (preg_match('/^\d{6}$/', (string) $item->dataset_month)) {
+                        $date = Carbon::createFromFormat('Ym', (string) $item->dataset_month);
+                    } else {
+                        $date = Carbon::parse((string) $item->dataset_month);
+                    }
                 } catch (\Throwable) {
-                    $date = Carbon::parse($item->created_at ?? now());
+                    // ignore
                 }
-            } else {
+            }
+
+            if (! $date) {
                 $date = Carbon::parse($item->created_at ?? now());
             }
 

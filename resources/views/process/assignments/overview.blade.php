@@ -186,12 +186,41 @@
                         <p class="text-muted small mb-0">
                             Segment admins and RB users see their records only after the respective pass is triggered.
                             @if(! $exportsReady)
-                                <span class="badge text-bg-warning ms-1">Waiting for exports</span>
+                                <span class="badge text-bg-warning ms-1" data-exports-waiting>Waiting for exports</span>
                             @endif
                         </p>
                     </div>
                 </div>
 
+                <div class="modal fade" id="passConfirmModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Pass records to calling units</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="mb-0">Are you sure you want to pass <strong id="passConfirmLabel">—</strong> records to calling units? This action cannot be undone.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-primary" id="passConfirmSubmit">Pass records</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div data-pass-buttons
+                     data-pass-config="{{ json_encode([
+                         'routes' => [
+                             route('process.assignments.pass-ccs', $process),
+                             route('process.assignments.pass-cc', $process),
+                             route('process.assignments.pass-s', $process),
+                             route('process.assignments.pass-rb', $process),
+                         ],
+                         'labels' => ['Call Center Staff', 'Call Center', 'Staff', 'Regional Billing'],
+                         'btnIds' => ['btn-pass-ccs', 'btn-pass-cc', 'btn-pass-s', 'btn-pass-rb'],
+                     ]) }}">
                 <div class="row g-3">
                     @foreach($passButtons as $btn)
                     <div class="col-12 col-sm-6 col-xl-3">
@@ -210,24 +239,26 @@
                             <button type="button"
                                     class="btn btn-outline-secondary w-100"
                                     disabled
-                                    title="All exports must be ready before passing.">
+                                    title="All exports must be ready before passing."
+                                    data-pass-waiting="1">
                                 Pass — {{ $btn['label'] }}
                             </button>
                         @else
                             {{-- Ready to pass --}}
                             <form method="POST"
-                                  action="{{ route($btn['route'], $process) }}"
-                                  onsubmit="return confirm('Pass {{ $btn['label'] }} records to calling units?');">
+                                  action="{{ route($btn['route'], $process) }}">
                                 @csrf
                                 <button type="submit"
                                         id="{{ $btn['btnId'] }}"
-                                        class="btn btn-primary w-100">
+                                        class="btn btn-primary w-100"
+                                        data-pass-trigger>
                                     Pass — {{ $btn['label'] }}
                                 </button>
                             </form>
                         @endif
                     </div>
                     @endforeach
+                </div>
                 </div>
             </div>
         </div>
@@ -541,6 +572,25 @@ document.addEventListener('DOMContentLoaded', () => {
             '<a href="' + xlsxUrl + '" class="btn btn-dark" data-loader-off="1">Download XLSX</a>';
     };
 
+    const renderPassButton = (index) => {
+        const container = document.querySelector('[data-pass-buttons]');
+        if (!container) return null;
+
+        const config = JSON.parse(container.dataset.passConfig || '{}');
+        const route = config.routes?.[index];
+        const label = config.labels?.[index];
+        const btnId = config.btnIds?.[index];
+
+        if (!route || !label) return null;
+
+        return '<form method="POST" action="' + route + '">' +
+            '<input type="hidden" name="_token" value="' + document.querySelector('meta[name=csrf-token]')?.content + '">' +
+            '<button type="submit" id="' + btnId + '" class="btn btn-primary w-100" data-pass-trigger>' +
+                'Pass — ' + label +
+            '</button>' +
+        '</form>';
+    };
+
     const pollExportStatus = () => {
         if (exportButtonBlocks.length === 0) return;
 
@@ -561,9 +611,89 @@ document.addEventListener('DOMContentLoaded', () => {
                     const state = status.status || 'processing';
                     renderButtons(block, state);
                 });
+
+                const requiredBuckets = ['call-center-staff', 'call-center', 'staff', 'region-billing'];
+                const exportsReady = requiredBuckets.every(
+                    (bucket) => (payload.exports?.[bucket]?.status || null) === 'ready'
+                );
+
+                document.querySelectorAll('[data-exports-waiting]').forEach((el) => {
+                    el.style.display = exportsReady ? 'none' : '';
+                });
+
+                if (exportsReady) {
+                    const waitingButtons = document.querySelectorAll('[data-pass-buttons] [data-pass-waiting]');
+                    const waitArray = Array.from(waitingButtons);
+                    waitArray.forEach((btn, index) => {
+                        const col = btn.closest('.col-12, .col-sm-6, .col-xl-3');
+                        if (!col) return;
+                        col.innerHTML = renderPassButton(index) || col.innerHTML;
+                    });
+                } else {
+                    const enabledPassButtons = document.querySelectorAll('[data-pass-buttons] form[action*="/pass-"]');
+                    const enabledArray = Array.from(enabledPassButtons);
+                    enabledArray.forEach((form, index) => {
+                        const col = form.closest('.col-12, .col-sm-6, .col-xl-3');
+                        if (!col) return;
+                        const originalLabel = form.querySelector('.btn-primary')?.textContent?.replace('Pass — ', '') || ('Segment ' + (index + 1));
+                        col.innerHTML = '<button type="button" class="btn btn-outline-secondary w-100" disabled title="All exports must be ready before passing." data-pass-waiting="1">Pass — ' + originalLabel + '</button>';
+                    });
+                }
             })
             .catch(() => {});
     };
+
+    const passConfirmModalEl = document.getElementById('passConfirmModal');
+    const passConfirmLabel = document.getElementById('passConfirmLabel');
+    const passConfirmSubmit = document.getElementById('passConfirmSubmit');
+    const passModal = passConfirmModalEl && window.bootstrap ? new window.bootstrap.Modal(passConfirmModalEl) : null;
+    let pendingPassForm = null;
+
+    document.addEventListener('click', (e) => {
+        const trigger = e.target.closest('[data-pass-trigger]');
+        if (!trigger) return;
+
+        const form = trigger.closest('form');
+        if (!form) return;
+
+        e.preventDefault();
+        pendingPassForm = form;
+
+        const label = trigger.textContent?.replace('Pass — ', '')?.trim() || 'records';
+        if (passConfirmLabel) passConfirmLabel.textContent = label;
+
+        if (passModal) {
+            passModal.show();
+        } else if (passConfirmModalEl) {
+            passConfirmModalEl.style.display = 'block';
+        }
+    });
+
+    const submitPendingPass = () => {
+        if (pendingPassForm) {
+            pendingPassForm.submit();
+        }
+        pendingPassForm = null;
+    };
+
+    if (passConfirmSubmit) {
+        passConfirmSubmit.addEventListener('click', submitPendingPass);
+    }
+
+    const hidePassModal = () => {
+        pendingPassForm = null;
+        if (passModal) {
+            passModal.hide();
+        } else if (passConfirmModalEl) {
+            passConfirmModalEl.style.display = 'none';
+        }
+    };
+
+    passConfirmModalEl?.addEventListener('hidden.bs.modal', hidePassModal);
+
+    document.querySelectorAll('#passConfirmModal [data-bs-dismiss="modal"]').forEach((btn) => {
+        btn.addEventListener('click', hidePassModal);
+    });
 
     const fetchAndReplace = (url) => {
         const target = new URL(url, window.location.origin);

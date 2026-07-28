@@ -503,12 +503,10 @@
                 setProgress(
                     Math.min(100, Math.max(0, progressValue)),
                     message,
-                    status === 'awaiting_exclusions' ?
-                    `Upload complete. Please submit and add exclusions to begin processing.${heartbeat ? ' • ' + heartbeat : ''}` :
                     heartbeat
                 );
 
-                if (['ready', 'failed', 'canceled', 'awaiting_exclusions'].includes(status)) {
+                if (['ready', 'failed', 'canceled'].includes(status)) {
                     source?.close();
                     source = null;
                 }
@@ -551,12 +549,10 @@
                     setProgress(
                         Math.min(100, Math.max(0, progressValue)),
                         message,
-                        data.status === 'awaiting_exclusions' ?
-                        `Upload complete. Please submit and add exclusions to begin processing.${heartbeat ? ' • ' + heartbeat : ''}` :
                         heartbeat
                     );
 
-                    if (['ready', 'failed', 'canceled', 'awaiting_exclusions'].includes(data.status)) {
+                    if (['ready', 'failed', 'canceled'].includes(data.status)) {
                         clearInterval(pollTimer);
                     }
                 } catch (_error) {}

@@ -157,6 +157,13 @@ class PaymentUploadController extends Controller
         ]);
     }
 
+    public function history(Request $request): \Illuminate\View\View
+    {
+        return view('process.payment-upload-history', [
+            'userId' => (int) data_get($request->session()->get('user'), 'id', 0),
+        ]);
+    }
+
     public function progress(string $token): JsonResponse
     {
         $state = Cache::get(self::PROGRESS_CACHE_PREFIX . $token);

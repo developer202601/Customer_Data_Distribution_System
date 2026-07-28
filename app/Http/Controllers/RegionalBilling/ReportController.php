@@ -373,11 +373,31 @@ class ReportController extends Controller
                 ->count();
 
         $sessionUserId = (int) (session('user.id') ?? session('user')['id'] ?? 0);
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        $sharedRtomAdminIds = [];
+        if (str_starts_with($sessionAssignment, 'rtom_')) {
+            $dbUser = User::find($sessionUserId);
+            $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
+            if ($region) {
+                $rtomValue = substr($sessionAssignment, 5);
+                $sharedUsers = User::where('system', 'rb')
+                    ->where('status', 1)
+                    ->where('assignment', 'rtom_' . $rtomValue)
+                    ->get();
+                foreach ($sharedUsers as $user) {
+                    if ($this->getRtomAdminRegion($user) === $region && $user->id !== $sessionUserId) {
+                        $sharedRtomAdminIds[] = (int) $user->id;
+                    }
+                }
+            }
+        }
+        $supervisorIds = array_merge([$sessionUserId], $sharedRtomAdminIds);
+
         $callers = User::query()
             ->where('system', 'rb')
             ->where('status', 1)
             ->where('assignment', 'like', 'caller_%')
-            ->where('supervisor', $sessionUserId)
+            ->whereIn('supervisor', $supervisorIds)
             ->orderBy('username')
             ->get();
 

@@ -40,6 +40,45 @@ class AssignmentController extends Controller
         ];
     }
 
+    private function getSharedRtomAdminUserIds(): array
+    {
+        $sessionUser = session('user');
+        $currentUserId = (int) ($sessionUser['id'] ?? 0);
+        if ($currentUserId <= 0) {
+            return [];
+        }
+
+        $currentUser = User::find($currentUserId);
+        if (! $currentUser) {
+            return [];
+        }
+
+        $assignment = strtolower(trim((string) ($currentUser->assignment ?? '')));
+        if (! str_starts_with($assignment, 'rtom_')) {
+            return [];
+        }
+
+        $rtomValue = substr($assignment, 5);
+        $region = $this->getRtomAdminRegion($currentUser);
+        if (! $region) {
+            return [];
+        }
+
+        $users = User::where('system', 'rb')
+            ->where('status', 1)
+            ->where('assignment', 'rtom_' . $rtomValue)
+            ->get();
+
+        $sharedIds = [];
+        foreach ($users as $user) {
+            if ($this->getRtomAdminRegion($user) === $region && $user->id !== $currentUserId) {
+                $sharedIds[] = (int) $user->id;
+            }
+        }
+
+        return $sharedIds;
+    }
+
     protected function deriveRegionFromRtom(string $rtomValue): ?string
     {
         $query = MasterDatasetRow::query();
@@ -823,11 +862,15 @@ class AssignmentController extends Controller
             }
         }
 
+        $sessionUserId = (int) ($sessionUser['id'] ?? 0);
+        $sharedRtomAdminIds = $this->getSharedRtomAdminUserIds();
+        $supervisorIds = array_merge([$sessionUserId], $sharedRtomAdminIds);
+
         $callerIds = User::query()
             ->where('system', 'rb')
             ->where('status', 1)
             ->where('assignment', 'like', 'caller_%')
-            ->where('supervisor', (int) ($sessionUser['id'] ?? 0))
+            ->whereIn('supervisor', $supervisorIds)
             ->whereIn('id', $inputUserIds)
             ->pluck('id')
             ->map(fn ($id) => (int) $id)

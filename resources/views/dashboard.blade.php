@@ -60,8 +60,24 @@
         <div class="col-lg-6">
             <a href="{{ route('payment.upload') }}" class="dashboard-card h-100" role="button" aria-label="Open payment files upload page">
                 <div class="dashboard-card-body">
-                    <h2 class="dashboard-card-title">Payment Files Upload</h2>
+                    <h2 class="dashboard-card-title">Upload Payment Files</h2>
                     <p class="dashboard-card-description">Upload the monthly payment files</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-lg-6">
+            <a href="{{ route('master.upload.history') }}" class="dashboard-card h-100" role="button" aria-label="Review master upload history">
+                <div class="dashboard-card-body">
+                    <h2 class="dashboard-card-title">Master Upload History</h2>
+                    <p class="dashboard-card-description">Review past master dataset uploads</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-lg-6">
+            <a href="{{ route('payments.history') }}" class="dashboard-card h-100" role="button" aria-label="Review payment upload history">
+                <div class="dashboard-card-body">
+                    <h2 class="dashboard-card-title">Payment Upload History</h2>
+                    <p class="dashboard-card-description">Review past payment uploads</p>
                 </div>
             </a>
         </div>

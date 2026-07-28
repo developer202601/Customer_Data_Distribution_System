@@ -30,6 +30,8 @@ Route::middleware('session.auth')->group(function () {
     Route::delete('/master/upload/chunks/upload/{token}', [MasterDatasetUploadController::class, 'cancelChunkUpload'])->name('master.upload.chunks.cancel');
     Route::delete('/master/upload/chunks/staged/{token}', [MasterDatasetUploadController::class, 'destroyStagedUpload'])->name('master.upload.chunks.staged.destroy');
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
+    Route::get('/master/upload/history', [MasterDatasetUploadController::class, 'history'])->name('master.upload.history');
+    Route::get('/master/upload/history/json', [MasterDatasetUploadController::class, 'historyJson'])->name('master.upload.history.json');
     Route::get('/master/upload/validation-report/{token}', [MasterValidationReportController::class, 'download'])->name('master.validation.report.download');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
     Route::get('/payment/upload', function (\Illuminate\Http\Request $request) {
@@ -40,6 +42,7 @@ Route::middleware('session.auth')->group(function () {
     })->name('payment.upload');
     Route::post('/payments/update', [PaymentUploadController::class, 'update'])->name('payments.update');
     Route::get('/payments', [PaymentUploadController::class, 'index'])->name('payments.index');
+    Route::get('/payments/history', [PaymentUploadController::class, 'history'])->name('payments.history');
     Route::get('/payments/progress/{token}', [PaymentUploadController::class, 'progress'])->name('payments.progress');
     Route::get('/payments/progress/stream/{token}', [PaymentUploadController::class, 'progressStream'])->name('payments.progress.stream');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');

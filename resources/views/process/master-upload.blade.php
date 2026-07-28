@@ -14,16 +14,32 @@
 </form>
 @endsection
 
+<style>
+.upload-complete-toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1100;
+    max-width: 400px;
+}
+.upload-complete-toast {
+    animation: slideInRight 0.3s ease;
+}
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+</style>
 @section('content')
 <div class="process-upload py-4">
+    <div class="upload-complete-toast-container"></div>
     <div class="container-fluid">
         @if(!empty($process) && !empty($showProcessBanner))
         <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert">
-            <div>
+<div>
                 <strong>Master file already uploaded.</strong>
                 <div class="small mb-0">Process #{{ $process->id }} is currently in status: {{ ucfirst(str_replace('_', ' ', (string) $process->status)) }}.</div>
             </div>
-             <a href="{{ route('process.exclusions.create') }}" class="btn btn-outline-primary btn-sm" data-loader-off="1">Continue to exclusions</a>
         </div>
         @endif
 
@@ -32,6 +48,23 @@
             {{ session('status') }}
         </div>
         @endif
+
+        <div class="modal fade" id="uploadSuccessModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Upload submitted</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-0">Your master file has been submitted successfully. Redirecting you to the dashboard…</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" id="uploadSuccessRedirect">Go to dashboard</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <form id="master-upload-form" action="{{ route('master.upload.store') }}" method="post" enctype="multipart/form-data">
             @csrf
@@ -47,6 +80,7 @@
                         </div>
                         <div class="d-flex gap-2">
                             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Back</a>
+                            <a href="{{ route('master.upload.history') }}" class="btn btn-outline-secondary px-4" data-loader-off="1">Upload history</a>
                             <button type="submit" class="btn btn-dark px-4 d-none" id="master-upload-submit" disabled>Submit</button>
                         </div>
                     </div>
@@ -73,16 +107,7 @@
                             </ul>
                             @endif
 
-                            @if(!empty($processFailurePayload['exclusion_errors']))
-                            <p class="mb-1 fw-semibold">Exclusion file errors</p>
-                            <ul class="mb-2">
-                                @foreach($processFailurePayload['exclusion_errors'] as $error)
-                                <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
-                            @endif
-
-                            @if(!empty($processFailurePayload['general_errors']))
+@if(!empty($processFailurePayload['general_errors']))
                             <p class="mb-1 fw-semibold">Other errors</p>
                             <ul class="mb-0">
                                 @foreach($processFailurePayload['general_errors'] as $error)
@@ -170,10 +195,10 @@
                     </div>
 
                     @if(!empty($assignmentConfig))
-                    <div class="process-config mt-4" id="assignment-config-block">
+                    <!-- <div class="process-config mt-4" id="assignment-config-block">
                         <h2 class="process-guidelines-title">Current allocation values</h2>
-                        <!-- Outer grey panel for current allocation values -->
-                        <div class="p-3" style="background:var(--surface-muted); border-radius:1rem;">
+                         Outer grey panel for current allocation values -->
+                        <!--<div class="p-3" style="background:var(--surface-muted); border-radius:1rem;">
                             <div class="row g-3" id="assignment-config-cards">
                                 <div class="col-md-6">
                                     <div class="border p-3 h-100 bg-light" style="border-radius:1rem;">
@@ -206,7 +231,7 @@
                             <span class="text-muted small mb-0">Click refresh to load the latest updated numbers.</span>
                         </div>
                         <p class="text-muted small mt-1 mb-0" id="assignment-config-status" aria-live="polite"></p>
-                    </div>
+                    </div> -->
                     @endif
                 </div>
             </div>
@@ -502,13 +527,15 @@
 
                 setProgress(
                     Math.min(100, Math.max(0, progressValue)),
-                    message,
-                    status === 'awaiting_exclusions' ?
-                    `Upload complete. Please submit and add exclusions to begin processing.${heartbeat ? ' • ' + heartbeat : ''}` :
+                    status === 'awaiting_exclusions' ? 'Upload Complete.' : message,
                     heartbeat
                 );
 
-                if (['ready', 'failed', 'canceled', 'awaiting_exclusions'].includes(status)) {
+                if (status === 'awaiting_exclusions') {
+                    showUploadCompleteToast();
+                }
+
+                if (['ready', 'failed', 'canceled'].includes(status)) {
                     source?.close();
                     source = null;
                 }
@@ -550,13 +577,15 @@
                     const heartbeat = buildHeartbeat(data.last_updated_at);
                     setProgress(
                         Math.min(100, Math.max(0, progressValue)),
-                        message,
-                        data.status === 'awaiting_exclusions' ?
-                        `Upload complete. Please submit and add exclusions to begin processing.${heartbeat ? ' • ' + heartbeat : ''}` :
+                        data.status === 'awaiting_exclusions' ? 'Upload Complete.' : message,
                         heartbeat
                     );
 
-                    if (['ready', 'failed', 'canceled', 'awaiting_exclusions'].includes(data.status)) {
+                    if (data.status === 'awaiting_exclusions') {
+                        showUploadCompleteToast();
+                    }
+
+                    if (['ready', 'failed', 'canceled'].includes(data.status)) {
                         clearInterval(pollTimer);
                     }
                 } catch (_error) {}
@@ -578,6 +607,30 @@
                 }
 
                 return `Active ${delta}s`;
+            };
+
+            const showUploadCompleteToast = () => {
+                const container = document.querySelector('.upload-complete-toast-container');
+                if (!container) {
+                    return;
+                }
+
+                const existing = container.querySelector('.upload-complete-toast');
+                if (existing) {
+                    existing.remove();
+                }
+
+                const toast = document.createElement('div');
+                toast.className = 'upload-complete-toast alert alert-success d-flex align-items-center gap-2 mb-2';
+                toast.setAttribute('role', 'alert');
+                toast.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i><span>Upload Complete.</span>';
+                container.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transition = 'opacity 0.3s ease';
+                    setTimeout(() => toast.remove(), 300);
+                }, 8000);
             };
 
             poll();
@@ -838,7 +891,38 @@
                         validationMessages : [json?.message || 'Unable to submit uploaded file.'];
                 }
 
-                window.location.href = json?.redirect_url || @json(route('process.exclusions.create'));
+                if (window.CDDSLoader) {
+                    window.CDDSLoader.hide();
+                }
+
+                const successModalEl = document.getElementById('uploadSuccessModal');
+                const successRedirectBtn = document.getElementById('uploadSuccessRedirect');
+                const successModal = successModalEl && window.bootstrap ? new window.bootstrap.Modal(successModalEl) : null;
+                const redirectUrl = json?.redirect_url;
+
+                const doRedirect = () => {
+                    if (redirectUrl) {
+                        window.CDDSLoaderIgnoreBeforeUnload = true;
+                        window.location.href = redirectUrl;
+                    }
+                };
+
+                if (successModal) {
+                    successModal.show();
+                } else if (successModalEl) {
+                    successModalEl.style.display = 'block';
+                }
+
+                if (successRedirectBtn) {
+                    successRedirectBtn.onclick = () => {
+                        doRedirect();
+                    };
+                }
+
+                setTimeout(() => {
+                    doRedirect();
+                }, 5000);
+
             } catch (error) {
                 if (window.CDDSLoader) {
                     window.CDDSLoader.hide();

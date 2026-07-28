@@ -49,6 +49,23 @@
         </div>
         @endif
 
+        <div class="modal fade" id="uploadSuccessModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Upload submitted</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-0">Your master file has been submitted successfully. Redirecting you to the dashboard…</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" id="uploadSuccessRedirect">Go to dashboard</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <form id="master-upload-form" action="{{ route('master.upload.store') }}" method="post" enctype="multipart/form-data">
             @csrf
             <div class="card process-upload-card shadow-sm">
@@ -63,6 +80,7 @@
                         </div>
                         <div class="d-flex gap-2">
                             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Back</a>
+                            <a href="{{ route('master.upload.history') }}" class="btn btn-outline-secondary px-4" data-loader-off="1">Upload history</a>
                             <button type="submit" class="btn btn-dark px-4 d-none" id="master-upload-submit" disabled>Submit</button>
                         </div>
                     </div>
@@ -177,10 +195,10 @@
                     </div>
 
                     @if(!empty($assignmentConfig))
-                    <div class="process-config mt-4" id="assignment-config-block">
+                    <!-- <div class="process-config mt-4" id="assignment-config-block">
                         <h2 class="process-guidelines-title">Current allocation values</h2>
-                        <!-- Outer grey panel for current allocation values -->
-                        <div class="p-3" style="background:var(--surface-muted); border-radius:1rem;">
+                         Outer grey panel for current allocation values -->
+                        <!--<div class="p-3" style="background:var(--surface-muted); border-radius:1rem;">
                             <div class="row g-3" id="assignment-config-cards">
                                 <div class="col-md-6">
                                     <div class="border p-3 h-100 bg-light" style="border-radius:1rem;">
@@ -213,7 +231,7 @@
                             <span class="text-muted small mb-0">Click refresh to load the latest updated numbers.</span>
                         </div>
                         <p class="text-muted small mt-1 mb-0" id="assignment-config-status" aria-live="polite"></p>
-                    </div>
+                    </div> -->
                     @endif
                 </div>
             </div>
@@ -872,6 +890,38 @@
                     throw validationMessages.length ?
                         validationMessages : [json?.message || 'Unable to submit uploaded file.'];
                 }
+
+                if (window.CDDSLoader) {
+                    window.CDDSLoader.hide();
+                }
+
+                const successModalEl = document.getElementById('uploadSuccessModal');
+                const successRedirectBtn = document.getElementById('uploadSuccessRedirect');
+                const successModal = successModalEl && window.bootstrap ? new window.bootstrap.Modal(successModalEl) : null;
+                const redirectUrl = json?.redirect_url;
+
+                const doRedirect = () => {
+                    if (redirectUrl) {
+                        window.CDDSLoaderIgnoreBeforeUnload = true;
+                        window.location.href = redirectUrl;
+                    }
+                };
+
+                if (successModal) {
+                    successModal.show();
+                } else if (successModalEl) {
+                    successModalEl.style.display = 'block';
+                }
+
+                if (successRedirectBtn) {
+                    successRedirectBtn.onclick = () => {
+                        doRedirect();
+                    };
+                }
+
+                setTimeout(() => {
+                    doRedirect();
+                }, 5000);
 
             } catch (error) {
                 if (window.CDDSLoader) {

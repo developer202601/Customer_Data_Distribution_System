@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\ProcessExclusionUpload;
 use App\Jobs\ProcessMasterIngestion;
 use App\Models\MasterDatasetProcess;
+use App\Models\MasterUpload;
 use App\Support\ChunkedUploadManager;
 use App\Support\MasterDatasetAssignmentConfiguration;
 use App\Support\MasterDatasetProcessStatus;
@@ -27,6 +28,38 @@ class MasterDatasetUploadController extends Controller
     private const CHUNK_BYTES = 2097152;
     private const STAGED_UPLOAD_SESSION_KEY = 'master.dataset.staged_upload';
     private const FAILURE_CACHE_PREFIX = 'master.dataset.failure.user.';
+    private const HISTORY_CACHE_PREFIX = 'master.upload.history.';
+
+    private function recordUploadHistory(string $token, int $userId, array $data): void
+    {
+        Cache::put(self::HISTORY_CACHE_PREFIX . $token, array_merge([
+            'user_id' => $userId,
+            'status' => 'processing',
+            'progress' => 0,
+            'message' => 'Uploading…',
+            'processed_rows' => 0,
+            'total_rows' => null,
+            'file_size' => null,
+            'mime_type' => null,
+            'error' => null,
+            'started_at' => time(),
+            'finished_at' => null,
+            'last_updated_at' => now()->toIso8601String(),
+        ], $data), now()->addDays(30));
+    }
+
+    private function syncUploadHistoryToDb(string $token, array $overrides = []): void
+    {
+        $cached = Cache::get(self::HISTORY_CACHE_PREFIX . $token);
+        if (!is_array($cached)) {
+            return;
+        }
+
+        MasterUpload::updateOrCreate(
+            ['token' => $token],
+            array_merge($cached, $overrides)
+        );
+    }
 
     private function replaceCurrentSessionProcess(Request $request): void
     {
@@ -135,6 +168,14 @@ class MasterDatasetUploadController extends Controller
 
         $upload = $chunks->start('master', $data['file_name'], (int) $data['file_size'], $data['mime_type'] ?? null);
 
+        $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+        $this->recordUploadHistory($upload['token'], $userId, [
+            'original_name' => $data['file_name'],
+            'file_size' => (int) $data['file_size'],
+            'mime_type' => $data['mime_type'] ?? null,
+            'started_at' => time(),
+        ]);
+
         return response()->json([
             'status' => 'ok',
             'upload_token' => $upload['token'],
@@ -193,6 +234,16 @@ class MasterDatasetUploadController extends Controller
                 'relative_path' => $relativePath,
                 'original_name' => (string) ($metadata['original_name'] ?? 'master.xlsx'),
                 'mime_type' => (string) ($metadata['mime_type'] ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+            ]);
+
+            $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+            $this->recordUploadHistory($token, $userId, [
+                'original_name' => (string) ($metadata['original_name'] ?? 'master.xlsx'),
+                'file_size' => (int) ($metadata['file_size'] ?? 0),
+                'mime_type' => (string) ($metadata['mime_type'] ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                'status' => 'awaiting_submission',
+                'progress' => 100,
+                'message' => 'Upload complete. Ready to submit.',
             ]);
 
             // Initialize progress in cache so polling knows about this upload
@@ -268,10 +319,15 @@ class MasterDatasetUploadController extends Controller
 
             // Dispatch background master ingestion (Phase 1) job
             ProcessMasterIngestion::dispatch($process->id, $userContext);
-            /*
-            // Ingest and validate master spreadsheet synchronously
-            $process = $workflow->ingestMasterSynchronously($process, $userContext);
-            */
+
+            $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+            $this->syncUploadHistoryToDb($data['staged_upload_token'], [
+                'user_id' => $userId,
+                'status' => 'submitted',
+                'progress' => 100,
+                'message' => 'Master dataset file uploaded successfully. Passed to Credit Control Section for processing.',
+                'finished_at' => time(),
+            ]);
 
             $request->session()->put('master.dataset.process_id', $process->id);
             $request->session()->forget('master.dataset.staged_exclusions');
@@ -309,6 +365,15 @@ class MasterDatasetUploadController extends Controller
 
     public function destroyStagedUpload(Request $request, string $token): JsonResponse
     {
+        $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+        $this->syncUploadHistoryToDb($token, [
+            'user_id' => $userId,
+            'status' => 'canceled',
+            'progress' => 0,
+            'message' => 'Upload canceled by user.',
+            'finished_at' => time(),
+        ]);
+
         $staged = $request->session()->get(self::STAGED_UPLOAD_SESSION_KEY);
 
         // Signal background validation job to stop as soon as possible.
@@ -344,11 +409,26 @@ class MasterDatasetUploadController extends Controller
             'upload' => 'required|file|mimes:xlsx|max:51200',
         ]);
 
+        $token = (string) Str::uuid();
+
         try {
             $this->replaceCurrentSessionProcess($request);
             $userContext = $resolver->resolve($request);
 
             $process = $workflow->queueMasterArchive($request->file('upload'), $userContext);
+
+            $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+            $this->recordUploadHistory($token, $userId, [
+                'original_name' => $request->file('upload')->getClientOriginalName(),
+                'file_size' => $request->file('upload')->getSize(),
+                'mime_type' => $request->file('upload')->getMimeType(),
+                'status' => 'submitted',
+                'progress' => 100,
+                'message' => 'Master dataset file uploaded successfully. Passed to download section for processing.',
+                'finished_at' => time(),
+            ]);
+
+            $this->syncUploadHistoryToDb($token);
 
         } catch (ValidationException $exception) {
             throw $exception;
@@ -369,6 +449,60 @@ class MasterDatasetUploadController extends Controller
             ->route('process.exclusions.create')
             ->with('status', 'Master dataset uploaded. Continue by adding exclusion files to begin validation.')
             ->with('hide_dataset_info', true);
-        */
+         */
+    }
+
+    public function history(Request $request): View
+    {
+        $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+
+        return view('process.master-upload-history', [
+            'userId' => $userId,
+        ]);
+    }
+
+    public function historyJson(Request $request): JsonResponse
+    {
+        $userId = (int) data_get($request->session()->get('user'), 'id', 0);
+
+        if ($userId <= 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'User not authenticated.',
+            ], 401);
+        }
+
+        $perPage = (int) $request->query('per_page', 10);
+        $perPage = $perPage > 0 ? min($perPage, 50) : 10;
+
+        $query = MasterUpload::where('user_id', $userId)
+            ->orderByDesc('created_at');
+
+        $paginator = $query->paginate($perPage);
+
+        $uploads = $paginator->getCollection()->map(fn ($upload) => [
+            'token' => $upload->token,
+            'original_name' => $upload->original_name,
+            'status' => $upload->status,
+            'progress' => (int) $upload->progress,
+            'message' => $upload->message,
+            'processed_rows' => (int) $upload->processed_rows,
+            'total_rows' => $upload->total_rows ? (int) $upload->total_rows : null,
+            'file_size' => $upload->file_size ? (int) $upload->file_size : null,
+            'mime_type' => $upload->mime_type,
+            'started_at' => $upload->started_at ? (int) $upload->started_at : $upload->created_at->timestamp,
+            'last_updated_at' => $upload->updated_at?->toIso8601String(),
+        ])->values()->all();
+
+        return response()->json([
+            'status' => 'ok',
+            'uploads' => $uploads,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ]);
     }
 }

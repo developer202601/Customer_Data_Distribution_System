@@ -30,6 +30,7 @@
                         </div>
                         <div class="d-flex gap-2">
                             <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary px-4">Back</a>
+                            <a href="{{ route('payments.history') }}" class="btn btn-outline-secondary px-4" data-loader-off="1">Upload history</a>
                             <button type="submit" class="btn btn-dark px-4 d-none" id="payment-upload-submit">Submit</button>
                         </div>
                     </div>
@@ -75,7 +76,7 @@
             </div>
         </form>
 
-        <div class="card shadow-sm mt-4">
+        <!-- <div class="card shadow-sm mt-4">
             <div class="card-body p-4 p-lg-5">
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                     <div>
@@ -88,7 +89,7 @@
                     <p class="text-muted mb-0">Loading upload history…</p>
                 </div>
             </div>
-        </div>
+        </div> -->
 
     </div>
 </div>
@@ -581,3 +582,5 @@
 </script>
 @endpush
 @endsection
+
+

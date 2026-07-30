@@ -65,7 +65,7 @@
                 </div>
             </a>
         </div>
-        <div class="col-lg-6">
+        <!-- <div class="col-lg-6">
             <a href="{{ route('master.upload.history') }}" class="dashboard-card h-100" role="button" aria-label="Review master upload history">
                 <div class="dashboard-card-body">
                     <h2 class="dashboard-card-title">Master Upload History</h2>
@@ -80,7 +80,7 @@
                     <p class="dashboard-card-description">Review past payment uploads</p>
                 </div>
             </a>
-        </div>
+        </div> -->
         @endif
     </div>
 </div>

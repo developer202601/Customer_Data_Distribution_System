@@ -101,6 +101,8 @@ Route::middleware('session.auth')->group(function () {
 
     Route::post('/configurations/mediums', [BillRangeController::class, 'saveMediums'])->name('configurations.mediums');
 
+    Route::post('/configurations/outstanding-threshold', [BillRangeController::class, 'saveOutstandingThreshold'])->name('configurations.outstanding_threshold');
+
     Route::prefix('cc')->name('cc.')->middleware('session.cc_user')->group(function () {
         Route::get('/', [CallCenterDashboardController::class, 'index'])->name('dashboard');
         Route::post('/profile/name', [CallCenterUserController::class, 'setName'])->name('profile.setName');

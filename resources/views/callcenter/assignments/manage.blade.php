@@ -297,7 +297,7 @@
                                 <label class="form-label small">Outcome</label>
                                 <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
                                     <option value="" disabled selected>Select outcome</option>
-                                    <option value="paid">paid</option>
+                                    <option value="paid">Paid</option>
                                     <option value="number invalid">number invalid</option>
                                     <option value="user not authorized">user not authorized</option>
                                     <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
@@ -362,6 +362,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const statusField = document.getElementById('ccCallStatus');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const NOT_RELEVANT_PERSON_OUTCOME = 'not relevant person contacted';
+    const outstandingThreshold = @json($outstandingThreshold);
     let bootstrapModal = null;
     if (assignmentRowModal && window.bootstrap) {
         bootstrapModal = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
@@ -575,7 +576,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (selName) selName.textContent = data.address_name || data.name || '';
         if (selAmt) {
             const paymentValue = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-            selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Payment: ${paymentValue}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+            const arrearsNum = data.arrears !== null && data.arrears !== undefined ? Number(data.arrears) : null;
+            const paymentNum = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value) : null;
+            const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
+            const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+            const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+            selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Payment: ${paymentValue} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+        }
 
         // If this row belongs to a previous report, keep interactions read-only and show reason text
         try {
@@ -731,11 +738,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.dataset.called = r.called_in_period ? '1' : '0';
                 btn.dataset.overdue = r.promise_overdue ? '1' : '0';
                 btn.dataset.outcome = r.latest_outcome || '';
+                const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
+                const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
+                const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
+                const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
                 btn.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <strong>${r.address_name ?? '—'}</strong>
-                            <div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'}</div>
+                            <div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}</div>
                             <div class="small text-danger">Payment: ${r.payment_value ?? '—'}</div>
                             <div class="small text-muted">
                                 Calls since assignment: ${r.call_count ?? 0}

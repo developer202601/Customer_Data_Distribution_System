@@ -109,7 +109,7 @@
         @csrf
         <input type="hidden" name="action" id="bulkAction" value="hide">
 
-        <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-2">
+                <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-2">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 @if(!empty($isLocked))
                     <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Review Locked</button>
@@ -132,7 +132,7 @@
             </div>
             <div style="min-width: 320px;" class="w-100 w-md-auto">
                 <label class="form-label small text-muted mb-1" for="tableSearch">Search</label>
-                <input class="form-control form-control-sm" type="search" id="tableSearch" name="q" value="{{ $search ?? request('q') }}" placeholder="Account / arrears / phone / customer ref">
+                <input class="form-control form-control-sm" type="search" id="tableSearch" name="q" value="{{ $search ?? request('q') }}" placeholder="Account / arrears / outstanding / payment / phone / customer ref">
             </div>
         </div>
 
@@ -143,6 +143,8 @@
                     <th style="width: 40px;"></th>
                     <th>Account Number</th>
                     <th>Arrears</th>
+                    <th>Outstanding</th>
+                    <th>Status</th>
                     <th>Payment</th>
                     <th>Phone</th>
                     <th>Customer Ref</th>
@@ -166,6 +168,19 @@
                         </td>
                         <td>{{ $row->account_num ?? '—' }}</td>
                         <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
+                        <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value - (float) ($row->payments_value ?? 0), 2) : '—' }}</td>
+                        <td>
+                            @php
+                                $outstanding = $row->new_arrears_value !== null ? (float) $row->new_arrears_value - (float) ($row->payments_value ?? 0) : null;
+                            @endphp
+                            @if($outstanding === null)
+                                —
+                            @elseif($outstanding < $outstandingThreshold)
+                                <span class="badge bg-success">Paid</span>
+                            @else
+                                <span class="badge bg-danger">Unpaid</span>
+                            @endif
+                        </td>
                         <td class="text-danger">{{ $row->payments_value !== null ? number_format((float) $row->payments_value, 2) : '—' }}</td>
                         <td>{{ $row->mobile_contact_tel ?? '—' }}</td>
                         <td>{{ $row->customer_ref ?? '—' }}</td>
@@ -192,7 +207,7 @@
                         </td>
                     </tr>
                     <tr class="d-none" id="more-{{ $row->id }}">
-                        <td colspan="8" class="bg-light">
+                        <td colspan="10" class="bg-light">
                             <div class="small">
                                 <strong>Address:</strong> {{ $row->full_address ?? '—' }}<br>
                                 <strong>Address Name:</strong> {{ $row->address_name ?? '—' }}<br>
@@ -205,7 +220,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="text-muted">No rows found for this report/region with current filters.</td>
+                        <td colspan="10" class="text-muted">No rows found for this report/region with current filters.</td>
                     </tr>
                 @endforelse
             </tbody>

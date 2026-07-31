@@ -204,4 +204,43 @@ class BillRangeController extends Controller
             ->route('admin.config', ['tab' => $request->input('tab', 'connection-mediums')])
             ->with('success', 'Connection mediums saved successfully.');
     }
+
+    public function saveOutstandingThreshold(Request $request)
+    {
+        $incomingFields = $request->validate([
+            'outstanding_threshold' => 'required|integer|min:0',
+        ]);
+
+        $incomingFields['outstanding_threshold'] = (int) strip_tags($incomingFields['outstanding_threshold']);
+
+        $previous = Configurations::where('config_name', 'outstanding_threshold')->first();
+
+        $userId = auth()->id() ?: $request->session()->get('user.id');
+        if (!$userId) {
+            return redirect()->route('login')->withErrors(['auth' => 'You must be logged in to perform this action.']);
+        }
+
+        $incomingFields['user_id'] = (int) $userId;
+
+        try {
+            $config = Configurations::updateOrCreate(
+                ['config_name' => 'outstanding_threshold'],
+                ['value' => $incomingFields['outstanding_threshold'], 'changedby_id' => $incomingFields['user_id']]
+            );
+
+            ConfigurationChange::create([
+                'configuration_id' => $config->id,
+                'config_key' => 'outstanding_threshold',
+                'old_value' => $previous ? (string) $previous->value : null,
+                'new_value' => (string) $incomingFields['outstanding_threshold'],
+                'user_id' => $incomingFields['user_id'],
+            ]);
+        } catch (\Exception $e) {
+            logger()->error('Failed to record outstanding threshold change: ' . $e->getMessage());
+        }
+
+        return redirect()
+            ->route('admin.config', ['tab' => $request->input('tab', 'outstanding-threshold')])
+            ->with('success', 'Outstanding threshold saved successfully.');
+    }
 }

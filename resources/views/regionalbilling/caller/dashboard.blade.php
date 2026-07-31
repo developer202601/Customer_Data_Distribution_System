@@ -91,6 +91,8 @@
                                         <th>Account</th>
                                         <th>Customer Ref</th>
                                         <th>Arrears</th>
+                                        <th>Outstanding</th>
+                                        <th>Status</th>
                                         <th>Payment</th>
                                         <th>Status</th>
                                     </tr>
@@ -103,7 +105,20 @@
                                                 <td>{{ $row?->account_num ?? '—' }}</td>
                                                 <td>{{ $row?->customer_ref ?? '—' }}</td>
                                                 <td>{{ $row?->new_arrears_value ?? '—' }}</td>
-                                                <td class="text-danger">{{ $row?->payments_value !== null ? number_format((float) $row->payments_value, 2) : '—' }}</td>
+                                                <td>{{ $row?->new_arrears_value !== null ? number_format((float) $row?->new_arrears_value - (float) ($row?->payments_value ?? 0), 2) : '—' }}</td>
+                                                <td>
+                                                    @php
+                                                        $outstanding = $row?->new_arrears_value !== null ? (float) $row?->new_arrears_value - (float) ($row?->payments_value ?? 0) : null;
+                                                    @endphp
+                                                    @if($outstanding === null)
+                                                        —
+                                                    @elseif($outstanding < $outstandingThreshold)
+                                                        <span class="badge bg-success">Paid</span>
+                                                    @else
+                                                        <span class="badge bg-danger">Unpaid</span>
+                                                    @endif
+                                                </td>
+                                                <td class="text-danger">{{ $row?->payments_value !== null ? number_format((float) $row?->payments_value, 2) : '—' }}</td>
                                                 <td>{{ $assignment->status ?? '—' }}</td>
                                             </tr>
                                         @endforeach

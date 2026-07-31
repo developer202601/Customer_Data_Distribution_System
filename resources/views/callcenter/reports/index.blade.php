@@ -530,9 +530,10 @@
                     if (modal) hideModalOrFallback(modal);
                 });
 
+                const selectedReportId = @json($selectedReport->id ?? null);
+                const outstandingThreshold = @json($outstandingThreshold);
                 async function loadUserAccepted(userId) {
                     const params = new URLSearchParams();
-                    const selectedReportId = @json($selectedReport->id ?? null);
                     if (selectedReportId) {
                         params.set('report', String(selectedReportId));
                     }
@@ -616,7 +617,14 @@
                     const selName = document.getElementById('ccSelectedName');
                     const selAmt = document.getElementById('ccSelectedAmounts');
                     if (selName) selName.textContent = data.address_name || data.name || '';
-                    if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+                    if (selAmt) {
+                        const arrearsNum = data.arrears !== null && data.arrears !== undefined ? Number(data.arrears) : null;
+                        const paymentNum = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value) : null;
+                        const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
+                        const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                        const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                        selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+                    }
 
                     // wire Start Call button to enable form
                     const startBtnEl = document.getElementById('ccStartCallBtn');
@@ -649,7 +657,12 @@
                                 btn.type = 'button';
                                 btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-start';
                                 btn.dataset.assignmentId = r.assignment_id;
-                                btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'}</div></div><div class="text-muted small">#${r.row_id}</div>`;
+                                const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
+                                const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
+                                const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
+                                const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                                const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                                btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
                                 btn.addEventListener('click', async () => {
                                     const assignmentId = btn.dataset.assignmentId;
                                     document.getElementById('ccCallAssignmentId').value = assignmentId;

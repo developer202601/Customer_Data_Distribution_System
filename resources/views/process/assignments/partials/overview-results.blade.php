@@ -23,6 +23,8 @@
                     <th scope="col">Business Line</th>
                     <th scope="col">Assignment</th>
                     <th scope="col" class="text-end">New Arrears (Rs.)</th>
+                    <th scope="col" class="text-end">Outstanding</th>
+                    <th scope="col">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -34,10 +36,23 @@
                     <td>{{ $row->slt_business_line_value ?? '—' }}</td>
                     <td>{{ $resolveAssignment($row) }}</td>
                     <td class="text-end">{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
+                    <td class="text-end">{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value - (float) ($row->payments_value ?? 0), 2) : '—' }}</td>
+                    <td>
+                        @php
+                            $outstanding = $row->new_arrears_value !== null ? (float) $row->new_arrears_value - (float) ($row->payments_value ?? 0) : null;
+                        @endphp
+                        @if($outstanding === null)
+                            —
+                        @elseif($outstanding < $outstandingThreshold)
+                            <span class="badge bg-success">Paid</span>
+                        @else
+                            <span class="badge bg-danger">Unpaid</span>
+                        @endif
+                    </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" class="text-center py-4 text-muted">No records matched your search.</td>
+                    <td colspan="8" class="text-center py-4 text-muted">No records matched your search.</td>
                 </tr>
                 @endforelse
             </tbody>

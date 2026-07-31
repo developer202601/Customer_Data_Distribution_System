@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Configurations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use PDOException;
 
@@ -23,6 +25,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->ensureSessionStoreAvailable();
+
+        View::composer('*', function ($view) {
+            $threshold = Configurations::where('config_name', 'outstanding_threshold')->value('value');
+            $view->with('outstandingThreshold', $threshold !== null ? (int) $threshold : 0);
+        });
     }
 
     private function ensureSessionStoreAvailable(): void

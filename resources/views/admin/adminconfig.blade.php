@@ -25,6 +25,7 @@
                         <button type="button" class="admin-config-btn is-active config-side-btn button" data-config-target="latest-bill-range">Bill Value Range</button>
                         <button type="button" class="admin-config-btn button" data-config-target="bill-arears-quota">No Of Accounts</button>
                         <button type="button" class="admin-config-btn button" data-config-target="connection-mediums">Connection Mediums</button>
+                        <button type="button" class="admin-config-btn button" data-config-target="outstanding-threshold">Outstanding Threshold</button>
                         <button type="button" class="admin-config-btn button" data-config-target="user-account">IT User Accounts</button>
                     </div>
                 </div>
@@ -145,6 +146,35 @@
                                             LTE
                                         </label>
                                     </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary px-4 admin-config-save-btn">Save</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <form action="{{ route('configurations.outstanding_threshold') }}" method="POST" class="card shadow-sm border-0">
+                        @csrf
+                        @method('post')
+                        <input type="hidden" name="tab" value="outstanding-threshold" />
+                        <div class="admin-config-form" data-config-block="outstanding-threshold">
+                            <div class="card-body config-card">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                                    <div>
+                                        <p class="admin-config-hint mb-1">Set the outstanding amount threshold for payment status.</p>
+                                        <p class="text-muted mb-0 small">If outstanding is below this value, the row is marked as paid; otherwise unpaid.</p>
+                                        @if(!empty($outstandingThresholdUpdated['timestamp']))
+                                            <div class="small text-muted mt-2">
+                                                <div>Last edited: {{ optional($outstandingThresholdUpdated['timestamp'])->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</div>
+                                                <div>By: {{ $outstandingThresholdUpdated['editor']->username ?? $outstandingThresholdUpdated['editor']->name ?? 'Unknown' }}</div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                <div class="admin-config-field">
+                                    <label for="outstanding_threshold">Outstanding Threshold (Rs.) :</label>
+                                    <input type="number" class="admin-config-input" min="0" name="outstanding_threshold" id="outstanding_threshold" value="{{ $configs['outstanding_threshold']->value ?? 0 }}" placeholder="Enter threshold" required />
                                 </div>
 
                                 <button type="submit" class="btn btn-primary px-4 admin-config-save-btn">Save</button>

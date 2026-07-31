@@ -24,13 +24,14 @@ class AdminController extends Controller
         }
 
         $configs = Configurations::with('editor')
-            ->whereIn('config_name', ['upper_range', 'lower_range', 'ccs', 'cc', 's', 'medium_ftth', 'medium_copper', 'medium_lte'])
+            ->whereIn('config_name', ['upper_range', 'lower_range', 'ccs', 'cc', 's', 'medium_ftth', 'medium_copper', 'medium_lte', 'outstanding_threshold'])
             ->get()
             ->keyBy('config_name');
 
         $billRangeUpdated = $this->latestMeta($configs, ['upper_range', 'lower_range']);
         $staffUpdated = $this->latestMeta($configs, ['ccs', 'cc', 's']);
         $mediumsUpdated = $this->latestMeta($configs, ['medium_ftth', 'medium_copper', 'medium_lte']);
+        $outstandingThresholdUpdated = $this->latestMeta($configs, ['outstanding_threshold']);
 
         $adminId = auth()->id() ?: $request->session()->get('user.id');
 
@@ -75,6 +76,7 @@ class AdminController extends Controller
             'billRangeUpdated' => $billRangeUpdated,
             'staffUpdated' => $staffUpdated,
             'mediumsUpdated' => $mediumsUpdated,
+            'outstandingThresholdUpdated' => $outstandingThresholdUpdated,
             'users' => $users,
         ]);
     }

@@ -335,15 +335,9 @@
                         </div>
                     </div>
                     <div class="col-lg-6">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <div id="ccSelectedName" class="fw-semibold">&nbsp;</div>
-                                <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
-                            </div>
-                            <div class="text-end">
-                                <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
-                                <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
-                            </div>
+                        <div class="mb-2">
+                            <div id="ccSelectedName" class="fw-semibold mb-2">&nbsp;</div>
+                            <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
                         </div>
                         <div id="ccCallFormWrapperAssign" class="cc-disabled card-body bg-white rounded-3">
                         <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
@@ -715,7 +709,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const note = document.getElementById('ccCallNote');
         const pay = document.getElementById('ccPaymentExpected');
         const saveBtn = document.getElementById('ccSaveCallBtn');
-        const startBtn = document.getElementById('ccStartCallBtn');
+        let startBtn = document.getElementById('ccStartCallBtn');
         const wrapper = document.getElementById('ccCallFormWrapperAssign');
         if (outcome) outcome.disabled = true;
         if (note) note.disabled = true;
@@ -737,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function () {
             detailPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
             interactionsPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
             document.getElementById('ccSelectedName').textContent = '';
-            document.getElementById('ccSelectedAmounts').textContent = '';
+            document.getElementById('ccSelectedAmounts').innerHTML = '';
             return;
         }
         detailPanel.innerHTML = `
@@ -797,7 +791,26 @@ document.addEventListener('DOMContentLoaded', function () {
             const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
             const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
             const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-            selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Payment: ${paymentValue} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+            let html = `
+            <div class="row g-2 align-items-start">
+                <div class="col-8">
+                    <div class="row g-2">
+                        <div class="col-6">Arrears: ${data.arrears ?? '—'}</div>
+                        <div class="col-6">Bill: ${data.bill ?? '—'}</div>
+                        <div class="col-6">Payment: ${paymentValue}</div>
+                        <div class="col-6">Outstanding: ${outstandingDisplay}</div>
+                        <div class="col-12">Status: ${statusBadge}</div>
+                        ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
+                    </div>
+                </div>
+                <div class="col-4 text-end">
+                    <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+                    <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
+                </div>
+            </div>`;
+            selAmt.innerHTML = html;
+            startBtn = document.getElementById('ccStartCallBtn');
+            if (startBtn) startBtn.disabled = false;
         }
 
         // If this row belongs to a previous report, keep interactions read-only and show reason text

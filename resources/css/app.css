@@ -553,6 +553,7 @@ body.guest-layout .guest-content .content {
     background-image: url('../images/contentwrap-bg-white.png');
     background-size: cover;
     background-position: center;
+    background-attachment: fixed;
 }
 
 .login-page__panel {
@@ -1209,7 +1210,7 @@ body.guest-layout .content-wrapper {
     background-image: url('../images/contentwrap-bg-white.png');
     background-size: cover;
     background-position: center;
-    /* background-attachment: fixed; */
+    background-attachment: fixed;
     display: flex;
     flex-direction: column;
     /* min-height: 100vh; */
@@ -1839,12 +1840,14 @@ body.theme-dark .login-page {
     background-image: url('../images/contentwrap-bg-dark.png');
     background-size: cover;
     background-position: center;
+    background-attachment: fixed;
 }
 
 body.theme-dark .content-wrapper {
     background-image: url('../images/contentwrap-bg-dark.png');
     background-size: cover;
     background-position: center;
+    background-attachment: fixed;
 }
 
 body.theme-dark .content-wrapper * p,

@@ -581,7 +581,7 @@
                     if (!data) {
                         assignmentDetailFields.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
                         document.getElementById('ccSelectedName').textContent = '';
-                        document.getElementById('ccSelectedAmounts').textContent = '';
+                        document.getElementById('ccSelectedAmounts').innerHTML = '';
                         return;
                     }
 
@@ -623,7 +623,23 @@
                         const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
                         const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                         const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-                        selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+                        let html = `
+                        <div class="row g-2 align-items-start">
+                            <div class="col-8">
+                                <div class="row g-2">
+                                    <div class="col-6">Arrears: ${data.arrears ?? '—'}</div>
+                                    <div class="col-6">Bill: ${data.bill ?? '—'}</div>
+                                    <div class="col-12">Outstanding: ${outstandingDisplay}</div>
+                                    <div class="col-12">Status: ${statusBadge}</div>
+                                    ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
+                                </div>
+                            </div>
+                            <div class="col-4 text-end">
+                                <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+                                <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
+                            </div>
+                        </div>`;
+                        selAmt.innerHTML = html;
                     }
 
                     // wire Start Call button to enable form
@@ -757,14 +773,9 @@
                                 </div>
                             </div>
                             <div class="col-lg-6">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div>
-                                        <div id="ccSelectedName" class="fw-semibold">&nbsp;</div>
-                                        <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
-                                    </div>
-                                    <div>
-                                        <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
-                                    </div>
+                                <div class="mb-2">
+                                    <div id="ccSelectedName" class="fw-semibold mb-2">&nbsp;</div>
+                                    <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
                                 </div>
                                 <div id="ccCallFormWrapper" class="card-body bg-white rounded-3">
                                     <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">

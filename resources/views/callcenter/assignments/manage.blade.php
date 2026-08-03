@@ -230,11 +230,7 @@
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="all">All (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="called">Called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary active" data-cc-filter="uncalled">Not called (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="authorized">User Not Authorized (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="promise_overdue">Promise overdue (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="number_invalid">Number invalid (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_answered">Not answered (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="not_relevant_person">Not relevant person (0)</button>
+                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="paid">Paid (0)</button>
                                                 </div>
                                             </div>
                                             <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">
@@ -280,15 +276,9 @@
                         </div>
                     </div>
                     <div class="col-lg-6">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <div id="ccSelectedName" class="fw-semibold">&nbsp;</div>
-                                <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
-                            </div>
-                            <div class="text-end">
-                                <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
-                                <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
-                            </div>
+                        <div class="mb-2">
+                            <div id="ccSelectedName" class="fw-semibold mb-2">&nbsp;</div>
+                            <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
                         </div>
                         <div id="ccCallFormWrapperAssign" class="cc-disabled card-body bg-white rounded-3">
                         <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
@@ -499,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const note = document.getElementById('ccCallNote');
         const pay = document.getElementById('ccPaymentExpected');
         const saveBtn = document.getElementById('ccSaveCallBtn');
-        const startBtn = document.getElementById('ccStartCallBtn');
+        let startBtn = document.getElementById('ccStartCallBtn');
         const wrapper = document.getElementById('ccCallFormWrapperAssign');
         if (outcome) outcome.disabled = true;
         if (note) note.disabled = true;
@@ -521,7 +511,7 @@ document.addEventListener('DOMContentLoaded', function () {
             detailPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
             interactionsPanel.innerHTML = '<div class="text-muted small">Details unavailable.</div>';
             document.getElementById('ccSelectedName').textContent = '';
-            document.getElementById('ccSelectedAmounts').textContent = '';
+            document.getElementById('ccSelectedAmounts').innerHTML = '';
             return;
         }
         detailPanel.innerHTML = `
@@ -581,7 +571,26 @@ document.addEventListener('DOMContentLoaded', function () {
             const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
             const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
             const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-            selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Payment: ${paymentValue} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+            let html = `
+            <div class="row g-2 align-items-start">
+                <div class="col-8">
+                    <div class="row g-2">
+                        <div class="col-6">Arrears: ${data.arrears ?? '—'}</div>
+                        <div class="col-6">Bill: ${data.bill ?? '—'}</div>
+                        <div class="col-6">Payment: ${paymentValue}</div>
+                        <div class="col-6">Outstanding: ${outstandingDisplay}</div>
+                        <div class="col-12">Status: ${statusBadge}</div>
+                        ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
+                    </div>
+                </div>
+                <div class="col-4 text-end">
+                    <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+                    <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
+                </div>
+            </div>`;
+            selAmt.innerHTML = html;
+            startBtn = document.getElementById('ccStartCallBtn');
+            if (startBtn) startBtn.disabled = false;
         }
 
         // If this row belongs to a previous report, keep interactions read-only and show reason text
@@ -632,7 +641,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const latestReportId = assignmentList?.dataset.latestReportId || '';
     const userId = assignmentList?.dataset.userId || '';
     let paging = { page: 1, per_page: 50, has_more: false };
-    let filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
+    let filterCounts = { all: 0, called: 0, uncalled: 0, paid: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
     // Always show previous-report rows by default so visible items match Accepted count.
     let showOldRows = true;
     let currentFilter = 'uncalled';
@@ -652,9 +661,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const called = row.dataset.called === '1';
             const overdue = row.dataset.overdue === '1';
             const outcome = (row.dataset.outcome || '').toLowerCase();
+            const paid = row.dataset.paid === '1';
             let show = true;
-            if (targetFilter === 'called') show = called;
-            else if (targetFilter === 'uncalled') show = !called;
+            if (targetFilter === 'called') show = called && !paid;
+            else if (targetFilter === 'uncalled') show = !called && !paid;
+            else if (targetFilter === 'paid') show = paid;
             else if (targetFilter === 'authorized') show = outcome === 'user not authorized';
             else if (targetFilter === 'promise_overdue') show = overdue;
             else if (targetFilter === 'number_invalid') show = outcome === 'number invalid';
@@ -712,12 +723,20 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await res.json();
             const rows = Array.isArray(data.rows) ? data.rows : [];
             if (!append) {
-                assignmentList.innerHTML = '';
-                filterCounts = { all: 0, called: 0, uncalled: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
+                        filterCounts = { all: 0, called: 0, uncalled: 0, paid: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
             }
             rows.forEach(r => {
+                const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
+                const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
+                const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
+                const isPaid = outstandingNum !== null && outstandingNum < outstandingThreshold;
+
                 filterCounts.all++;
-                if (r.called_in_period) filterCounts.called++; else filterCounts.uncalled++;
+                if (isPaid) {
+                    filterCounts.paid++;
+                } else {
+                    if (r.called_in_period) filterCounts.called++; else filterCounts.uncalled++;
+                }
                 if ((r.latest_outcome || '').toLowerCase() === 'user not authorized') filterCounts.authorized++;
                 if (r.promise_overdue) filterCounts.promise_overdue++;
                 if ((r.latest_outcome || '').toLowerCase() === 'number invalid') filterCounts.number_invalid++;
@@ -738,11 +757,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.dataset.called = r.called_in_period ? '1' : '0';
                 btn.dataset.overdue = r.promise_overdue ? '1' : '0';
                 btn.dataset.outcome = r.latest_outcome || '';
-                const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
-                const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
-                const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
+                btn.dataset.paid = isPaid ? '1' : '0';
                 const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                const statusBadge = outstandingNum === null ? '—' : (isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
                 btn.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <div>

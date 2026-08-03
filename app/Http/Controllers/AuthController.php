@@ -212,4 +212,9 @@ class AuthController extends Controller
 
         return redirect()->route('login');
     }
+
+    public function showUserLogin(): View
+    {
+        return view('auth.user-login');
+    }
 }

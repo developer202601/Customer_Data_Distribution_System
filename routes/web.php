@@ -244,5 +244,8 @@ Route::middleware('session.auth')->group(function () {
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.perform');
 
+Route::get('/userLogin', [AuthController::class, 'showUserLogin'])->name('user.login');
+Route::post('/userLogin', [AuthController::class, 'login'])->name('user.login.perform');
+
 Route::get('/auth/microsoft', [AuthController::class, 'microsoftRedirect']);
 Route::get('/auth/microsoft/callback', [AuthController::class, 'microsoftCallback'])->name('microsoft.callback');

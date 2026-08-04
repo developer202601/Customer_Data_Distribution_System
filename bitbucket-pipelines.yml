@@ -1,12 +1,414 @@
+image: webdevops/php:8.2
+
+
+options:
+  max-time: 40
+
+
+
+definitions:
+
+  services:
+
+    mysql:
+      image: mysql:8.0
+      variables:
+        MYSQL_ROOT_PASSWORD: root
+        MYSQL_DATABASE: test_db
+
+
+
+  caches:
+
+    composer: ~/.composer/cache
+    npm: ~/.npm
+    pip: ~/.cache/pip
+
+
+
+
 pipelines:
-  default:
-     - step:
-         name: Deploy to production
-         deployment: production
-         script:
-           - echo "Deploying to production environment"
-           - pipe: atlassian/ssh-run:0.8.1
-             variables:
-              SSH_USER: $SERVER_USER
-              SERVER: $SERVER_IP
-              COMMAND: 'cd $APP_PATH && ./deploy.sh'
+
+
+  pull-requests:
+
+    '**':
+
+
+      - step:
+
+          name: Build and Test
+
+
+          services:
+            - mysql
+
+
+          caches:
+
+            - composer
+            - npm
+            - pip
+
+
+
+          script:
+
+
+
+            # PHP
+
+            - php -v
+
+            - composer --version
+
+
+
+            # Install system packages
+
+            - |
+              apt-get update
+              apt-get install -y \
+                curl \
+                default-mysql-client \
+                python3 \
+                python3-pip \
+                python3-venv
+
+
+
+            # Install Node.js 20
+
+            - |
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+
+              apt-get install -y nodejs
+
+
+
+            - node -v
+
+            - npm -v
+
+
+
+            - export COMPOSER_ALLOW_SUPERUSER=1
+
+
+
+            # Wait for MySQL
+
+            - |
+              until mysqladmin ping \
+                -h 127.0.0.1 \
+                -uroot \
+                -proot \
+                --silent
+              do
+                sleep 2
+              done
+
+
+
+            # Check MySQL
+
+            - |
+              mysql \
+                -h 127.0.0.1 \
+                -uroot \
+                -proot \
+                -e "SELECT VERSION();"
+
+
+
+            # Laravel environment
+
+            - |
+              cat > .env <<EOF
+              APP_NAME=Laravel
+              APP_ENV=testing
+              APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+              APP_DEBUG=true
+
+              DB_CONNECTION=mysql
+              DB_HOST=127.0.0.1
+              DB_PORT=3306
+              DB_DATABASE=test_db
+              DB_USERNAME=root
+              DB_PASSWORD=root
+
+              SESSION_DRIVER=file
+              CACHE_STORE=array
+              QUEUE_CONNECTION=sync
+
+              MAIL_MAILER=log
+              EOF
+
+
+
+            # Clear Laravel cache
+
+            - rm -f bootstrap/cache/config.php
+
+
+
+            # Composer install
+
+            - |
+              composer install \
+                --no-interaction \
+                --prefer-dist \
+                --optimize-autoloader
+
+
+
+            - php artisan config:clear
+
+
+
+            # Frontend
+
+            - npm ci
+
+            - npm run build
+
+
+
+            # Python dependencies
+
+            - |
+              python3 -m pip install --upgrade pip
+
+
+
+            - |
+              pip3 install \
+                -r scripts/requirements-ingest.txt
+
+
+
+            # Database
+
+            - php artisan migrate --force
+
+
+
+            # Tests
+
+            - php artisan test
+
+
+
+
+
+
+  branches:
+
+
+    main:
+
+
+      - step:
+
+          name: Build Main Branch
+
+
+          services:
+
+            - mysql
+
+
+
+          caches:
+
+            - composer
+            - npm
+            - pip
+
+
+
+          script:
+
+
+
+            - export COMPOSER_ALLOW_SUPERUSER=1
+
+
+
+            # Install packages
+
+            - |
+              apt-get update
+              apt-get install -y \
+                curl \
+                default-mysql-client \
+                python3 \
+                python3-pip \
+                python3-venv
+
+
+
+            # Node
+
+            - |
+              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+
+              apt-get install -y nodejs
+
+
+
+            # Wait MySQL
+
+            - |
+              until mysqladmin ping \
+                -h 127.0.0.1 \
+                -uroot \
+                -proot \
+                --silent
+              do
+                sleep 2
+              done
+
+
+
+            # Laravel env
+
+            - |
+              cat > .env <<EOF
+              APP_NAME=Laravel
+              APP_ENV=testing
+              APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+              APP_DEBUG=true
+
+              DB_CONNECTION=mysql
+              DB_HOST=127.0.0.1
+              DB_PORT=3306
+              DB_DATABASE=test_db
+              DB_USERNAME=root
+              DB_PASSWORD=root
+
+              SESSION_DRIVER=file
+              CACHE_STORE=array
+              QUEUE_CONNECTION=sync
+
+              MAIL_MAILER=log
+              EOF
+
+
+
+            - rm -f bootstrap/cache/config.php
+
+
+
+            # Composer
+
+            - |
+              composer install \
+                --no-interaction \
+                --prefer-dist \
+                --optimize-autoloader
+
+
+
+            - php artisan config:clear
+
+
+
+            # Frontend
+
+            - npm ci
+
+            - npm run build
+
+
+
+            # Migration
+
+            - php artisan migrate --force
+
+
+
+            # Tests
+
+            - php artisan test
+
+
+
+
+
+      - step:
+
+          name: Deploy Production
+
+
+          deployment: production
+
+
+
+          script:
+
+
+            - pipe: atlassian/ssh-run:0.8.1
+
+              variables:
+
+
+                SSH_USER: $DEPLOY_USER
+
+                SERVER: $DEPLOY_HOST
+
+                PORT: $DEPLOY_PORT
+
+                # SSH_KEY: $DEPLOY_SSH_KEY
+
+
+
+                COMMAND: |
+
+                  set -e
+
+
+                  cd "$DEPLOY_PATH"
+
+
+
+                  git fetch origin main
+
+                  git reset --hard origin/main
+
+
+
+                  export COMPOSER_ALLOW_SUPERUSER=1
+
+
+
+                  composer install \
+                    --no-interaction \
+                    --prefer-dist \
+                    --optimize-autoloader
+
+
+
+                  npm ci
+
+                  npm run build
+
+
+
+                  php artisan migrate --force
+
+
+
+                  php artisan optimize:clear
+
+
+
+                  sudo systemctl restart php-fpm || true
+
+                  sudo systemctl restart nginx || true
+
+                  sudo systemctl restart cdds-queue-exports.service || true
+
+
+
+                  echo "Deployment completed"

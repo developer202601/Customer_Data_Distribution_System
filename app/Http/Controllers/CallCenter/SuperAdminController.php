@@ -73,13 +73,11 @@ class SuperAdminController extends Controller
     {
         $this->ensureSuper();
 
-        $sessionUser = session('user');
         $q               = request()->query('q');
         $selectedSegment = request()->query('segment');
 
         $query = User::where('system', 'cc')
-            ->where('assignment', 'like', 'segment_%')
-            ->where('supervisor', $sessionUser['id'] ?? null);
+            ->where('assignment', 'like', 'segment_%');
 
         if (! empty($q)) {
             $query->where(function ($w) use ($q) {
@@ -101,13 +99,11 @@ class SuperAdminController extends Controller
     {
         $this->ensureSuper();
 
-        $sessionUser = session('user');
         $q               = $request->query('q');
         $selectedSegment = $request->query('segment');
 
         $query = User::where('system', 'cc')
-            ->where('assignment', 'like', 'segment_%')
-            ->where('supervisor', $sessionUser['id'] ?? null);
+            ->where('assignment', 'like', 'segment_%');
 
         if (! empty($q)) {
             $query->where(function ($w) use ($q) {

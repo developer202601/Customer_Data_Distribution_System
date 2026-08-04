@@ -190,7 +190,7 @@
                             @else
                                 <span class="badge text-bg-success">Visible</span>
                             @endif
-                            @if($isRtomPassed)
+                            @if($isRtomPassed && empty($row->is_hidden_for_distribution))
                                 <span class="badge text-bg-secondary" title="Passed to RTOM"><i class="bi-lock-fill"></i> Passed</span>
                             @endif
                         </td>

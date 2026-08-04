@@ -340,18 +340,13 @@ pipelines:
 
           name: Deploy Production
 
-
           deployment: production
 
-
-
           script:
-
 
             - pipe: atlassian/ssh-run:0.8.1
 
               variables:
-
 
                 SSH_USER: $DEPLOY_USER
 
@@ -361,16 +356,23 @@ pipelines:
 
                 # SSH_KEY: $DEPLOY_SSH_KEY
 
-
-
                 COMMAND: |
 
                   set -e
 
 
+                  echo "Changing directory..."
+
                   cd "$DEPLOY_PATH"
 
 
+                  echo "Marking git directory as safe..."
+
+                  git config --global --add safe.directory "$DEPLOY_PATH"
+
+
+
+                  echo "Pulling latest code..."
 
                   git fetch origin main
 
@@ -378,9 +380,9 @@ pipelines:
 
 
 
+                  echo "Installing Composer dependencies..."
+
                   export COMPOSER_ALLOW_SUPERUSER=1
-
-
 
                   composer install \
                     --no-interaction \
@@ -389,26 +391,46 @@ pipelines:
 
 
 
-                  npm ci
+                  echo "Installing Node dependencies..."
+
+                  npm ci --no-audit --no-fund
+
+
+
+                  echo "Building frontend..."
 
                   npm run build
 
 
 
+                  echo "Running database migrations..."
+
                   php artisan migrate --force
 
 
+
+                  echo "Clearing Laravel cache..."
 
                   php artisan optimize:clear
 
 
 
+                  echo "Restarting PHP-FPM..."
+
                   sudo systemctl restart php-fpm || true
 
+
+
+                  echo "Restarting Nginx..."
+
                   sudo systemctl restart nginx || true
+
+
+
+                  echo "Restarting Queue Worker..."
 
                   sudo systemctl restart cdds-queue-exports.service || true
 
 
 
-                  echo "Deployment completed"
+                  echo "Deployment completed successfully"

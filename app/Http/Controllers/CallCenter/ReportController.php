@@ -21,8 +21,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|\Illuminate\Http\RedirectResponse
     {
+        // Reports are owned by segment admins only — super admins are redirected
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        if ($sessionAssignment === 'super') {
+            return redirect()->route('cc.super.segments');
+        }
+
         $reports = CallCenterReport::callCenter()->with('process')
             ->orderByDesc('created_at')
             ->get();
@@ -44,12 +50,6 @@ class ReportController extends Controller
             ->rejected()
             ->where('status', 'pending')
             ->orderByDesc('rejected_at')
-            ->when(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'), function ($q) {
-                $assign = session('user.assignment') ?? '';
-                $rtomPart = preg_replace('/^supervisor_/', '', $assign);
-                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-                return $q->whereHas('row', fn($rowQ) => $rowQ->where('rtom', $rtomVal));
-            })
             ->get()
             : collect();
 
@@ -58,53 +58,34 @@ class ReportController extends Controller
             ->where('call_center_report_id', $selectedReport->id)
             ->where('accepted', true)
             ->orderByDesc('accepted_at')
-            ->when(\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_'), function ($q) {
-                $assign = session('user.assignment') ?? '';
-                $rtomPart = preg_replace('/^supervisor_/', '', $assign);
-                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-                return $q->whereHas('row', fn($rowQ) => $rowQ->where('rtom', $rtomVal));
-            })
             ->get()
             : collect();
 
-        // If logged-in user is a supervisor, show callers for the supervisor's RTOM (from assignment)
-        // Supervisors will see other supervisors' callers in the same RTOM; their own callers will be marked in the view.
-        $currentSupervisorId = session('user')['id'] ?? null;
-        if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
-            $assign = session('user.assignment') ?? '';
-            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
-            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-            if ($rtomVal !== '') {
-                $ccUsers = CallCenterUser::where('assignment', 'caller_rtom_' . $rtomVal)
-                    ->active()
-                    ->orderBy('username')
-                    ->get();
-            } else {
-                // fallback: show callers created by this supervisor
-                $ccUsers = CallCenterUser::where('supervisor', $currentSupervisorId)
-                    ->active()
-                    ->orderBy('username')
-                    ->get();
-            }
+        $sessionUser    = session('user');
+        $sessionAssignment = strtolower(trim((string) ($sessionUser['assignment'] ?? '')));
+        $isSegmentAdmin = str_starts_with($sessionAssignment, 'segment_');
+        $isSuperAdmin   = $sessionAssignment === 'super';
+
+        // Segment admins only see their own callers; super admins see no callers
+        // (super admins observe reports but do not distribute — segment admins do that)
+        if ($isSegmentAdmin) {
+            $callerAssignment = 'caller_' . substr($sessionAssignment, strlen('segment_'));
+            $segmentAdminId   = (int) ($sessionUser['id'] ?? 0);
+            $ccUsers = User::where('system', 'cc')
+                ->where('assignment', $callerAssignment)
+                ->where('supervisor', $segmentAdminId)
+                ->where('status', 1)
+                ->orderBy('username')
+                ->get();
         } else {
-            $ccUsers = CallCenterUser::active()->orderBy('username')->get();
+            $ccUsers = collect();
         }
 
         $pendingCounts = [];
-        $isSupervisor = \Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_');
-        $rtomVal = null;
-        if ($isSupervisor) {
-            $assign = session('user.assignment') ?? '';
-            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
-            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-        }
         foreach ($ccUsers as $u) {
             $query = CallCenterAssignment::callCenter()->where('assigned_user_id', $u->id)
                 ->where('call_center_report_id', $selectedReport->id)
                 ->pendingApproval();
-            if ($isSupervisor && $rtomVal) {
-                $query->whereHas('row', fn($rowQ) => $rowQ->where('rtom', $rtomVal));
-            }
             $pendingCounts[$u->id] = $selectedReport ? $query->count() : 0;
         }
 
@@ -148,44 +129,51 @@ class ReportController extends Controller
         $effectiveRowCount = $selectedReport ? max(0, (int) $selectedReport->row_count - count($hiddenRowIds)) : 0;
         if ($selectedReport) {
             $allAssignedForReport = CallCenterAssignment::callCenter()->where('call_center_report_id', $selectedReport->id)->whereNotNull('assigned_user_id');
-            // Default behavior: everything
             $assignedCount = $allAssignedForReport->count();
-
-            // If supervisor, narrow to rows matching their RTOM
-            if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
-                $assignStr = session('user.assignment') ?? '';
-                $rtomPart = preg_replace('/^supervisor_/', '', $assignStr);
-                // strip leading rtom_ if present
-                $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-                // find row ids that match this rtom (case-insensitive) within the report's visible row list
-                $rowIds = array_values(array_diff($selectedReport->row_ids ?? [], $hiddenRowIds));
-                $allowedRowIds = collect($rowIds)->chunk(1000)->flatMap(function($chunk) use ($rtomVal) {
-                    return DB::table('master_dataset_rows')
-                        ->whereIn('id', $chunk->toArray())
-                        ->whereRaw('LOWER(rtom) = ?', [strtolower($rtomVal)])
-                        ->pluck('id');
-                })->values()->all();
-
-                $assignedCount = CallCenterAssignment::callCenter()->where('call_center_report_id', $selectedReport->id)
-                    ->whereIn('master_dataset_row_id', $allowedRowIds)
-                    ->whereNotNull('assigned_user_id')
-                    ->count();
-
-                $effectiveRowCount = count($allowedRowIds);
-            }
+            $allowedRowIds = collect($selectedReport->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values()->all();
+            $effectiveRowCount = count($allowedRowIds);
         }
 
         $anyAssigned = $assignedCount > 0;
         $allAssigned = $selectedReport ? ($effectiveRowCount > 0 && $assignedCount >= $effectiveRowCount) : false;
         $distributableRows = $selectedReport ? max(0, $effectiveRowCount - $assignedCount) : 0;
+        $bucketRowCount = $effectiveRowCount; // overridden below for segment admins
+
+        // For segment admins, restrict distributable count to their bucket rows only
+        if ($isSegmentAdmin && $selectedReport && ! empty($allowedRowIds)) {
+            $bucketLabel = match ($sessionAssignment) {
+                'segment_ccs' => 'call center staff',
+                'segment_cc'  => 'call center',
+                'segment_s'   => 'staff',
+                default       => '',
+            };
+            if ($bucketLabel !== '') {
+                $bucketRowIds = \App\Models\MasterDatasetRow::whereIn('id', $allowedRowIds)
+                    ->whereRaw('LOWER(TRIM(assigned_to)) = ?', [$bucketLabel])
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
+                    ->values()
+                    ->all();
+                $bucketAssigned = CallCenterAssignment::callCenter()
+                    ->where('call_center_report_id', $selectedReport->id)
+                    ->whereIn('master_dataset_row_id', $bucketRowIds)
+                    ->whereNotNull('assigned_user_id')
+                    ->count();
+                $distributableRows = max(0, count($bucketRowIds) - $bucketAssigned);
+                $allAssigned = count($bucketRowIds) > 0 && $bucketAssigned >= count($bucketRowIds);
+                $anyAssigned = $bucketAssigned > 0;
+                $bucketRowCount = count($bucketRowIds);
+            } else {
+                // Unknown segment — nothing to distribute
+                $distributableRows = 0;
+                $allAssigned = false;
+            }
+        }
 
         $regionalReviewStatus = [
             'hidden_count' => count($hiddenRowIds),
             'pending_regions' => [],
         ];
-        if ($selectedReport) {
-            $regionalReviewStatus['pending_regions'] = $this->pendingRegionalReviews($selectedReport);
-        }
 
         $hasInteractions = false;
         if ($selectedReport) {
@@ -215,7 +203,9 @@ class ReportController extends Controller
             'reports' => $reports,
             'selectedReport' => $selectedReport,
             'ccUsers' => $ccUsers,
-            'currentSupervisorId' => $currentSupervisorId,
+            'isSegmentAdmin' => $isSegmentAdmin,
+            'currentSupervisorId' => $isSegmentAdmin ? ($sessionUser['id'] ?? null) : null,
+            'bucketRowCount' => $bucketRowCount ?? $effectiveRowCount,
             'allowedRowIds' => $allowedRowIds,
             'rejectedAssignments' => $rejectedAssignments,
             'acceptedAssignments' => $acceptedAssignments,
@@ -284,26 +274,16 @@ class ReportController extends Controller
         ]);
     }
 
-    public function history(): View
+    public function history(): View|\Illuminate\Http\RedirectResponse
     {
-        $reportsQuery = CallCenterReport::callCenter()->with('process')
-            ->orderByDesc('created_at');
-
-        // Filter for supervisors: only show reports that have assignments to callers in their RTOM
-        if (\Illuminate\Support\Str::startsWith(session('user.assignment') ?? '', 'supervisor_')) {
-            $assign = session('user.assignment') ?? '';
-            $rtomPart = preg_replace('/^supervisor_/', '', $assign);
-            $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-            if ($rtomVal !== '') {
-                $reportsQuery->whereHas('assignments', function ($q) use ($rtomVal) {
-                    $q->whereHas('agent', function ($uq) use ($rtomVal) {
-                        $uq->where('assignment', 'caller_rtom_' . $rtomVal);
-                    });
-                });
-            }
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        if ($sessionAssignment === 'super') {
+            return redirect()->route('cc.super.segments');
         }
 
-        $reports = $reportsQuery->get();
+        $reports = CallCenterReport::callCenter()->with('process')
+            ->orderByDesc('created_at')
+            ->get();
 
         $assignmentStats = CallCenterAssignment::callCenter()->selectRaw(
             'call_center_report_id,
@@ -368,8 +348,13 @@ class ReportController extends Controller
         ]);
     }
 
-    public function summary(CallCenterReport $report): View
+    public function summary(CallCenterReport $report): View|\Illuminate\Http\RedirectResponse
     {
+        $sessionAssignment = strtolower(trim((string) (session('user.assignment') ?? '')));
+        if ($sessionAssignment === 'super') {
+            return redirect()->route('cc.super.segments');
+        }
+
         $label = $this->formatReportLabel($report);
         $assignments = CallCenterAssignment::callCenter()->with(['agent', 'row', 'interactions.agent'])
             ->where('call_center_report_id', $report->id)
@@ -632,197 +617,6 @@ class ReportController extends Controller
         return $total;
     }
 
-    private function pendingRegionalReviews(CallCenterReport $report): array
-    {
-        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values();
-        if ($rowIds->isEmpty()) {
-            return [];
-        }
-
-        $regionsInReport = DB::table('master_dataset_rows')
-            ->whereIn('id', $rowIds->all())
-            ->whereNotNull('region')
-            ->selectRaw('LOWER(TRIM(region)) as region_key')
-            ->distinct()
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        if (empty($regionsInReport)) {
-            return [];
-        }
-
-        $enabledRegions = DB::table('users')
-            ->where('system', 'cc')
-            ->where('admin_prev', 1)
-            ->where('status', 1)
-            ->where('enable_regional_review', 1)
-            ->whereNotNull('enable_regional_review_enabled_at')
-            ->where('enable_regional_review_enabled_at', '<=', $report->created_at)
-            ->whereNotNull('assignment')
-            ->where('assignment', '<>', 'super')
-            ->where('assignment', 'not like', 'rtom_%')
-            ->where('assignment', 'not like', 'supervisor_%')
-            ->where('assignment', 'not like', 'caller_%')
-            ->select('assignment')
-            ->distinct()
-            ->get();
-
-        $regionLabelByKey = [];
-        foreach ($enabledRegions as $regionRow) {
-            $label = trim((string) ($regionRow->assignment ?? ''));
-            if ($label === '') {
-                continue;
-            }
-
-            $key = strtolower($label);
-            $regionLabelByKey[$key] = $label;
-        }
-        $enabledRegionKeys = array_keys($regionLabelByKey);
-
-        $required = array_values(array_unique(array_intersect($regionsInReport, $enabledRegionKeys)));
-        if (empty($required)) {
-            return [];
-        }
-
-        $reviewed = DB::table('call_center_report_region_reviews')
-            ->where('call_center_report_id', $report->id)
-            ->whereNotNull('reviewed_at')
-            ->selectRaw('LOWER(TRIM(region_name)) as region_key')
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        $pendingKeys = array_values(array_diff($required, $reviewed));
-        if (empty($pendingKeys)) {
-            return [];
-        }
-
-        $pendingLabels = [];
-        foreach ($pendingKeys as $key) {
-            $pendingLabels[] = $regionLabelByKey[$key] ?? $key;
-        }
-
-        return array_values(array_unique($pendingLabels));
-    }
-
-    /**
-     * Supervisor-specific distribution: only allow assigning rows that match
-     * the supervisor's RTOM and only to callers they created.
-     */
-    public function distributeSupervisor(Request $request, $reportId)
-    {
-        $session = session('user');
-        if (! $session || ! \Illuminate\Support\Str::startsWith($session['assignment'] ?? '', 'supervisor_')) {
-            abort(403);
-        }
-
-        $report = CallCenterReport::callCenter()->findOrFail($reportId);
-
-        $pendingRegions = $this->pendingRegionalReviews($report);
-        if (! empty($pendingRegions)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])
-                ->withErrors(['reassign' => 'Distribution is blocked. Pending regional review: ' . implode(', ', $pendingRegions)]);
-        }
-
-        $userIds = array_values(array_filter((array) $request->input('user_ids', []), fn($v) => is_numeric($v) && (int)$v > 0));
-        if (empty($userIds)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'Select at least one user to distribute to.']);
-        }
-
-        // Determine RTOM value for this supervisor
-        $assignStr = $session['assignment'] ?? '';
-        $rtomPart = preg_replace('/^supervisor_/', '', $assignStr);
-        $rtomVal = preg_replace('/^rtom_/', '', $rtomPart);
-
-        if ($rtomVal === '') {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'Unable to determine your RTO assignment.']);
-        }
-
-        // Only allow selecting callers that belong to this RTOM (callers may be owned by any supervisor)
-        $allowedUserIds = \App\Models\CallCenter\CallCenterUser::whereIn('id', $userIds)
-            ->where('assignment', 'caller_rtom_' . $rtomVal)
-            ->pluck('id')
-            ->toArray();
-
-        if (empty($allowedUserIds)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No valid users selected.']);
-        }
-
-        $hiddenIds = DB::table('call_center_report_hidden_rows')
-            ->where('call_center_report_id', $report->id)
-            ->pluck('master_dataset_row_id')
-            ->map(fn($id) => (int) $id)
-            ->all();
-
-        $rowIds = array_values(array_diff($report->row_ids ?? [], $hiddenIds));
-        if (empty($rowIds)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No rows available for this report.']);
-        }
-
-        // Find allowed master row ids matching RTOM (case-insensitive)
-        $allowedRowIds = collect($rowIds)->chunk(1000)->flatMap(function($chunk) use ($rtomVal) {
-            return \Illuminate\Support\Facades\DB::table('master_dataset_rows')
-                ->whereIn('id', $chunk->toArray())
-                ->whereRaw('LOWER(rtom) = ?', [strtolower($rtomVal)])
-                ->pluck('id');
-        })->values()->all();
-
-        if (empty($allowedRowIds)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No rows match your RTO.']);
-        }
-
-        // Exclude rows already assigned for this report
-        $alreadyAssigned = CallCenterAssignment::callCenter()->where('call_center_report_id', $report->id)
-            ->whereIn('master_dataset_row_id', $allowedRowIds)
-            ->whereNotNull('assigned_user_id')
-            ->pluck('master_dataset_row_id')
-            ->toArray();
-
-        $available = array_values(array_diff($allowedRowIds, $alreadyAssigned));
-        if (empty($available)) {
-            return redirect()->route('cc.reports', ['report' => $reportId])->withErrors(['reassign' => 'No distributable rows available for your RTO.']);
-        }
-
-        // Distribute evenly among allowed users
-        $total = count($available);
-        $users = array_values($allowedUserIds);
-        $userCount = count($users);
-        $basePerUser = $userCount ? (int) floor($total / $userCount) : 0;
-        $remainder = $userCount ? $total % $userCount : 0;
-
-        $now = Carbon::now()->toDateTimeString();
-        $reportType = $report->report_type ?? CallCenterReport::REPORT_TYPE_CALL_CENTER;
-        $batch = [];
-        $pos = 0;
-        foreach ($users as $index => $uid) {
-            $take = $basePerUser + ($index < $remainder ? 1 : 0);
-            for ($i = 0; $i < $take && $pos < $total; $i++, $pos++) {
-                $batch[] = [
-                    'call_center_report_id' => $report->id,
-                    'report_type' => $reportType,
-                    'master_dataset_row_id' => $available[$pos],
-                    'assigned_user_id' => $uid,
-                    'status' => 'pending',
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-                if (count($batch) >= 500) {
-                    \Illuminate\Support\Facades\DB::table('call_center_row_assignments')->insert($batch);
-                    $batch = [];
-                }
-            }
-        }
-
-        if (! empty($batch)) {
-            \Illuminate\Support\Facades\DB::table('call_center_row_assignments')->insert($batch);
-        }
-
-        return redirect()->route('cc.reports', ['report' => $reportId])->with('status', 'Distribution completed for your RTO.');
-    }
-
     public function getAgentDetails(Request $request)
     {
         $userId = $request->query('user_id');
@@ -833,33 +627,18 @@ class ReportController extends Controller
         }
 
         $supervisor = null;
-        $rtom = null;
         $region = null;
 
         $supervisorUser = $agent->supervisor ? User::find($agent->supervisor) : null;
         $supervisor = $supervisorUser ? $this->formatAgentLabel($supervisorUser) : 'N/A';
 
-        $assignment = $agent->assignment ?? null;
-        if ($assignment && str_starts_with($assignment, 'caller_')) {
-            $rtom = substr($assignment, 7); // after 'caller_'
-        }
-
-        // Find region by traversing supervisor chain
-        $currentUser = $supervisorUser;
-        while ($currentUser) {
-            $currentAssignment = $currentUser->assignment ?? null;
-            if ($currentAssignment && !str_starts_with($currentAssignment, 'caller_') && !str_starts_with($currentAssignment, 'rtom_') && !str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
-                $region = $currentAssignment;
-                break;
-            }
-            $currentUser = $currentUser->supervisor ? User::find($currentUser->supervisor) : null;
-        }
+        $region = $supervisorUser ? $supervisorUser->assignment : 'N/A';
 
         return response()->json([
             'name' => $this->formatAgentLabel($agent),
             'supervisor' => $supervisor,
-            'rtom' => $rtom ?? 'N/A',
-            'region' => $region ?? 'N/A',
+            'rtom' => 'N/A',
+            'region' => $region,
         ]);
     }
 }

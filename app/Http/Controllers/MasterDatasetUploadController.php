@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessExclusionUpload;
+use App\Jobs\ProcessMasterIngestion;
 use App\Models\MasterDatasetProcess;
 use App\Support\ChunkedUploadManager;
 use App\Support\MasterDatasetAssignmentConfiguration;
@@ -68,8 +69,12 @@ class MasterDatasetUploadController extends Controller
         $request->session()->forget('master.dataset.staged_exclusions');
     }
 
-    public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View
+    public function create(Request $request, MasterDatasetAssignmentConfiguration $configuration): View|RedirectResponse
     {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        if ($isAdmin) {
+            return redirect()->route('process.assignments.reports')->with('status', 'File uploads are reserved for normal users.');
+        }
         $process = null;
         $showProcessBanner = false;
         $failurePayload = null;
@@ -261,17 +266,25 @@ class MasterDatasetUploadController extends Controller
 
             $process = $workflow->queueMasterArchive($uploadedFile, $userContext);
 
-            ProcessExclusionUpload::dispatch($process->id, [], $userContext)
-                ->onQueue('exports');
+            // Dispatch background master ingestion (Phase 1) job
+            ProcessMasterIngestion::dispatch($process->id, $userContext);
+            /*
+            // Ingest and validate master spreadsheet synchronously
+            $process = $workflow->ingestMasterSynchronously($process, $userContext);
+            */
 
             $request->session()->put('master.dataset.process_id', $process->id);
             $request->session()->forget('master.dataset.staged_exclusions');
 
+            $request->session()->flash('status', 'Master dataset file uploaded successfully. Passed to Credit Control Section for processing.');
+
             return response()->json([
                 'status' => 'ok',
-                'message' => 'Master dataset uploaded. Exclusions skipped. Proceeding to confirmation.',
+                'message' => 'Master dataset file uploaded successfully. Passed to Credit Control Section for processing.',
                 'process_id' => $process->id,
-                'redirect_url' => route('process.confirm.create'),
+                'redirect_url' => route('dashboard'),
+                // Previous redirect:
+                // 'redirect_url' => route('process.exclusions.create'),
             ]);
         } catch (ValidationException $exception) {
             throw $exception;
@@ -337,8 +350,6 @@ class MasterDatasetUploadController extends Controller
 
             $process = $workflow->queueMasterArchive($request->file('upload'), $userContext);
 
-            ProcessExclusionUpload::dispatch($process->id, [], $userContext)
-                ->onQueue('exports');
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -349,8 +360,15 @@ class MasterDatasetUploadController extends Controller
 
         $request->session()->put('master.dataset.process_id', $process->id);
 
+        $request->session()->flash('status', 'Master dataset file uploaded successfully. Passed to download section for processing.');
+
         return redirect()
-            ->route('process.confirm.create')
-            ->with('status', 'Master dataset uploaded. Exclusions skipped. Proceeding to confirmation.');
+            ->route('dashboard');
+        /*
+        return redirect()
+            ->route('process.exclusions.create')
+            ->with('status', 'Master dataset uploaded. Continue by adding exclusion files to begin validation.')
+            ->with('hide_dataset_info', true);
+        */
     }
 }

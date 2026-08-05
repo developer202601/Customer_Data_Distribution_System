@@ -8,6 +8,7 @@ use App\Models\CallCenterReportRegionReview;
 use App\Models\CallCenterReport;
 use App\Models\MasterDatasetRow;
 use App\Models\User;
+use App\Support\MasterDatasetExportService;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
@@ -1233,11 +1235,86 @@ class ReportController extends Controller
         return response()->json([]);
     }
 
-    public function download(): RedirectResponse
+    public function download(Request $request, int $id, MasterDatasetExportService $exportService): StreamedResponse
     {
         $this->ensureRegionalBillingUser();
+        $report = CallCenterReport::regionalBilling()->findOrFail($id);
 
-        return redirect()->back()->withErrors(['download' => 'Report download is not yet implemented for RBC.']);
+        $format = strtolower((string) $request->query('format', 'xlsx'));
+        if (!in_array($format, ['csv', 'xlsx'], true)) {
+            abort(400, 'Invalid download format.');
+        }
+
+        $process = $report->process;
+        if (!$process) {
+            abort(404, 'Report dataset not found.');
+        }
+
+        $reportRowIds = collect($report->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
+        if (empty($reportRowIds)) {
+            abort(404, 'This report has no rows available for download.');
+        }
+
+        $hiddenRowIds = DB::table('call_center_report_hidden_rows')
+            ->where('call_center_report_id', $report->id)
+            ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+            ->pluck('master_dataset_row_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $visibleRowIds = array_values(array_diff($reportRowIds, $hiddenRowIds));
+        if (empty($visibleRowIds)) {
+            abort(403, 'No visible rows available for download.');
+        }
+
+        $sessionUser = $this->ensureRegionalBillingUser();
+        $assignment = $this->normalizeAssignment($sessionUser['assignment'] ?? null);
+
+        $scopedRowIds = $visibleRowIds;
+
+        if ($this->isRtomAdmin($assignment)) {
+            $dbUser = User::find($sessionUser['id'] ?? 0);
+            $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
+            $rtomValue = $this->extractRtomValue($assignment);
+
+            if (!$region || !$rtomValue) {
+                abort(403, 'Unable to determine your RTOM or region.');
+            }
+
+            $scopedRowIds = MasterDatasetRow::query()
+                ->whereIn('id', $visibleRowIds)
+                ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtomValue)])
+                ->whereRaw('LOWER(TRIM(region)) = ?', [strtolower($region)])
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+        } elseif ($this->isRegionAdmin($assignment)) {
+            $normalizedRegion = $this->normalizeRegionName($assignment);
+
+            $regionRowIds = MasterDatasetRow::query()
+                ->whereIn('id', $visibleRowIds)
+                ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion])
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+            $draftHiddenIds = $this->getDraftHiddenRowIds($report->id, $normalizedRegion);
+
+            $scopedRowIds = empty($draftHiddenIds)
+                ? $regionRowIds
+                : array_values(array_diff($regionRowIds, $draftHiddenIds));
+        }
+
+        if (empty($scopedRowIds)) {
+            abort(403, 'No rows available for download within your scope.');
+        }
+
+        $query = MasterDatasetRow::query()->whereIn('id', $scopedRowIds)->orderBy('id');
+        $filename = 'rb_report_' . $report->id . '_' . date('Ymd_His') . ($format === 'csv' ? '.csv' : '.xlsx');
+
+        return $exportService->streamWithSpout($process, $filename, $query, $format);
     }
 
     public function distributeSupervisor(): RedirectResponse

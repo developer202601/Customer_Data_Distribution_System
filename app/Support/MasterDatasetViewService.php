@@ -108,10 +108,25 @@ class MasterDatasetViewService
 
     public function groupBSummary(MasterDatasetProcess $process): array
     {
-        $enterpriseCount = MasterDatasetRow::query()
+        $govCount = MasterDatasetRow::query()
             ->where('process_id', $process->id)
             ->where('excluded', false)
             ->where('assigned_to', self::ENTERPRISE_LABEL)
+            ->where(function (\Illuminate\Database\Eloquent\Builder $q) {
+                $q->where('slt_gl_sub_segment', 'like', '%government%')
+                  ->orWhere('slt_gl_sub_segment', 'like', '%gov%');
+            })
+            ->count();
+
+        $largeMediumWholesaleCount = MasterDatasetRow::query()
+            ->where('process_id', $process->id)
+            ->where('excluded', false)
+            ->where('assigned_to', self::ENTERPRISE_LABEL)
+            ->where(function (\Illuminate\Database\Eloquent\Builder $q) {
+                $q->where('slt_gl_sub_segment', 'not like', '%government%')
+                  ->where('slt_gl_sub_segment', 'not like', '%gov%')
+                  ->orWhereNull('slt_gl_sub_segment');
+            })
             ->count();
 
         $smeCount = MasterDatasetRow::query()
@@ -121,10 +136,20 @@ class MasterDatasetViewService
             ->count();
 
         return [
+            'enterprise_government' => [
+                'label' => 'Enterprise - Government',
+                'count' => $govCount,
+            ],
+            'enterprise_large_medium_wholesale' => [
+                'label' => 'Enterprise - Large/Medium/Wholesale',
+                'count' => $largeMediumWholesaleCount,
+            ],
+            /*
             'enterprise_wholesale' => [
                 'label' => 'Enterprise & Wholesale (47, 44, 41 & 76)',
                 'count' => $enterpriseCount,
             ],
+            */
             'sme' => [
                 'label' => 'SME (31)',
                 'count' => $smeCount,
@@ -315,6 +340,32 @@ class MasterDatasetViewService
                     fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::REGION_LABEL),
                 ],
             ],
+            'enterprise-government' => [
+                'label' => 'Enterprise - Government',
+                'filename' => 'enterprise_government.xlsx',
+                'scopes' => [
+                    fn(Builder $query) => $query->where('excluded', false)
+                        ->where('assigned_to', self::ENTERPRISE_LABEL)
+                        ->where(function (Builder $q) {
+                            $q->where('slt_gl_sub_segment', 'like', '%government%')
+                              ->orWhere('slt_gl_sub_segment', 'like', '%gov%');
+                        }),
+                ],
+            ],
+            'enterprise-large-medium-wholesale' => [
+                'label' => 'Enterprise - Large/Medium/Wholesale',
+                'filename' => 'enterprise_large_medium_wholesale.xlsx',
+                'scopes' => [
+                    fn(Builder $query) => $query->where('excluded', false)
+                        ->where('assigned_to', self::ENTERPRISE_LABEL)
+                        ->where(function (Builder $q) {
+                            $q->where('slt_gl_sub_segment', 'not like', '%government%')
+                              ->where('slt_gl_sub_segment', 'not like', '%gov%')
+                              ->orWhereNull('slt_gl_sub_segment');
+                        }),
+                ],
+            ],
+            /*
             'enterprise-wholesale' => [
                 'label' => 'Enterprise & Wholesale',
                 'filename' => 'enterprise_wholesale.xlsx',
@@ -322,6 +373,7 @@ class MasterDatasetViewService
                     fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::ENTERPRISE_LABEL),
                 ],
             ],
+            */
             'sme' => [
                 'label' => 'SME',
                 'filename' => 'sme.xlsx',

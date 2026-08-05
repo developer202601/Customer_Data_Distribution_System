@@ -21,8 +21,11 @@
                         <p class="text-muted small mb-0">Region: {{ $region ?? '—' }} | RTOM: {{ strtoupper($rtom ?? '—') }}</p>
                     </div>
                 </div>
-                <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+                <div class="mt-3 d-flex flex-wrap align-items-center gap-2" data-loader-off="1">
                     <a href="{{ route('rb.reports.history') }}" class="btn btn-outline-primary btn-sm">Browse past reports</a>
+                    @if(!empty($report) && $report->id)
+                    <a href="{{ route('rb.reports.download', $report->id) }}" class="btn btn-outline-success btn-sm">Download Excel</a>
+                    @endif
                     <p class="small text-muted mb-0">See every report we ran with call center users, their interactions, and the payouts that followed.</p>
                 </div>
 

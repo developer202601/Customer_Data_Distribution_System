@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\MasterDatasetUploadController;
 use App\Http\Controllers\MasterValidationReportController;
+use App\Http\Controllers\PaymentUploadController;
 use App\Http\Controllers\ProcessFileController;
 use App\Http\Controllers\ProcessRunningController;
 use App\Http\Controllers\ProcessStatusController;
@@ -30,7 +31,16 @@ Route::middleware('session.auth')->group(function () {
     Route::post('/master/upload', [MasterDatasetUploadController::class, 'store'])->name('master.upload.store');
     Route::get('/master/upload/validation-report/{token}', [MasterValidationReportController::class, 'download'])->name('master.validation.report.download');
     Route::get('/process/upload', [ProcessFileController::class, 'create'])->name('process.upload.create');
-    Route::get('/payment/upload', function () {return view('process.payment-upload');})->name('payment.upload');
+    Route::get('/payment/upload', function (\Illuminate\Http\Request $request) {
+        if ($request->session()->get('user.is_admin')) {
+            return redirect()->route('process.assignments.reports')->with('status', 'File uploads are reserved for normal users.');
+        }
+        return view('process.payment-upload');
+    })->name('payment.upload');
+    Route::post('/payments/update', [PaymentUploadController::class, 'update'])->name('payments.update');
+    Route::get('/payments', [PaymentUploadController::class, 'index'])->name('payments.index');
+    Route::get('/payments/progress/{token}', [PaymentUploadController::class, 'progress'])->name('payments.progress');
+    Route::get('/payments/progress/stream/{token}', [PaymentUploadController::class, 'progressStream'])->name('payments.progress.stream');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
     Route::get('/process/upload/progress/{token}', [ProcessFileController::class, 'progress'])->name('process.upload.progress');
@@ -65,6 +75,7 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/process/assignments/exports/status', [AssignmentController::class, 'exportStatus'])->name('process.assignments.exports.status');
     Route::delete('/process/assignments/reports/bulk', [AssignmentController::class, 'destroyBulk'])->name('process.assignments.destroyBulk');
     Route::delete('/process/assignments/reports/{process}', [AssignmentController::class, 'destroy'])->name('process.assignments.destroy');
+    Route::get('/process/assignments/reports/{process}/download-master', [AssignmentController::class, 'downloadOriginalMaster'])->name('process.assignments.download-master');
     // Consolidated into overview; group-specific pages removed
     Route::get('/process/assignments/download/{group}/{bucket}', [AssignmentController::class, 'download'])->name('process.assignments.download');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
@@ -73,6 +84,7 @@ Route::middleware('session.auth')->group(function () {
     Route::put('/admin/users/{user}/status', [AdminController::class, 'updateUserStatus'])->name('admin.updateUserStatus');
     Route::put('/admin/users/{user}/name', [AdminController::class, 'updateUserName'])->name('admin.updateUserName');
     Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.deleteUser');
+    Route::post('/admin/process-queues', [AdminController::class, 'processQueues'])->name('admin.processQueues');
     Route::post('/configurations/billrange', [BillRangeController::class, 'createRange'])->name('configurations.billrange');
 
     Route::post('/configurations/billrange2', [BillRangeController::class, 'createStaff'])->name('configurations.billarears');
@@ -81,18 +93,11 @@ Route::middleware('session.auth')->group(function () {
 
     Route::prefix('cc')->name('cc.')->middleware('session.cc_user')->group(function () {
         Route::get('/', [CallCenterDashboardController::class, 'index'])->name('dashboard');
-        // allow callers to set their display name on first login
         Route::post('/profile/name', [CallCenterUserController::class, 'setName'])->name('profile.setName');
-        Route::get('/payments/list', [CallCenterDashboardController::class, 'paymentList'])->name('payments.list');
-        Route::get('/caller/{id}/calls7', [CallCenterDashboardController::class, 'callerCalls7'])->name('caller.calls7');
 
-        // Supervisor dashboard
-        Route::get('/supervisor/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'supervisorDashboard'])->name('supervisor.dashboard');
+        Route::get('/caller/dashboard', [CallCenterDashboardController::class, 'callerDashboard'])->name('caller.dashboard');
+        Route::get('/payments/list', [CallCenterDashboardController::class, 'listPayments'])->name('payments.list');
 
-        // RTOM dashboard
-        Route::get('/rtom/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'rtomDashboard'])->name('rtom.dashboard');
-
-        // Call center staff assignment endpoints
         Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
         Route::get('/assignments/manage', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'manage'])->name('assignments.manage');
         Route::post('/assignments/{user}/accept-all', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'acceptAll'])->name('assignments.acceptAll');
@@ -122,48 +127,43 @@ Route::middleware('session.auth')->group(function () {
             Route::get('/reports/{report}/summary', [CallCenterReportController::class, 'summary'])->name('reports.summary');
             Route::get('/reports', [CallCenterReportController::class, 'index'])->name('reports');
             Route::get('/reports/agent-details', [CallCenterReportController::class, 'getAgentDetails'])->name('reports.agentDetails');
-            // Region admin pages (RTOM management)
-            Route::get('/rtoms/dashboard', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'dashboard'])->name('region.dashboard');
-            Route::get('/rtoms/reports/review', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'reviewReport'])->name('region.review');
-            Route::post('/rtoms/reports/{report}/rows/hide', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'hideRows'])->name('region.review.hide_rows');
-            Route::post('/rtoms/reports/{report}/pass', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'passReport'])->name('region.review.pass');
-            Route::post('/rtoms/review-preference', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateReviewPreference'])->name('region.review.preference');
-            Route::get('/rtoms', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'index'])->name('region.index');
-            Route::get('/rtoms/search', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'search'])->name('region.search');
-            Route::get('/rtoms/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'indexAssign'])->name('region.assign.index');
-            Route::get('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'showAssignForm'])->name('region.assign');
-            Route::post('/rtoms/{user}/assign', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeAssignment'])->name('region.assign.store');
-            Route::get('/rtoms/create-admin', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'createAdminForm'])->name('region.create_admin');
-            Route::get('/rtoms/create-supervisor', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'createSupervisorForm'])->name('region.create_supervisor');
-            Route::post('/rtoms/admins', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeAdmin'])->name('region.store_admin');
-            Route::post('/rtoms/supervisors', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'storeSupervisor'])->name('region.store_supervisor');
-            Route::get('/rtoms/admins/{user}/edit', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'editAdminForm'])->name('region.edit_admin');
-            Route::put('/rtoms/admins/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateAdmin'])->name('region.update_admin');
-            Route::delete('/rtoms/admins/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroyAdmin'])->name('region.destroy_admin');
-            // Supervisor management (for RTOM users)
-            Route::get('/rtoms/supervisors/{user}/edit', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'editSupervisorForm'])->name('region.edit_supervisor');
-            Route::put('/rtoms/supervisors/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'updateSupervisor'])->name('region.update_supervisor');
-            Route::put('/rtoms/supervisors/{user}/disable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'disableSupervisor'])->name('region.disable_supervisor');
-            Route::put('/rtoms/supervisors/{user}/enable', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'enableSupervisor'])->name('region.enable_supervisor');
-            Route::delete('/rtoms/supervisors/{user}', [\App\Http\Controllers\CallCenter\RegionAdminController::class, 'destroySupervisor'])->name('region.destroy_supervisor');
-            // Super admin pages (Region management)
-            Route::get('/regions', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexRegions'])->name('super.regions');
-            Route::get('/regions/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editRegionAdminForm'])->name('super.edit_region');
-            Route::put('/regions/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateRegionAdmin'])->name('super.update_region');
-            Route::get('/regions/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchRegions'])->name('super.regions.search');
-            // Region admins create RTOM admins only; regular user creation removed
+
+            // Segment admin routes (replaces cc region admin)
+            Route::get('/segment/dashboard', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'dashboard'])->name('segment.dashboard');
+            Route::get('/segment/callers', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'callers'])->name('segment.callers');
+            Route::get('/segment/callers/create', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'createCallerForm'])->name('segment.callers.create');
+            Route::post('/segment/callers', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'storeCaller'])->name('segment.callers.store');
+            Route::get('/segment/callers/{user}/edit', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'editCaller'])->name('segment.callers.edit');
+            Route::put('/segment/callers/{user}', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'updateCaller'])->name('segment.callers.update');
+            Route::delete('/segment/callers/{user}', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'destroyCaller'])->name('segment.callers.destroy');
+            Route::put('/segment/callers/{user}/enable', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'enableCaller'])->name('segment.callers.enable');
+            Route::put('/segment/callers/{user}/disable', [\App\Http\Controllers\CallCenter\SegmentAdminController::class, 'disableCaller'])->name('segment.callers.disable');
+
             Route::post('/reports/{report}/distribute', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'distribute'])->name('reports.distribute');
-            Route::post('/reports/{report}/distribute-supervisor', [\App\Http\Controllers\CallCenter\ReportController::class, 'distributeSupervisor'])->name('reports.distribute_supervisor');
-            Route::get('/reports/{report}/distribute/cancel/{token}', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'cancelDistribute'])->name('reports.distribute.cancel');
             Route::post('/reports/{report}/recall', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recall'])->name('reports.recall');
             Route::get('/reports/{report}/recall/preview', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'recallPreview'])->name('reports.recall.preview');
             Route::post('/reports/{report}/reassign', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'reassign'])->name('reports.reassign');
             Route::get('/reports/{report}/download', [CallCenterReportController::class, 'download'])->name('reports.download');
+
+            // Super admin segment management routes (replaces cc.super.regions)
+            Route::get('/segments', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexSegments'])->name('super.segments');
+            Route::get('/segments/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editSegmentAdminForm'])->name('super.edit_segment');
+            Route::put('/segments/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateSegmentAdmin'])->name('super.update_segment');
+            Route::get('/segments/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchSegments'])->name('super.segments.search');
+
+            // CC super admin can also create RB region admins
+            Route::get('/rb-region/create', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'createRbRegionForm'])->name('super.rb_region.create');
+            Route::post('/rb-region', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'storeRbRegion'])->name('super.rb_region.store');
+
+            // CC super admin: manage existing RB region admins
+            Route::get('/rb-regions', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'indexRbRegions'])->name('super.rb_regions');
+            Route::get('/rb-regions/search', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'searchRbRegions'])->name('super.rb_regions.search');
+            Route::get('/rb-regions/{user}/edit', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'editRbRegionForm'])->name('super.rb_regions.edit');
+            Route::put('/rb-regions/{user}', [\App\Http\Controllers\CallCenter\SuperAdminController::class, 'updateRbRegion'])->name('super.rb_regions.update');
         });
     });
 
     Route::prefix('rb')->name('rb.')->middleware('session.rb_user')->group(function () {
-        // Regional billing staff assignment endpoints (mirror of call-center)
         Route::get('/', [\App\Http\Controllers\RegionalBilling\DashboardController::class, 'index'])->name('dashboard');
         Route::get('/caller/dashboard', [\App\Http\Controllers\RegionalBilling\DashboardController::class, 'callerDashboard'])->name('caller.dashboard');
         Route::get('/assignments', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'index'])->name('assignments.list');
@@ -232,10 +232,5 @@ Route::middleware('session.auth')->group(function () {
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.perform');
 
-//Route::post('/create/range', [AdminController::class, 'createRange'])->name('create.range');
-
 Route::get('/auth/microsoft', [AuthController::class, 'microsoftRedirect']);
 Route::get('/auth/microsoft/callback', [AuthController::class, 'microsoftCallback'])->name('microsoft.callback');
-
-// Route::get('/auth/microsoft', [AuthController::class, 'login2']);
-// Route::get('/auth/microsoft/callback', [AuthController::class, 'getLogin2']);

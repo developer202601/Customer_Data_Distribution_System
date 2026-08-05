@@ -151,24 +151,19 @@ class AuthController extends Controller
         $assignment = $this->normalizeAssignment($user['assignment'] ?? null);
         $isAdmin = $user['is_admin'] ?? false;
 
-        // Super admins go to overview
+        // Super admins go to segment admin list
         if ($assignment === 'super') {
-            return 'cc.dashboard';
+            return 'cc.super.segments';
         }
 
-        // Regional admins go to region dashboard
-        if ($assignment !== '' && !str_starts_with($assignment, 'supervisor_') && !str_starts_with($assignment, 'rtom_') && !str_starts_with($assignment, 'caller_')) {
-            return 'cc.region.dashboard';
+        // Segment admins go to segment dashboard
+        if (str_starts_with($assignment, 'segment_')) {
+            return 'cc.segment.dashboard';
         }
 
-        // RTOM admins go to RTOM assignment management
-        if (str_starts_with($assignment, 'rtom_')) {
-            return 'cc.region.assign.index';
-        }
-
-        // Supervisors go to supervisor dashboard
-        if (str_starts_with($assignment, 'supervisor_')) {
-            return 'cc.supervisor.dashboard';
+        // Callers (all variants including caller_ccs, caller_cc, caller_s) go to assignments
+        if (str_starts_with($assignment, 'caller_')) {
+            return 'cc.assignments.manage';
         }
 
         // Regular admins go to user management
@@ -176,7 +171,7 @@ class AuthController extends Controller
             return 'cc.users.index';
         }
 
-        // Regular callers go to assignments
+        // Fallback
         return 'cc.assignments.manage';
     }
 

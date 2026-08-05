@@ -204,8 +204,16 @@ class AssignmentController extends Controller
             ->count();
     }
 
-    public function reports(Request $request): View
+    public function reports(Request $request): View|RedirectResponse
     {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        $isCc = (string) ($request->session()->get('user.system') ?? '') === 'cc';
+        if (! $isAdmin && ! $isCc) {
+            return redirect()->route('dashboard')->withErrors([
+                'auth' => 'Only administrators can view past reports.',
+            ]);
+        }
+
         $reportGroups = $this->reportArchiveGroups();
         $monthOptions = $reportGroups->keys();
         $selectedMonth = null;
@@ -415,7 +423,19 @@ class AssignmentController extends Controller
     {
         session(['master.dataset.process_id' => $process->id]);
 
-        if ($process->status === MasterDatasetProcessStatus::AWAITING_EXCLUSIONS) {
+        $isRawUpload = in_array(
+            (string) ($process->status ?? ''),
+            [
+                MasterDatasetProcessStatus::WAITING_CONFIRMATION,
+                MasterDatasetProcessStatus::AWAITING_EXCLUSIONS,
+                'waiting_confirmation',
+                'awaiting_confirmation',
+                'staged',
+            ],
+            true
+        );
+
+        if ($isRawUpload) {
             return redirect()->route('process.exclusions.create');
         }
 
@@ -647,11 +667,38 @@ class AssignmentController extends Controller
         return $grouped;
     }
 
+    public function downloadOriginalMaster(Request $request, MasterDatasetProcess $process)
+    {
+        $isAdmin = (bool) ($request->session()->get('user.is_admin') ?? false);
+        $isCc = (string) ($request->session()->get('user.system') ?? '') === 'cc';
+        if (! $isAdmin && ! $isCc) {
+            abort(403, 'Unauthorized.');
+        }
+
+        $diskName = $process->storage_disk ?: config('filesystems.default', 'local');
+        $disk = Storage::disk($diskName);
+
+        if (!$process->master_archive_path || !$disk->exists($process->master_archive_path)) {
+            return back()->withErrors(['reports' => 'Original master dataset file could not be found in storage.']);
+        }
+
+        $originalName = basename($process->master_archive_path);
+        return $disk->download($process->master_archive_path, $originalName);
+        /*
+        $fileName = 'master_dataset_' . $process->dataset_month . '.' . pathinfo($originalName, PATHINFO_EXTENSION);
+
+        return $disk->download($process->master_archive_path, $fileName);
+        */
+    }
+
     private function bucketAllowed(string $group, string $bucket): bool
     {
         $map = [
             'group-a' => ['call-center-staff', 'call-center', 'staff'],
+            'group-b' => ['enterprise-government', 'enterprise-large-medium-wholesale', 'sme'],
+            /*
             'group-b' => ['enterprise-wholesale', 'sme'],
+            */
             'exclusions' => ['excluded', 'excluded-copper-retail-micro'],
             'vip' => ['vip'],
             'region' => ['region-billing'],

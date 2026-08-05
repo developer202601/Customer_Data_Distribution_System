@@ -789,7 +789,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const selName = document.getElementById('ccSelectedName');
         const selAmt = document.getElementById('ccSelectedAmounts');
         if (selName) selName.textContent = data.address_name || data.name || '';
-        if (selAmt) selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+        if (selAmt) {
+            const paymentValue = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+            selAmt.textContent = `Arrears: ${data.arrears ?? '—'} — Bill: ${data.bill ?? '—'} — Payment: ${paymentValue}` + (data.call_count ? ` — Calls since assignment: ${data.call_count}` : '');
+        }
 
         // If this row belongs to a previous report, keep interactions read-only and show reason text
         try {
@@ -951,6 +954,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div>
                             <strong>${r.address_name ?? '—'}</strong>
                             <div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'}</div>
+                            <div class="small text-danger">Payment: ${r.payment_value ?? '—'}</div>
                             <div class="small text-muted">
                                 Calls since assignment: ${r.call_count ?? 0}
                                 ${r.latest_outcome ? ' • Latest: ' + r.latest_outcome : ''}

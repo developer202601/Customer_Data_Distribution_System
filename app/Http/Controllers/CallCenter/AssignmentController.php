@@ -8,29 +8,63 @@ use App\Jobs\ReassignCallCenterRows;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterInteraction;
 use App\Models\CallCenterReport;
+use App\Models\MasterDatasetRow;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Bus;
-use Illuminate\Support\Collection;
 
 class AssignmentController extends Controller
 {
+    private function ensureSegmentAdmin(): array
+    {
+        $sessionUser = session('user');
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'cc') {
+            abort(403);
+        }
+
+        $assignment = strtolower(trim((string) ($sessionUser['assignment'] ?? '')));
+        if (! str_starts_with($assignment, 'segment_')) {
+            abort(403);
+        }
+
+        return [
+            'sessionUser' => $sessionUser,
+            'assignment'  => $assignment,
+        ];
+    }
+
+    private function segmentBucketLabel(string $assignment): string
+    {
+        return match ($assignment) {
+            'segment_ccs' => 'call center staff',
+            'segment_cc'  => 'call center',
+            'segment_s'   => 'staff',
+            default       => '',
+        };
+    }
+
     public function index(Request $request)
     {
-        $user = Auth::user();
-        if (! $user) {
+        $sessionUser = $request->session()->get('user');
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'cc') {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['error' => 'Unauthenticated'], 401);
             }
 
             return Redirect::route('login');
         }
+
+        $currentUserId = $sessionUser['id'] ?? null;
+        if (! $currentUserId) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
         $perPage = (int) $request->get('per_page', 25);
 
-        $q = CallCenterAssignment::callCenter()->where('assigned_user_id', $user->id)
+        $q = CallCenterAssignment::callCenter()->where('assigned_user_id', $currentUserId)
             ->where('status', '<>', 'completed')
             ->with('row', 'interactions')
             ->orderBy('id', 'asc');
@@ -38,30 +72,29 @@ class AssignmentController extends Controller
         return response()->json($q->paginate($perPage));
     }
 
-    /**
-     * Show a manageable list of assigned rows with document details.
-     * Visible to call-center users and admins.
-     */
     public function manage(Request $request)
     {
-        // Prevent super-assigned admin users from accessing the assign/manage rows page
         $sessionUser = $request->session()->get('user');
-        if (! empty($sessionUser) && (($sessionUser['assignment'] ?? null) === 'super')) {
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'cc') {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['error' => 'Unauthenticated'], 401);
+            }
+
+            return Redirect::route('login');
+        }
+
+        if (($sessionUser['assignment'] ?? null) === 'super') {
             abort(403);
         }
 
         $reportId = $request->query('report');
-
-        $currentUserId = auth()->id() ?? session('user.id') ?? null;
+        $currentUserId = $sessionUser['id'] ?? null;
 
         $latestReportId = null;
         $latestAcceptedReportId = null;
         $allUserAssignments = collect();
+
         if ($currentUserId) {
-            // Keep two report markers:
-            // - latestReportId: newest report assigned to the user (including pending)
-            // - latestAcceptedReportId: newest report with at least one accepted row
-            // Default view should use accepted rows so existing work does not disappear.
             $allUserAssignments = CallCenterAssignment::callCenter()->where('assigned_user_id', $currentUserId)
                 ->whereNotNull('call_center_report_id')
                 ->get(['id', 'call_center_report_id', 'accepted', 'rejected', 'reassignment_origin_id']);
@@ -72,8 +105,6 @@ class AssignmentController extends Controller
                 ->max('call_center_report_id');
         }
 
-        // If no specific report is requested, prefer latest report with accepted rows.
-        // Fall back to newest assigned report when there are no accepted rows yet.
         if (! $reportId) {
             $reportId = $latestAcceptedReportId ?: $latestReportId;
         }
@@ -81,25 +112,18 @@ class AssignmentController extends Controller
         $q = CallCenterAssignment::callCenter()->with(['row', 'agent', 'report'])
             ->whereNotNull('assigned_user_id');
 
-        // Always show only the current authenticated user's assignments
         if ($currentUserId) {
             $q->where('assigned_user_id', $currentUserId);
         }
 
-        // Only show assignments from the latest/current report
         if ($reportId) {
             $q->where('call_center_report_id', (int) $reportId);
         }
 
-        // Only show accepted assignments (hide pending/rejected)
         $q->where('accepted', true);
-
-        // Include all accepted assignments from current report, even if marked completed (paid)
-        // Completed status just means the interaction was recorded, not that it should be hidden
 
         $assignments = $q->orderBy('assigned_user_id')->orderBy('id')->get();
 
-        // Build per-assignment metadata for filtering by call activity and promise status within the report period
         $assignmentMeta = [];
         $filterCounts = [
             'all' => 0,
@@ -115,8 +139,6 @@ class AssignmentController extends Controller
 
         foreach ($assignments as $assignment) {
             $filterCounts['all']++;
-            // Count calls only after the user explicitly accepted this assignment.
-            // If the assignment is not yet accepted, calls-since count is zero.
             $row = $assignment->row;
             $acct = $row->account_num ?? $row->customer_ref ?? null;
             $callQBase = CallCenterInteraction::query();
@@ -126,7 +148,6 @@ class AssignmentController extends Controller
                 $callQBase->where('assignment_id', $assignment->id);
             }
 
-            // Latest overall interaction (for display purposes)
             $latestOverall = (clone $callQBase)->orderBy('created_at', 'desc')->first();
 
             $callCount = 0;
@@ -193,18 +214,15 @@ class AssignmentController extends Controller
 
         $reportLabel = null;
         if ($reportId) {
-            $r = \App\Models\CallCenterReport::callCenter()->find((int) $reportId);
+            $r = CallCenterReport::callCenter()->find((int) $reportId);
             if ($r) {
                 $dm = $r->dataset_month;
                 $reportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($r->dataset_month ?: 'Unknown report');
             }
         }
 
-        // Determine report-level metadata using all assignments (accepted + pending + rejected),
-        // not only the currently displayed accepted subset.
         $userReportIds = $allUserAssignments->pluck('call_center_report_id')->filter()->unique()->values();
         $latestReportCount = $latestReportId ? $allUserAssignments->where('call_center_report_id', $latestReportId)->count() : 0;
-        // count only unaccepted (pending) rows from the latest report for the banner
         $latestReportPending = $latestReportId
             ? $allUserAssignments->where('call_center_report_id', $latestReportId)->where('accepted', false)->where('rejected', false)->count()
             : 0;
@@ -221,7 +239,7 @@ class AssignmentController extends Controller
         }
         $latestReportLabel = null;
         if ($latestReportId) {
-            $lr = \App\Models\CallCenterReport::callCenter()->find((int) $latestReportId);
+            $lr = CallCenterReport::callCenter()->find((int) $latestReportId);
             if ($lr) {
                 $dm = $lr->dataset_month;
                 $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($lr->dataset_month ?: 'Report #' . $lr->id);
@@ -245,9 +263,6 @@ class AssignmentController extends Controller
         ]);
     }
 
-    /**
-     * Bulk accept all assignments for a specific user (optionally scoped to a report).
-     */
     public function acceptAll(Request $request, $userId)
     {
         $reportId = $request->query('report');
@@ -269,9 +284,6 @@ class AssignmentController extends Controller
             if ($assignment->master_dataset_row_id) $masterRowIds[] = $assignment->master_dataset_row_id;
         }
 
-        // If these accepted assignments correspond to master dataset rows that were
-        // previously assigned from earlier reports, mark those older assignments
-        // as completed so they no longer appear as active/pending rows.
         if (!empty($masterRowIds)) {
             $masterRowIds = array_values(array_unique($masterRowIds));
             $prevQuery = CallCenterAssignment::callCenter()->where('assigned_user_id', $userId)
@@ -312,14 +324,9 @@ class AssignmentController extends Controller
             ]);
         }
 
-        // Non-AJAX redirect: use a neutral flash message to avoid exposing
-        // implementation or host details in the UI toast.
         return Redirect::route('cc.assignments.manage', ['report' => $reportId])->with('status', 'Assignments updated.');
     }
 
-    /**
-     * Bulk reject all assignments for a specific user (optionally scoped to a report).
-     */
     public function rejectAll(Request $request, $userId)
     {
         $reportId = $request->query('report');
@@ -334,10 +341,10 @@ class AssignmentController extends Controller
         ]);
 
         $assignments = $query->get();
-        // If the UI indicated no reason is required, treat this as "discard reassigned copies" flow:
+        $rejectedBy = $request->session()->get('user.id');
+
         if (isset($payload['requires_reason']) && (string)$payload['requires_reason'] === '0') {
             foreach ($assignments as $assignment) {
-                // Only operate on reassigned copies that are NOT accepted
                 if (! empty($assignment->reassignment_origin_id) && empty($assignment->accepted)) {
                     $this->reopenOriginalRejectedAssignment($assignment);
                 }
@@ -345,7 +352,6 @@ class AssignmentController extends Controller
         } else {
             foreach ($assignments as $assignment) {
                 if (! empty($assignment->reassignment_origin_id)) {
-                    // Discard reassigned copies and restore originals; skip note
                     if (empty($assignment->accepted)) {
                         $this->reopenOriginalRejectedAssignment($assignment);
                     }
@@ -354,7 +360,7 @@ class AssignmentController extends Controller
                 $assignment->update([
                     'rejected' => true,
                     'rejected_at' => now(),
-                    'rejected_by' => Auth::id(),
+                    'rejected_by' => $rejectedBy,
                     'rejection_note' => $payload['rejection_note'] ?? 'Bulk rejected',
                     'status' => 'pending',
                     'locked_at' => null,
@@ -374,16 +380,12 @@ class AssignmentController extends Controller
             ]);
         }
 
-        // Non-AJAX redirect: neutral flash message
         return Redirect::route('cc.assignments.manage', ['report' => $reportId])->with('status', 'Assignments updated.');
     }
 
-    /**
-     * Return accepted assignments rows for a user (JSON) - used by AJAX to load details after accept.
-     */
     public function userRows(Request $request, $userId)
     {
-        $currentUserId = Auth::id() ?? session('user.id');
+        $currentUserId = $request->session()->get('user.id');
         if ($currentUserId && (int) $userId !== (int) $currentUserId) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
@@ -396,9 +398,6 @@ class AssignmentController extends Controller
 
         $q = CallCenterAssignment::callCenter()->with('row')
             ->where('assigned_user_id', $userId);
-        // When include_completed is requested we want to return either accepted
-        // assignments (active) or historical completed assignments so previous
-        // report rows remain visible. Otherwise only return accepted+pending rows.
         if ($includeCompleted) {
             $q->where(function ($qq) {
                 $qq->where('accepted', true)->orWhere('status', 'completed');
@@ -416,7 +415,6 @@ class AssignmentController extends Controller
             ->get()
             ->map(function ($a) {
                 $row = $a->row;
-                // Count calls only after the assignment was accepted by the user.
                 $acct = $row->account_num ?? $row->customer_ref ?? null;
                 $callQBase = CallCenterInteraction::query();
                 if ($acct) {
@@ -425,7 +423,6 @@ class AssignmentController extends Controller
                     $callQBase->where('assignment_id', $a->id);
                 }
 
-                // latest overall for display purposes
                 $latestOverall = (clone $callQBase)->orderBy('created_at', 'desc')->first();
 
                 $callCount = 0;
@@ -444,10 +441,9 @@ class AssignmentController extends Controller
 
                 $latestOutcome = $latestOverall->outcome ?? null;
                 $latestPaymentExpected = $latestOverall && $latestOverall->payment_expected_at ? Carbon::parse($latestOverall->payment_expected_at)->toDateString() : null;
-                $latestPaid = (bool) ($latestOverall->paid ?? false);
                 $promiseOverdue = false;
                 if ($latestOverall && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
-                    if (! $latestPaid && $latestOverall->payment_expected_at) {
+                    if (!empty($latestOverall->payment_expected_at)) {
                         try {
                             $due = Carbon::parse($latestOverall->payment_expected_at)->endOfDay();
                             if ($due->lt(Carbon::now())) {
@@ -466,6 +462,7 @@ class AssignmentController extends Controller
                     'address_name' => optional($row)->address_name,
                     'arrears' => optional($row)->new_arrears_value,
                     'bill' => optional($row)->latest_bill_mny,
+                    'payment_value' => optional($row)->payments_value,
                     'call_count' => $callCount,
                     'called_in_period' => $calledInPeriod,
                     'latest_outcome' => $latestOutcome,
@@ -485,14 +482,10 @@ class AssignmentController extends Controller
         ]);
     }
 
-    /**
-     * Return full details for a specific assignment's row (AJAX)
-     */
     public function assignmentDetails(Request $request, $assignmentId)
     {
         $assignment = CallCenterAssignment::callCenter()->with('row')->findOrFail($assignmentId);
         $r = $assignment->row;
-        // load recent interactions. Prefer to load by account number (cross-assignment)
         $acct = $r->account_num ?? $r->customer_ref ?? null;
         $q = CallCenterInteraction::with('agent');
         if ($acct) {
@@ -508,6 +501,7 @@ class AssignmentController extends Controller
                 'agent_id' => $i->agent_id,
                 'agent_name' => $i->agent ? ($i->agent->name ?? $i->agent->username ?? null) : null,
                 'outcome' => $i->outcome,
+                'outcome_detail' => $i->outcome_detail ?? null,
                 'note' => $i->note,
                 'account_number' => $i->account_number ?? null,
                 'paid' => (bool) ($i->paid ?? false),
@@ -518,10 +512,8 @@ class AssignmentController extends Controller
             ];
         });
 
-        // Compute payment events separately: find interactions that recorded a payment
         $payments = [];
         try {
-            // iterate in chronological order (oldest first) to build sensible 'last contact before payment'
             $chron = $interactionsRaw->sortBy('created_at');
             $paymentEvents = $chron->filter(function ($i) {
                 return (! empty($i->paid) || ! empty($i->payment_date) || ! empty($i->paid_amount));
@@ -529,7 +521,6 @@ class AssignmentController extends Controller
             foreach ($paymentEvents as $p) {
                 $paymentDate = $p->payment_date ?? $p->created_at;
                 $lastBefore = $chron->filter(function ($x) use ($paymentDate, $p) {
-                    // strictly before the payment event time and not the payment event itself
                     return ($x->created_at < $paymentDate) && ($x->id !== $p->id);
                 })->sortByDesc('created_at')->first();
 
@@ -546,12 +537,9 @@ class AssignmentController extends Controller
             // ignore
         }
 
-        // Compute call_count as interactions since the assignment was accepted.
-        // Show all interactions in the modal, but only count those after
-        // `accepted_at`. If not accepted yet, count is zero.
         $callCount = 0;
         try {
-            $countQ = \App\Models\CallCenterInteraction::query();
+            $countQ = CallCenterInteraction::query();
             if ($acct) {
                 $countQ->where('account_number', $acct);
             } else {
@@ -576,6 +564,7 @@ class AssignmentController extends Controller
             'address_name' => $r->address_name ?? null,
             'arrears' => $r->new_arrears_value ?? null,
             'bill' => $r->latest_bill_mny ?? null,
+            'payment_value' => $r->payments_value ?? null,
             'phone' => $r->mobile_contact_tel ?? null,
             'address' => $r->full_address ?? null,
             'rtom' => $r->rtom ?? null,
@@ -591,19 +580,22 @@ class AssignmentController extends Controller
 
     public function claim($id)
     {
-        $user = Auth::user();
+        $userId = session('user.id');
+        if (! $userId) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
 
         $updated = CallCenterAssignment::callCenter()->where('id', $id)
-            ->where(function ($q) use ($user) {
-                $q->where('status', 'pending')->orWhere(function ($q2) use ($user) {
-                    $q2->where('assigned_user_id', $user->id)->where('status', 'claimed');
+            ->where(function ($q) use ($userId) {
+                $q->where('status', 'pending')->orWhere(function ($q2) use ($userId) {
+                    $q2->where('assigned_user_id', $userId)->where('status', 'claimed');
                 });
             })
             ->update([
                 'status' => 'claimed',
                 'locked_at' => now(),
-                'locked_by' => $user->id,
-                'assigned_user_id' => $user->id,
+                'locked_by' => $userId,
+                'assigned_user_id' => $userId,
             ]);
 
         return response()->json(['updated' => $updated]);
@@ -611,10 +603,13 @@ class AssignmentController extends Controller
 
     public function complete($id)
     {
-        $user = Auth::user();
+        $userId = session('user.id');
+        if (! $userId) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
 
         $updated = CallCenterAssignment::callCenter()->where('id', $id)
-            ->where('assigned_user_id', $user->id)
+            ->where('assigned_user_id', $userId)
             ->update(['status' => 'completed', 'locked_at' => null, 'locked_by' => null]);
 
         return response()->json(['updated' => $updated]);
@@ -622,9 +617,8 @@ class AssignmentController extends Controller
 
     public function storeInteraction(Request $request, $assignmentId)
     {
-        $user = Auth::user();
-        $agentId = $user->id ?? session('user.id') ?? null;
-        if (! $agentId) {
+        $userId = session('user.id');
+        if (! $userId) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['error' => 'Unauthenticated'], 401);
             }
@@ -633,6 +627,7 @@ class AssignmentController extends Controller
 
         $payload = $request->validate([
             'outcome' => 'nullable|string|max:100',
+            'outcome_detail' => 'nullable|string|max:150',
             'note' => 'nullable|string',
             'payment_expected_at' => 'nullable|date',
             'paid' => 'nullable|boolean',
@@ -640,7 +635,6 @@ class AssignmentController extends Controller
             'paid_amount' => 'nullable|numeric',
         ]);
 
-        // attempt to attach the account number from the assignment's row if available
         $assignment = CallCenterAssignment::callCenter()->with('row')->find($assignmentId);
         $accountNumber = null;
         if ($assignment && $assignment->row) {
@@ -649,20 +643,17 @@ class AssignmentController extends Controller
 
         $interaction = CallCenterInteraction::create(array_merge($payload, [
             'assignment_id' => $assignmentId,
-            'agent_id' => $agentId,
+            'agent_id' => $userId,
             'account_number' => $accountNumber,
         ]));
 
-        // update assignment summary/status in a transaction
         DB::transaction(function () use ($interaction, $payload) {
             $assignment = CallCenterAssignment::callCenter()->find($interaction->assignment_id);
             if (! $assignment) return;
 
             $assignment->locked_at = null;
             $assignment->locked_by = null;
-            // Do NOT auto-complete assignments when paid - they should remain visible in current report
 
-            // If the interaction includes a payment, mirror it on the assignment
             if (! empty($payload['paid'])) {
                 $assignment->paid = true;
                 if (! empty($payload['payment_date'])) {
@@ -681,9 +672,13 @@ class AssignmentController extends Controller
 
     public function accept(Request $request, $id)
     {
-        $user = Auth::user();
+        $userId = session('user.id');
+        if (! $userId) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
         $assignment = CallCenterAssignment::callCenter()->where('id', $id)
-            ->where('assigned_user_id', $user->id)
+            ->where('assigned_user_id', $userId)
             ->where('rejected', false)
             ->firstOrFail();
 
@@ -695,9 +690,8 @@ class AssignmentController extends Controller
             'locked_by' => null,
         ]);
 
-        // mark any previous assignments for the same master row as completed
         if ($assignment->master_dataset_row_id) {
-            CallCenterAssignment::callCenter()->where('assigned_user_id', $user->id)
+            CallCenterAssignment::callCenter()->where('assigned_user_id', $userId)
                 ->where('master_dataset_row_id', $assignment->master_dataset_row_id)
                 ->where('id', '<>', $assignment->id)
                 ->where('call_center_report_id', '<>', $assignment->call_center_report_id)
@@ -718,13 +712,15 @@ class AssignmentController extends Controller
 
     public function reject(Request $request, $id)
     {
-        $user = Auth::user();
+        $userId = session('user.id');
+        if (! $userId) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
 
         $assignment = CallCenterAssignment::callCenter()->where('id', $id)
-            ->where('assigned_user_id', $user->id)
+            ->where('assigned_user_id', $userId)
             ->firstOrFail();
 
-        // If this is a reassigned copy and NOT accepted, immediately reopen the origin and delete this copy
         if (! empty($assignment->reassignment_origin_id)) {
             if (! empty($assignment->accepted)) {
                 if ($request->ajax() || $request->wantsJson()) {
@@ -747,7 +743,7 @@ class AssignmentController extends Controller
         $assignment->update([
             'rejected' => true,
             'rejected_at' => now(),
-            'rejected_by' => $user->id,
+            'rejected_by' => $userId,
             'rejection_note' => $payload['note'] ?? null,
             'status' => 'pending',
             'locked_at' => null,
@@ -761,6 +757,105 @@ class AssignmentController extends Controller
         }
 
         return Redirect::route('cc.assignments.manage')->with('status', 'Assignment rejected.');
+    }
+
+    public function distribute(Request $request, $reportId)
+    {
+        $session = session('user');
+        if (! $session) {
+            abort(403);
+        }
+
+        $sessionAssignment = strtolower(trim((string) ($session['assignment'] ?? '')));
+
+        // Only segment admins may distribute — super admins observe only
+        if (! str_starts_with($sessionAssignment, 'segment_')) {
+            abort(403, 'Only segment admins can distribute rows to callers.');
+        }
+
+        $report = CallCenterReport::callCenter()->findOrFail((int) $reportId);
+
+        $userIds = array_values(array_filter((array) $request->input('user_ids', []), fn($v) => is_numeric($v) && (int)$v > 0));
+        $perUser = $request->input('per_user', null);
+
+        $sessionAssignment = strtolower(trim((string) ($session['assignment'] ?? '')));
+        $isSegmentAdmin    = str_starts_with($sessionAssignment, 'segment_');
+
+        // Auto-fetch callers belonging to this segment admin if none selected
+        if (empty($userIds) && $isSegmentAdmin) {
+            $segmentAdminId  = (int) ($session['id'] ?? 0);
+            $callerAssignment = 'caller_' . substr($sessionAssignment, strlen('segment_'));
+            $userIds = User::where('system', 'cc')
+                ->where('assignment', $callerAssignment)
+                ->where('supervisor', $segmentAdminId)
+                ->where('status', 1)
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->values()
+                ->toArray();
+        }
+
+        $userIds = array_values(array_filter($userIds, fn($id) => is_numeric($id) && (int)$id > 0));
+
+        if (empty($userIds)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])
+                ->withErrors(['reassign' => 'Select at least one user to distribute to.']);
+        }
+
+        // Scope row IDs to this segment's bucket when distributing as segment admin
+        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values()->all();
+
+        if ($isSegmentAdmin) {
+            $bucketLabel = $this->segmentBucketLabel($sessionAssignment);
+            if ($bucketLabel !== '' && ! empty($rowIds)) {
+                $rowIds = \App\Models\MasterDatasetRow::whereIn('id', $rowIds)
+                    ->whereRaw('LOWER(TRIM(assigned_to)) = ?', [$bucketLabel])
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
+                    ->values()
+                    ->all();
+            }
+        }
+
+        if (empty($rowIds)) {
+            return redirect()->route('cc.reports', ['report' => $reportId])
+                ->withErrors(['reassign' => 'No rows available for your segment in this report.']);
+        }
+
+        if (!empty($userIds)) {
+            try {
+                User::whereIn('id', $userIds)->update(['fixed' => 1]);
+            } catch (\Exception $e) {
+            }
+        }
+
+        if (!empty($userIds)) {
+            DB::transaction(function () use ($userIds, $reportId) {
+                foreach ($userIds as $uid) {
+                    $priorIds = CallCenterAssignment::callCenter()->where('assigned_user_id', (int) $uid)
+                        ->where('call_center_report_id', '<>', (int) $reportId)
+                        ->where('accepted', false)
+                        ->where('rejected', false)
+                        ->pluck('id')
+                        ->all();
+
+                    if (empty($priorIds)) {
+                        continue;
+                    }
+
+                    CallCenterAssignment::callCenter()->whereIn('id', $priorIds)
+                        ->update(['status' => 'completed', 'locked_at' => null, 'locked_by' => null]);
+                }
+            });
+        }
+
+        Bus::dispatchSync(new DistributeCallCenterReport($reportId, $userIds, $perUser));
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['dispatched' => true]);
+        }
+
+        return redirect()->route('cc.reports', ['report' => $reportId])->with('status', 'Distribution queued.');
     }
 
     public function reassign(Request $request, $reportId)
@@ -785,178 +880,8 @@ class AssignmentController extends Controller
         return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'Reassignment queued.');
     }
 
-    private function reopenOriginalRejectedAssignment(CallCenterAssignment $assignment): CallCenterAssignment
-    {
-        if (empty($assignment->reassignment_origin_id)) {
-            return $assignment;
-        }
-
-        $candidate = CallCenterAssignment::callCenter()->find($assignment->reassignment_origin_id);
-
-        if (! $candidate || ! $candidate->rejected || $candidate->status !== 'completed') {
-            return $assignment;
-        }
-
-        DB::transaction(function () use ($candidate, $assignment) {
-            // Reopen the original assignment as pending but do NOT clear its rejection metadata.
-            // We only update status/accept/lock fields so analytics about who rejected remain intact.
-            $candidate->update([
-                'status' => 'pending',
-                'accepted' => false,
-                'accepted_at' => null,
-                'locked_at' => null,
-                'locked_by' => null,
-                'reassignment_origin_id' => null,
-            ]);
-
-            // Only delete the reassigned copy if it is not accepted
-            if (empty($assignment->accepted)) {
-                $assignment->delete();
-            }
-        });
-
-        return $candidate->refresh();
-    }
-
-    // Admin helper to dispatch distribution job
-    public function distribute(Request $request, $reportId)
-    {
-        $report = CallCenterReport::callCenter()->findOrFail((int) $reportId);
-        $userIds = $request->input('user_ids', []);
-        $perUser = $request->input('per_user', null);
-        $user = Auth::user();
-        // sanitize user ids
-        $userIds = array_values(array_filter($userIds, fn($id) => is_numeric($id) && (int)$id > 0));
-
-        $pendingRegions = $this->pendingRegionalReviews($report);
-        if (! empty($pendingRegions)) {
-            $label = implode(', ', $pendingRegions);
-            return Redirect::route('cc.reports', ['report' => $reportId])
-                ->withErrors(['reassign' => 'Distribution is blocked. Pending regional review: ' . $label]);
-        }
-
-        // Mark selected users as fixed in the users table
-        if (!empty($userIds)) {
-            try {
-                \App\Models\User::whereIn('id', $userIds)->update(['fixed' => 1]);
-            } catch (\Exception $e) {
-                // don't block distribution if this fails; log if needed
-            }
-        }
-
-        // Finalize past assignments for selected agents without deleting.
-        // Only target assignments from reports other than the current one
-        // and not yet accepted or rejected. Mark them completed so they
-        // no longer appear as active, but preserve their historical status.
-        if (!empty($userIds)) {
-            DB::transaction(function () use ($userIds, $reportId) {
-                foreach ($userIds as $uid) {
-                    $priorIds = CallCenterAssignment::callCenter()->where('assigned_user_id', (int) $uid)
-                        ->where('call_center_report_id', '<>', (int) $reportId)
-                        ->where('accepted', false)
-                        ->where('rejected', false)
-                        ->pluck('id')
-                        ->all();
-
-                    if (empty($priorIds)) {
-                        continue;
-                    }
-
-                    CallCenterAssignment::callCenter()->whereIn('id', $priorIds)
-                        ->update(['status' => 'completed', 'locked_at' => null, 'locked_by' => null]);
-                }
-            });
-        }
-
-        // Always run synchronously so the page displays updated assignments immediately after form submission.
-        Bus::dispatchSync(new DistributeCallCenterReport($reportId, $userIds, $perUser));
-
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['dispatched' => true]);
-        }
-
-        return Redirect::route('cc.reports', ['report' => $reportId])->with('status', 'Distribution queued.');
-    }
-
-    private function pendingRegionalReviews(CallCenterReport $report): array
-    {
-        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values();
-        if ($rowIds->isEmpty()) {
-            return [];
-        }
-
-        $regionsInReport = DB::table('master_dataset_rows')
-            ->whereIn('id', $rowIds->all())
-            ->whereNotNull('region')
-            ->selectRaw('LOWER(TRIM(region)) as region_key')
-            ->distinct()
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        if (empty($regionsInReport)) {
-            return [];
-        }
-
-        $enabledRegions = DB::table('users')
-            ->where('system', 'cc')
-            ->where('admin_prev', 1)
-            ->where('status', 1)
-            ->where('enable_regional_review', 1)
-            ->whereNotNull('enable_regional_review_enabled_at')
-            ->where('enable_regional_review_enabled_at', '<=', $report->created_at)
-            ->whereNotNull('assignment')
-            ->where('assignment', '<>', 'super')
-            ->where('assignment', 'not like', 'rtom_%')
-            ->where('assignment', 'not like', 'supervisor_%')
-            ->where('assignment', 'not like', 'caller_%')
-            ->select('assignment')
-            ->distinct()
-            ->get();
-
-        $regionLabelByKey = [];
-        foreach ($enabledRegions as $regionRow) {
-            $label = trim((string) ($regionRow->assignment ?? ''));
-            if ($label === '') {
-                continue;
-            }
-
-            $key = strtolower($label);
-            $regionLabelByKey[$key] = $label;
-        }
-        $enabledRegionKeys = array_keys($regionLabelByKey);
-
-        $required = array_values(array_unique(array_intersect($regionsInReport, $enabledRegionKeys)));
-        if (empty($required)) {
-            return [];
-        }
-
-        $reviewed = DB::table('call_center_report_region_reviews')
-            ->where('call_center_report_id', $report->id)
-            ->whereNotNull('reviewed_at')
-            ->selectRaw('LOWER(TRIM(region_name)) as region_key')
-            ->pluck('region_key')
-            ->filter()
-            ->values()
-            ->all();
-
-        $pendingKeys = array_values(array_diff($required, $reviewed));
-        if (empty($pendingKeys)) {
-            return [];
-        }
-
-        $pendingLabels = [];
-        foreach ($pendingKeys as $key) {
-            $pendingLabels[] = $regionLabelByKey[$key] ?? $key;
-        }
-
-        return array_values(array_unique($pendingLabels));
-    }
-
     public function recall(Request $request, $reportId)
     {
-        // Only allow recall if no assignments have been accepted for this report
         $acceptedExists = CallCenterAssignment::callCenter()->where('call_center_report_id', $reportId)->where('accepted', true)->exists();
         if ($acceptedExists) {
             if ($request->ajax() || $request->wantsJson()) {
@@ -1028,5 +953,35 @@ class AssignmentController extends Controller
             'count' => $count,
             'sample' => $sample,
         ]);
+    }
+
+    private function reopenOriginalRejectedAssignment(CallCenterAssignment $assignment): CallCenterAssignment
+    {
+        if (empty($assignment->reassignment_origin_id)) {
+            return $assignment;
+        }
+
+        $candidate = CallCenterAssignment::callCenter()->find($assignment->reassignment_origin_id);
+
+        if (! $candidate || ! $candidate->rejected || $candidate->status !== 'completed') {
+            return $assignment;
+        }
+
+        DB::transaction(function () use ($candidate, $assignment) {
+            $candidate->update([
+                'status' => 'pending',
+                'accepted' => false,
+                'accepted_at' => null,
+                'locked_at' => null,
+                'locked_by' => null,
+                'reassignment_origin_id' => null,
+            ]);
+
+            if (empty($assignment->accepted)) {
+                $assignment->delete();
+            }
+        });
+
+        return $candidate->refresh();
     }
 }

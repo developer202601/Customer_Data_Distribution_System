@@ -6,11 +6,15 @@
                 <div class="card-body p-3">
                     <p class="text-uppercase text-muted small mb-1 fw-bold">Exclude file submission</p>
                     <p class="small text-muted mb-2">Upload a workbook of rows to hide from the review set.</p>
-                    <form method="post" action="{{ route('rb.reports.exclude_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
-                        @csrf
-                        <input type="file" name="exclude_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
-                        <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Exclude File</button>
-                    </form>
+                    <button
+                        type="button"
+                        class="btn btn-outline-danger btn-sm px-3"
+                        data-bs-toggle="modal"
+                        data-bs-target="#excludeFileModal"
+                        data-report-id="{{ $selectedReport->id }}"
+                    >
+                        <i class="bi bi-file-earmark-arrow-up me-1"></i> Upload Exclude File
+                    </button>
                 </div>
             </div>
         </div>
@@ -19,11 +23,15 @@
                 <div class="card-body p-3">
                     <p class="text-uppercase text-muted small mb-1 fw-bold">Inclusion file submission</p>
                     <p class="small text-muted mb-2">Upload a workbook of rows to keep visible and hide everything else.</p>
-                    <form method="post" action="{{ route('rb.reports.include_file', $selectedReport->id) }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-0">
-                        @csrf
-                        <input type="file" name="include_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control form-control-sm" />
-                        <button type="submit" class="btn btn-success btn-sm px-2 py-1" style="white-space: nowrap;">Submit Inclusion File</button>
-                    </form>
+                    <button
+                        type="button"
+                        class="btn btn-outline-success btn-sm px-3"
+                        data-bs-toggle="modal"
+                        data-bs-target="#includeFileModal"
+                        data-report-id="{{ $selectedReport->id }}"
+                    >
+                        <i class="bi bi-file-earmark-arrow-up me-1"></i> Upload Inclusion File
+                    </button>
                 </div>
             </div>
         </div>
@@ -122,6 +130,7 @@
                     <th style="width: 40px;"></th>
                     <th>Account Number</th>
                     <th>Arrears</th>
+                    <th>Payment</th>
                     <th>Phone</th>
                     <th>Customer Ref</th>
                     <th>Status</th>
@@ -144,6 +153,7 @@
                         </td>
                         <td>{{ $row->account_num ?? '—' }}</td>
                         <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
+                        <td class="text-danger">{{ $row->payments_value !== null ? number_format((float) $row->payments_value, 2) : '—' }}</td>
                         <td>{{ $row->mobile_contact_tel ?? '—' }}</td>
                         <td>{{ $row->customer_ref ?? '—' }}</td>
                         <td>
@@ -169,7 +179,7 @@
                         </td>
                     </tr>
                     <tr class="d-none" id="more-{{ $row->id }}">
-                        <td colspan="7" class="bg-light">
+                        <td colspan="8" class="bg-light">
                             <div class="small">
                                 <strong>Address:</strong> {{ $row->full_address ?? '—' }}<br>
                                 <strong>Address Name:</strong> {{ $row->address_name ?? '—' }}<br>

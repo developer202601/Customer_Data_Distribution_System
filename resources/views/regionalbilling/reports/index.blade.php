@@ -20,8 +20,11 @@
                         <h1 class="process-upload-title mb-0">Current report progress</h1>
                         <p class="text-muted">Showing the latest regional billing reports for {{ $region }}.</p>
                     </div>
-                    <div>
+                    <div data-loader-off="1">
                         <a href="{{ route('rb.reports.history') }}" class="btn btn-outline-primary rounded-pill px-4">View History</a>
+                        @if($selectedReport)
+                        <a href="{{ route('rb.reports.download', $selectedReport->id) }}" class="btn btn-outline-success rounded-pill px-4 ms-2">Download Excel</a>
+                        @endif
                     </div>
                 </div>
 

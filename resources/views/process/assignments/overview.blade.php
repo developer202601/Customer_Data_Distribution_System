@@ -18,14 +18,17 @@
 @section('content')
 <div class="process-preview p-4 p-lg-5 shadow-sm">
     <div class="container-fluid">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
                 <h1 class="process-preview-title mb-2">Assignments overview</h1>
                 <p class="text-muted mb-1">Choose which allocated dataset you want to review and download. The Retail &amp; Micro Business segments are assigned to calling units while other records are available only to download.</p>
                 <p class="text-muted mb-0">Dataset month: <strong>{{ $dataset['dataset_month'] ?? 'N/A' }}</strong> · Total rows: {{ number_format($dataset['row_count'] ?? 0) }} · Excluded: {{ number_format($dataset['excluded_count'] ?? 0) }}</p>
             </div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap gap-2 mt-1">
+                <a href="{{ route('process.assignments.reports') }}" class="btn btn-outline-secondary" data-loader-off="1">Back</a>
+                {{--
                 <a href="#" class="btn btn-outline-secondary" data-loader-off="1" onclick="history.back(); return false;">Back</a>
+                --}}
             </div>
         </div>
 
@@ -232,6 +235,34 @@
                         </thead>
                         <tbody>
                             @php
+                                $enterpriseGovCount = (int) ($groupB['enterprise_government']['count'] ?? 0);
+                                $enterpriseLmwCount = (int) ($groupB['enterprise_large_medium_wholesale']['count'] ?? 0);
+                                $smeCount = (int) ($groupB['sme']['count'] ?? 0);
+                            @endphp
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Enterprise - Government
+                                        <span class="text-muted">({{ number_format($enterpriseGovCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('group-b', 'enterprise-government', $enterpriseGovCount); @endphp
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        Enterprise - Large/Medium/Wholesale
+                                        <span class="text-muted">({{ number_format($enterpriseLmwCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('group-b', 'enterprise-large-medium-wholesale', $enterpriseLmwCount); @endphp
+                                </td>
+                            </tr>
+                            {{--
+                            @php
                                 $enterpriseCount = (int) ($groupB['enterprise_wholesale']['count'] ?? 0);
                                 $smeCount = (int) ($groupB['sme']['count'] ?? 0);
                             @endphp
@@ -246,6 +277,7 @@
                                     @php $renderDownloadButtons('group-b', 'enterprise-wholesale', $enterpriseCount); @endphp
                                 </td>
                             </tr>
+                            --}}
                             <tr>
                                 <th scope="row">
                                     <div class="fw-semibold mb-0">

@@ -92,10 +92,11 @@ In `searchSegments()`, same situation — `$sessionUser` is only used for the su
 - Displaying "Created By" column for segment admins (could be a future enhancement)
 - Changing how `supervisor` is stored or used elsewhere
 - Any changes to RB region admin visibility (already working correctly)
+- Caller sharing between peer segment admins (see separate plan: `cc-segment-caller-shared-access`)
 
 ## Implementation Tasks
 
-1. Edit `SuperAdminController.php` — remove `->where('supervisor', $sessionUser['id'] ?? null)` from `indexSegments()` and `searchSegments()`
-2. Remove unused `$sessionUser` variable in both methods (if confirmed unused)
-3. Run PHP lint / syntax check on the modified file
-4. Manual validation per steps above
+1. ✅ Edit `SuperAdminController.php` — remove `->where('supervisor', $sessionUser['id'] ?? null)` from `indexSegments()` and `searchSegments()`
+2. ✅ Remove unused `$sessionUser` variable in both methods
+3. ✅ Run PHP lint / syntax check on the modified file
+4. ✅ Run existing test suite

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\CallCenter;
 
+use App\Http\Controllers\CallCenter\Concerns\InteractsWithSharedSegmentAdmins;
 use App\Http\Controllers\Controller;
 use App\Jobs\DistributeCallCenterReport;
 use App\Jobs\ReassignCallCenterRows;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Redirect;
 
 class AssignmentController extends Controller
 {
+    use InteractsWithSharedSegmentAdmins;
     private function ensureSegmentAdmin(): array
     {
         $sessionUser = session('user');
@@ -781,13 +783,13 @@ class AssignmentController extends Controller
         $sessionAssignment = strtolower(trim((string) ($session['assignment'] ?? '')));
         $isSegmentAdmin    = str_starts_with($sessionAssignment, 'segment_');
 
-        // Auto-fetch callers belonging to this segment admin if none selected
+        // Auto-fetch callers belonging to all shared segment admins in this segment
         if (empty($userIds) && $isSegmentAdmin) {
-            $segmentAdminId  = (int) ($session['id'] ?? 0);
             $callerAssignment = 'caller_' . substr($sessionAssignment, strlen('segment_'));
+            $sharedIds = $this->getSharedSegmentAdminIds();
             $userIds = User::where('system', 'cc')
                 ->where('assignment', $callerAssignment)
-                ->where('supervisor', $segmentAdminId)
+                ->whereIn('supervisor', $sharedIds)
                 ->where('status', 1)
                 ->pluck('id')
                 ->map(fn($id) => (int) $id)

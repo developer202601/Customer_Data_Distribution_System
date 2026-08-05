@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\CallCenter;
 
+use App\Http\Controllers\CallCenter\Concerns\InteractsWithSharedSegmentAdmins;
 use App\Http\Controllers\Controller;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterReport;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 
 class SegmentAdminController extends Controller
 {
+    use InteractsWithSharedSegmentAdmins;
     /**
      * Maps assignment slug → dataset assigned_to label.
      * These match MasterDatasetAssignmentService constants.
@@ -164,15 +166,15 @@ class SegmentAdminController extends Controller
     {
         $assignment      = $this->ensureSegmentAdmin();
         $segmentLabel    = $this->segmentLabel($assignment);
-        $segmentAdminId  = session('user')['id'] ?? null;
         $callerAssign    = $this->callerAssignment($assignment);
 
         $q            = trim((string) $request->query('q', ''));
         $statusFilter = $request->query('status', 'all');
 
+        $sharedIds = $this->getSharedSegmentAdminIds();
         $query = User::where('system', 'cc')
             ->where('assignment', $callerAssign)
-            ->where('supervisor', $segmentAdminId)
+            ->whereIn('supervisor', $sharedIds)
             ->withCount(['interactionsAsAgent', 'rowAssignments']);
 
         if ($q !== '') {
@@ -232,10 +234,9 @@ class SegmentAdminController extends Controller
     {
         $assignment     = $this->ensureSegmentAdmin();
         $segmentLabel   = $this->segmentLabel($assignment);
-        $segmentAdminId = session('user')['id'] ?? null;
         $callerAssign   = $this->callerAssignment($assignment);
 
-        if ($user->assignment !== $callerAssign || (int) $user->supervisor !== (int) $segmentAdminId) {
+        if ($user->assignment !== $callerAssign || !in_array((int) $user->supervisor, $this->getSharedSegmentAdminIds(), true)) {
             abort(404);
         }
 
@@ -245,10 +246,9 @@ class SegmentAdminController extends Controller
     public function updateCaller(Request $request, User $user)
     {
         $assignment     = $this->ensureSegmentAdmin();
-        $segmentAdminId = session('user')['id'] ?? null;
         $callerAssign   = $this->callerAssignment($assignment);
 
-        if ($user->assignment !== $callerAssign || (int) $user->supervisor !== (int) $segmentAdminId) {
+        if ($user->assignment !== $callerAssign || !in_array((int) $user->supervisor, $this->getSharedSegmentAdminIds(), true)) {
             abort(404);
         }
 
@@ -263,10 +263,9 @@ class SegmentAdminController extends Controller
     public function destroyCaller(User $user)
     {
         $assignment     = $this->ensureSegmentAdmin();
-        $segmentAdminId = session('user')['id'] ?? null;
         $callerAssign   = $this->callerAssignment($assignment);
 
-        if ($user->assignment !== $callerAssign || (int) $user->supervisor !== (int) $segmentAdminId) {
+        if ($user->assignment !== $callerAssign || !in_array((int) $user->supervisor, $this->getSharedSegmentAdminIds(), true)) {
             abort(404);
         }
 
@@ -289,10 +288,9 @@ class SegmentAdminController extends Controller
     public function enableCaller(User $user)
     {
         $assignment     = $this->ensureSegmentAdmin();
-        $segmentAdminId = session('user')['id'] ?? null;
         $callerAssign   = $this->callerAssignment($assignment);
 
-        if ($user->assignment !== $callerAssign || (int) $user->supervisor !== (int) $segmentAdminId) {
+        if ($user->assignment !== $callerAssign || !in_array((int) $user->supervisor, $this->getSharedSegmentAdminIds(), true)) {
             abort(404);
         }
 
@@ -306,10 +304,9 @@ class SegmentAdminController extends Controller
     public function disableCaller(User $user)
     {
         $assignment     = $this->ensureSegmentAdmin();
-        $segmentAdminId = session('user')['id'] ?? null;
         $callerAssign   = $this->callerAssignment($assignment);
 
-        if ($user->assignment !== $callerAssign || (int) $user->supervisor !== (int) $segmentAdminId) {
+        if ($user->assignment !== $callerAssign || !in_array((int) $user->supervisor, $this->getSharedSegmentAdminIds(), true)) {
             abort(404);
         }
 

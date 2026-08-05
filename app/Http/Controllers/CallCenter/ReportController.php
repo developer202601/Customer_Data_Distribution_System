@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\CallCenter;
 
+use App\Http\Controllers\CallCenter\Concerns\InteractsWithSharedSegmentAdmins;
 use App\Http\Controllers\Controller;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterInteraction;
@@ -21,6 +22,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
+    use InteractsWithSharedSegmentAdmins;
+
     public function index(Request $request): View|\Illuminate\Http\RedirectResponse
     {
         // Reports are owned by segment admins only — super admins are redirected
@@ -66,14 +69,13 @@ class ReportController extends Controller
         $isSegmentAdmin = str_starts_with($sessionAssignment, 'segment_');
         $isSuperAdmin   = $sessionAssignment === 'super';
 
-        // Segment admins only see their own callers; super admins see no callers
-        // (super admins observe reports but do not distribute — segment admins do that)
+        // Segment admins see all callers in their shared segment group (same segment)
         if ($isSegmentAdmin) {
             $callerAssignment = 'caller_' . substr($sessionAssignment, strlen('segment_'));
-            $segmentAdminId   = (int) ($sessionUser['id'] ?? 0);
+            $sharedIds = $this->getSharedSegmentAdminIds();
             $ccUsers = User::where('system', 'cc')
                 ->where('assignment', $callerAssignment)
-                ->where('supervisor', $segmentAdminId)
+                ->whereIn('supervisor', $sharedIds)
                 ->where('status', 1)
                 ->orderBy('username')
                 ->get();

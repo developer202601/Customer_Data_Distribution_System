@@ -315,6 +315,8 @@
                                     </ul>
                                     @if(!$hasRejected)
                                     <p class="text-muted small mb-0">No rejected rows for this report.</p>
+                                    @else
+                                    <p class="small text-muted mt-3 mb-0">Rejected rows are returned to the distributable pool above and are available to distribute again.</p>
                                     @endif
                                 </div>
                             </div>

@@ -347,6 +347,7 @@ class ReportController extends Controller
                     'a.status',
                     'u.username as agent_username',
                 ])
+                ->orderBy('a.id', 'asc')
                 ->get()
                 ->keyBy('master_dataset_row_id');
 
@@ -360,7 +361,23 @@ class ReportController extends Controller
             return $row;
         });
 
-        $assigned = $assignmentRows->filter(fn ($a) => ! empty($a->assigned_user_id))->count();
+        $activeAssignedRowIds = empty($rtomScopedRowIds)
+            ? []
+            : DB::table('call_center_row_assignments')
+                ->where('call_center_report_id', $report->id)
+                ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+                ->whereIn('master_dataset_row_id', $rtomScopedRowIds)
+                ->whereNotNull('assigned_user_id')
+                ->where(function ($q) {
+                    $q->whereNull('rejected')->orWhere('rejected', false);
+                })
+                ->pluck('master_dataset_row_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+        $assigned = count($activeAssignedRowIds);
         $total = count($rtomScopedRowIds);
         $unassigned = max(0, $total - $assigned);
         $hidden = empty($reportRowIds)

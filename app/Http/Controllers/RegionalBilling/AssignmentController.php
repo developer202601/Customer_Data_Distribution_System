@@ -908,6 +908,9 @@ class AssignmentController extends Controller
             ->where('call_center_report_id', $report->id)
             ->whereIn('master_dataset_row_id', $rtomRowIds)
             ->whereNotNull('assigned_user_id')
+            ->where(function ($q) {
+                $q->whereNull('rejected')->orWhere('rejected', false);
+            })
             ->pluck('master_dataset_row_id')
             ->map(fn ($id) => (int) $id)
             ->unique()
@@ -950,6 +953,15 @@ class AssignmentController extends Controller
 
         DB::transaction(function () use ($report, $rowsToDistribute, $finalCounts) {
             $now = now();
+
+            $existingRejectedMap = CallCenterAssignment::regionalBilling()
+                ->where('call_center_report_id', $report->id)
+                ->whereIn('master_dataset_row_id', $rowsToDistribute)
+                ->where('rejected', true)
+                ->where('status', '<>', 'completed')
+                ->get()
+                ->keyBy('master_dataset_row_id');
+
             $inserts = [];
             $pos = 0;
 
@@ -958,14 +970,29 @@ class AssignmentController extends Controller
                     continue;
                 }
                 for ($i = 0; $i < $count && $pos < count($rowsToDistribute); $i++, $pos++) {
+                    $rowId = $rowsToDistribute[$pos];
+                    $originId = null;
+
+                    if (isset($existingRejectedMap[$rowId])) {
+                        $oldAss = $existingRejectedMap[$rowId];
+                        $originId = $oldAss->id;
+                        DB::table('call_center_row_assignments')
+                            ->where('id', $oldAss->id)
+                            ->update([
+                                'status' => 'completed',
+                                'updated_at' => $now,
+                            ]);
+                    }
+
                     $inserts[] = [
                         'call_center_report_id' => $report->id,
                         'report_type' => CallCenterReport::REPORT_TYPE_REGIONAL_BILLING,
-                        'master_dataset_row_id' => $rowsToDistribute[$pos],
+                        'master_dataset_row_id' => $rowId,
                         'assigned_user_id' => $callerId,
                         'status' => 'pending',
                         'accepted' => false,
                         'rejected' => false,
+                        'reassignment_origin_id' => $originId,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];

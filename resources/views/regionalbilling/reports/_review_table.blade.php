@@ -75,7 +75,7 @@
                                         <form method="post" action="{{ route('rb.reports.pass', $selectedReport->id) }}" class="m-0">
                                             @csrf
                                             <input type="hidden" name="rtom" value="{{ $rtom['name'] }}">
-                                            <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">Pass to RTOM {{ strtoupper($rtom['name']) }}</button>
+                                            <button type="button" class="btn btn-success btn-sm rounded-pill px-3" data-pass-trigger data-rtom-name="{{ strtoupper($rtom['name']) }}">Pass to RTOM {{ strtoupper($rtom['name']) }}</button>
                                         </form>
                                     @endif
                                 </td>
@@ -190,7 +190,7 @@
                             @else
                                 <span class="badge text-bg-success">Visible</span>
                             @endif
-                            @if($isRtomPassed)
+                            @if($isRtomPassed && empty($row->is_hidden_for_distribution))
                                 <span class="badge text-bg-secondary" title="Passed to RTOM"><i class="bi-lock-fill"></i> Passed</span>
                             @endif
                         </td>

@@ -82,7 +82,49 @@ class ReportController extends Controller
 
     protected function isReviewLocked(?CallCenterReportRegionReview $reviewRecord): bool
     {
-        return ! empty($reviewRecord?->reviewed_at);
+        if (!$reviewRecord) {
+            return false;
+        }
+
+        // Get all unique RTOMs in this region for this report
+        $report = CallCenterReport::find($reviewRecord->call_center_report_id);
+        if (!$report) {
+            return false;
+        }
+
+        $reportRowIds = collect($report->row_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values()
+            ->all();
+
+        if (empty($reportRowIds)) {
+            return false;
+        }
+
+        $normalizedRegion = strtolower(trim($reviewRecord->region_name));
+
+        $allRtoms = MasterDatasetRow::whereIn('id', $reportRowIds)
+            ->whereRaw('LOWER(TRIM(region)) = ?', [$normalizedRegion])
+            ->whereNotNull('rtom')
+            ->where('rtom', '<>', '')
+            ->distinct()
+            ->pluck('rtom')
+            ->map(fn($r) => strtolower(trim($r)))
+            ->all();
+
+        if (empty($allRtoms)) {
+            return false;
+        }
+
+        // Fetch existing passes for these RTOMs
+        $passedRtoms = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $reviewRecord->call_center_report_id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->pluck('rtom')
+            ->map(fn($r) => strtolower(trim($r)))
+            ->all();
+
+        return count($allRtoms) === count($passedRtoms);
     }
 
     protected function respondError(Request $request, string $message, int $status = 422)
@@ -548,19 +590,17 @@ class ReportController extends Controller
             $reviewRecord = CallCenterReportRegionReview::where('call_center_report_id', $selectedReport->id)
                 ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
                 ->first();
-            $isLocked = ! empty($reviewRecord?->reviewed_at);
+            $isLocked = $this->isReviewLocked($reviewRecord);
 
             $rowIds = collect($selectedReport->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
             if (! empty($rowIds)) {
-                if ($isLocked) {
-                    $hiddenRowIds = CallCenterReportHiddenRow::where('call_center_report_id', $selectedReport->id)
-                        ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
-                        ->pluck('master_dataset_row_id')
-                        ->map(fn ($id) => (int) $id)
-                        ->all();
-                } else {
-                    $hiddenRowIds = $this->getDraftHiddenRowIds($selectedReport->id, $normalizedRegion);
-                }
+                $committedHiddenRowIds = CallCenterReportHiddenRow::where('call_center_report_id', $selectedReport->id)
+                    ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
+                    ->pluck('master_dataset_row_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+                $draftHiddenRowIds = $this->getDraftHiddenRowIds($selectedReport->id, $normalizedRegion);
+                $hiddenRowIds = array_values(array_unique(array_merge($committedHiddenRowIds, $draftHiddenRowIds)));
 
                 $regionRowIds = MasterDatasetRow::query()
                     ->whereIn('id', $rowIds)
@@ -698,6 +738,7 @@ class ReportController extends Controller
             'canUnlockReview' => $canUnlockReview,
             'rtomsWithDetails' => $rtomsWithDetails,
             'passedRtomNames' => $passedRtomNames,
+            'isLocked' => $isLocked,
         ]);
     }
 
@@ -882,6 +923,28 @@ class ReportController extends Controller
             return $this->respondError($request, 'No rows in this report matched the uploaded exclusion file.');
         }
 
+        // Get passed RTOMs for this report and region
+        $passedRtoms = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->pluck('rtom')
+            ->map(fn($r) => strtolower(trim($r)))
+            ->all();
+
+        if (!empty($passedRtoms)) {
+            // Filter out any matching row IDs that belong to a passed RTOM
+            $passedRtomRowIds = MasterDatasetRow::whereIn('id', $matchingRowIds)
+                ->whereIn(DB::raw('LOWER(TRIM(rtom))'), $passedRtoms)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+            
+            $matchingRowIds = array_values(array_diff($matchingRowIds, $passedRtomRowIds));
+        }
+
+        if (empty($matchingRowIds)) {
+            return $this->respondError($request, 'No eligible (unpassed) rows in this report matched the uploaded exclusion file.');
+        }
+
         $draftHiddenIds = array_values(array_unique(array_merge(
             $this->getDraftHiddenRowIds($report->id, $normalizedRegion),
             $matchingRowIds
@@ -978,8 +1041,37 @@ class ReportController extends Controller
             return $this->respondError($request, 'No rows in this report matched the uploaded inclusion file.');
         }
 
-        // Hide all rows that are NOT in the inclusion file; unhide those that ARE in it
-        $draftHiddenIds = array_values(array_diff($reportRowIds, $matchingRowIds));
+        // Get passed RTOMs for this report and region
+        $passedRtoms = \App\Models\CallCenterReportRtomPass::where('call_center_report_id', $report->id)
+            ->whereRaw('LOWER(TRIM(region_name)) = ?', [$normalizedRegion])
+            ->pluck('rtom')
+            ->map(fn($r) => strtolower(trim($r)))
+            ->all();
+
+        $regionRowIds = $reportRows->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        if (!empty($passedRtoms)) {
+            // Find row IDs belonging to passed RTOMs
+            $passedRtomRowIds = MasterDatasetRow::whereIn('id', $regionRowIds)
+                ->whereIn(DB::raw('LOWER(TRIM(rtom))'), $passedRtoms)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            $eligibleRowIds = array_values(array_diff($regionRowIds, $passedRtomRowIds));
+            
+            // Get current draft exclusions belonging to passed RTOMs
+            $passedRtomDraftHiddenIds = array_values(array_intersect($this->getDraftHiddenRowIds($report->id, $normalizedRegion), $passedRtomRowIds));
+            
+            // Compute new draft exclusions only for eligible/unpassed RTOMs
+            $unpassedRtomNewHiddenIds = array_values(array_diff($eligibleRowIds, $matchingRowIds));
+            
+            $draftHiddenIds = array_values(array_unique(array_merge($passedRtomDraftHiddenIds, $unpassedRtomNewHiddenIds)));
+        } else {
+            // Hide all rows that are NOT in the inclusion file; unhide those that ARE in it
+            $draftHiddenIds = array_values(array_diff($regionRowIds, $matchingRowIds));
+        }
+
         $this->putDraftHiddenRowIds($report->id, $normalizedRegion, $draftHiddenIds);
 
         $previewRows = $matchingRows->map(function (MasterDatasetRow $row) use ($identifiers) {

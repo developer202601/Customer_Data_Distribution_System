@@ -137,7 +137,7 @@
                                 'rows' => $rows,
                                 'showHidden' => $showHidden,
                                 'showHiddenOnly' => $showHiddenOnly,
-                                'isLocked' => !empty($reviewRecord?->reviewed_at),
+                                'isLocked' => $isLocked,
                                 'search' => $search,
                                 'rtomsWithDetails' => $rtomsWithDetails ?? [],
                                 'canUnlockReview' => $canUnlockReview ?? false,
@@ -292,10 +292,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const isLocked = dock?.getAttribute('data-locked') === '1';
 
         if (selectAll) {
-            selectAll.disabled = isLocked;
+            if (isLocked) selectAll.disabled = true;
             selectAll.addEventListener('change', function () {
                 if (isLocked) return;
                 checks.forEach(function (cb) {
+                    if (cb.disabled) return;
                     cb.checked = selectAll.checked;
                     const row = cb.closest('.review-row');
                     const rowId = row?.getAttribute('data-row-id');
@@ -309,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         checks.forEach(function (cb) {
-            cb.disabled = isLocked;
+            if (isLocked) cb.disabled = true;
             cb.addEventListener('change', function () {
                 if (isLocked) {
                     cb.checked = false;

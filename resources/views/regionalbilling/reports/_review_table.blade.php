@@ -63,13 +63,6 @@
                                             <span class="text-success small fw-semibold">
                                                 <i class="bi bi-check-circle-fill"></i> Passed at {{ $rtom['passed_at']->format('Y-m-d H:i') }} by {{ $rtom['passed_by'] }}
                                             </span>
-                                            @if(!empty($canUnlockReview))
-                                                <form method="post" action="{{ route('rb.reports.unlock', $selectedReport->id) }}" class="m-0 d-inline">
-                                                    @csrf
-                                                    <input type="hidden" name="rtom" value="{{ $rtom['name'] }}">
-                                                    <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-3">Unlock</button>
-                                                </form>
-                                            @endif
                                         </div>
                                     @else
                                         <form method="post" action="{{ route('rb.reports.pass', $selectedReport->id) }}" class="m-0">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\RegionalBilling;
 
+use App\Http\Controllers\RegionalBilling\Concerns\InteractsWithSharedRegionAdmins;
 use App\Http\Controllers\Controller;
 use App\Models\CallCenterReport;
 use App\Models\MasterDatasetRow;
@@ -11,6 +12,7 @@ use Illuminate\Support\Str;
 
 class RegionAdminController extends Controller
 {
+    use InteractsWithSharedRegionAdmins;
     protected function ensureRegionAdmin()
     {
         $sessionUser = session('user');
@@ -122,7 +124,6 @@ class RegionAdminController extends Controller
     public function index()
     {
         $region = $this->ensureRegionAdmin();
-        $currentSupervisor = session('user')['id'] ?? null;
 
         $lastTwo = MasterDatasetRow::select('process_id')
             ->distinct()
@@ -141,10 +142,11 @@ class RegionAdminController extends Controller
                 ->values();
         }
 
+        $sharedIds = $this->getSharedRegionAdminIds();
         $query = User::where('system', 'rb')
             ->where('admin_prev', 1)
             ->where('assignment', 'like', 'rtom_%')
-            ->where('supervisor', $currentSupervisor);
+            ->whereIn('supervisor', $sharedIds);
 
         $q = request()->query('q');
         $selectedRtom = request()->query('rtom');
@@ -170,10 +172,11 @@ class RegionAdminController extends Controller
     {
         $region = $this->ensureRegionAdmin();
 
+        $sharedIds = $this->getSharedRegionAdminIds();
         $rtomCount = User::where('system', 'rb')
             ->where('admin_prev', 1)
             ->where('assignment', 'like', 'rtom_%')
-            ->where('supervisor', session('user')['id'] ?? null)
+            ->whereIn('supervisor', $sharedIds)
             ->count();
 
         $reportCount = CallCenterReport::regionalBilling()
@@ -196,12 +199,12 @@ class RegionAdminController extends Controller
     public function search(Request $request)
     {
         $region = $this->ensureRegionAdmin();
-        $currentSupervisor = session('user')['id'] ?? null;
 
+        $sharedIds = $this->getSharedRegionAdminIds();
         $query = User::where('system', 'rb')
             ->where('admin_prev', 1)
             ->where('assignment', 'like', 'rtom_%')
-            ->where('supervisor', $currentSupervisor);
+            ->whereIn('supervisor', $sharedIds);
 
         $q = $request->query('q');
         $selectedRtom = $request->query('rtom');
@@ -301,7 +304,7 @@ class RegionAdminController extends Controller
     {
         $region = $this->ensureRegionAdmin();
 
-        if (! $user->assignment || ! str_starts_with($user->assignment, 'rtom_') || $user->supervisor !== (session('user')['id'] ?? null)) {
+        if (! $user->assignment || ! str_starts_with($user->assignment, 'rtom_') || !in_array((int) $user->supervisor, $this->getSharedRegionAdminIds(), true)) {
             abort(404);
         }
 
@@ -313,7 +316,7 @@ class RegionAdminController extends Controller
     {
         $this->ensureRegionAdmin();
 
-        if (! $user->assignment || ! str_starts_with($user->assignment, 'rtom_') || $user->supervisor !== (session('user')['id'] ?? null)) {
+        if (! $user->assignment || ! str_starts_with($user->assignment, 'rtom_') || !in_array((int) $user->supervisor, $this->getSharedRegionAdminIds(), true)) {
             abort(404);
         }
 

@@ -24,7 +24,11 @@ trait InteractsWithSharedRegionAdmins
         }
 
         $assignment = $sessionUser['assignment'] ?? '';
-        if ($assignment === 'super' || str_starts_with($assignment, ['rtom_', 'caller_', 'supervisor_'])) {
+        if ($assignment === 'super'
+            || str_starts_with($assignment, 'rtom_')
+            || str_starts_with($assignment, 'caller_')
+            || str_starts_with($assignment, 'supervisor_')
+        ) {
             return [$currentUserId];
         }
 

@@ -137,7 +137,7 @@
                                 'rows' => $rows,
                                 'showHidden' => $showHidden,
                                 'showHiddenOnly' => $showHiddenOnly,
-                                'isLocked' => !empty($reviewRecord?->reviewed_at),
+                                'isLocked' => $isLocked,
                                 'search' => $search,
                                 'rtomsWithDetails' => $rtomsWithDetails ?? [],
                                 'canUnlockReview' => $canUnlockReview ?? false,
@@ -160,6 +160,25 @@
                                 margin-bottom: 0.5rem;
                             }
                         </style>
+
+                        {{-- Pass to RTOM Confirm Modal --}}
+                        <div class="modal fade" id="passConfirmModal" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content rounded-4 border-0 shadow">
+                                    <div class="modal-header border-0 pb-0">
+                                        <h5 class="modal-title fw-semibold">Pass records to RTOM</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p class="mb-0">Are you sure you want to pass records to RTOM <strong id="passConfirmLabel">—</strong>? This action cannot be undone.</p>
+                                    </div>
+                                    <div class="modal-footer border-0 pt-0">
+                                        <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="button" class="btn btn-success rounded-pill px-4" id="passConfirmSubmit">Pass records</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                         {{-- Exclude File Modal --}}
                         <div class="modal fade" id="excludeFileModal" tabindex="-1" aria-labelledby="excludeFileModalLabel" aria-hidden="true">
@@ -273,10 +292,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const isLocked = dock?.getAttribute('data-locked') === '1';
 
         if (selectAll) {
-            selectAll.disabled = isLocked;
+            if (isLocked) selectAll.disabled = true;
             selectAll.addEventListener('change', function () {
                 if (isLocked) return;
                 checks.forEach(function (cb) {
+                    if (cb.disabled) return;
                     cb.checked = selectAll.checked;
                     const row = cb.closest('.review-row');
                     const rowId = row?.getAttribute('data-row-id');
@@ -290,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         checks.forEach(function (cb) {
-            cb.disabled = isLocked;
+            if (isLocked) cb.disabled = true;
             cb.addEventListener('change', function () {
                 if (isLocked) {
                     cb.checked = false;
@@ -633,6 +653,39 @@ document.addEventListener('DOMContentLoaded', function () {
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = setTimeout(function () { fetchTable(1); }, 600);
     });
+
+    let pendingPassForm = null;
+
+    document.addEventListener('click', function (e) {
+        const trigger = e.target.closest('[data-pass-trigger]');
+        if (!trigger) return;
+
+        const form = trigger.closest('form');
+        if (!form) return;
+
+        e.preventDefault();
+        pendingPassForm = form;
+
+        const rtomName = trigger.dataset.rtomName || 'RTOM';
+        const labelEl = document.getElementById('passConfirmLabel');
+        if (labelEl) labelEl.textContent = rtomName;
+
+        const modalEl = document.getElementById('passConfirmModal');
+        if (modalEl) {
+            const passModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            passModal.show();
+        }
+    });
+
+    const passConfirmSubmit = document.getElementById('passConfirmSubmit');
+    if (passConfirmSubmit) {
+        passConfirmSubmit.addEventListener('click', function () {
+            if (pendingPassForm) {
+                pendingPassForm.submit();
+            }
+            pendingPassForm = null;
+        });
+    }
 
     applyBindings();
     updateBulkUi();

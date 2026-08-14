@@ -27,6 +27,10 @@ class DashboardController extends Controller
             */
         }
 
+        if (!empty($sessionUser) && (($sessionUser['system'] ?? null) === 'rb')) {
+            return redirect()->route('rb.dashboard');
+        }
+
         return view('dashboard');
     }
 }

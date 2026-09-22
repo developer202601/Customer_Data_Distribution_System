@@ -800,7 +800,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 </div>
                 <div class="col-4 text-end">
-                    <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+                    <!-- <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button> -->
                     <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
                 </div>
             </div>`;
@@ -821,7 +821,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (wrapper) wrapper.classList.add('cc-disabled');
                 // show a single red status message in the call-status area
                 if (reasonEl) {
-                    reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
+                    reasonEl.textContent = 'Call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
                     reasonEl.classList.remove('text-muted');
                     reasonEl.classList.add('text-danger');
                 }
@@ -829,23 +829,18 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 if (reasonEl) { reasonEl.textContent = ''; reasonEl.classList.remove('text-danger'); reasonEl.classList.add('text-muted'); }
                 if (startNoteEl) { startNoteEl.textContent = ''; startNoteEl.style.display = 'none'; }
-                if (startBtn) {
-                    startBtn.onclick = () => {
-                        if (outcome) outcome.disabled = false;
-                        if (note) note.disabled = false;
-                        if (notRelevantPersonEl) notRelevantPersonEl.disabled = false;
-                        if (pay) pay.disabled = false;
-                        if (paymentDate) paymentDate.disabled = false;
-                        if (paidAmount) paidAmount.disabled = false;
-                        if (saveBtn) {
-                            saveBtn.disabled = false;
-                            saveBtn.classList.remove('d-none');
-                        }
-                        if (wrapper) wrapper.classList.remove('cc-disabled');
-                        try { renderDependentDropdown(''); } catch (e) { /* ignore */ }
-                        startBtn.disabled = true;
-                    };
+                if (outcome) outcome.disabled = false;
+                if (note) note.disabled = false;
+                if (notRelevantPersonEl) notRelevantPersonEl.disabled = false;
+                if (pay) pay.disabled = false;
+                if (paymentDate) paymentDate.disabled = false;
+                if (paidAmount) paidAmount.disabled = false;
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('d-none');
                 }
+                if (wrapper) wrapper.classList.remove('cc-disabled');
+                try { renderDependentDropdown(''); } catch (e) { /* ignore */ }
             }
         } catch (e) { /* ignore */ }
     }

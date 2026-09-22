@@ -514,8 +514,20 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('ccSelectedAmounts').innerHTML = '';
             return;
         }
+        const rawEmail = data.email || data.email_address || '';
+        let emailHtml = '—';
+        if (rawEmail) {
+            const emails = String(rawEmail).split(/[,;]+/).map(e => e.trim()).filter(Boolean);
+            if (emails.length === 1) {
+                emailHtml = emails[0];
+            } else if (emails.length > 1) {
+                emailHtml = emails.map(e => `<div>${e}</div>`).join('');
+            }
+        }
+
         detailPanel.innerHTML = `
             <div class="mb-2"><strong>Phone:</strong> ${data.phone ?? '—'}</div>
+            <div class="mb-2 d-flex align-items-start"><strong class="me-1">Email:</strong><div>${emailHtml}</div></div>
             <div class="mb-2"><strong>Address:</strong> ${data.address ?? '—'}</div>
             <div class="mb-2"><strong>RTO:</strong> ${data.rtom ?? '—'}</div>
             <div class="mb-2"><strong>Customer ref:</strong> ${data.customer_ref ?? '—'}</div>

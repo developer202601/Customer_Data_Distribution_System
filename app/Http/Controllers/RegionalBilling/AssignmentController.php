@@ -644,6 +644,7 @@ class AssignmentController extends Controller
             'bill' => $r->latest_bill_mny ?? null,
             'payment_value' => $r->payments_value ?? null,
             'phone' => $r->mobile_contact_tel ?? null,
+            'email' => $r->email_address ?? null,
             'address' => $r->full_address ?? null,
             'rtom' => $r->rtom ?? null,
             'customer_ref' => $r->customer_ref ?? null,

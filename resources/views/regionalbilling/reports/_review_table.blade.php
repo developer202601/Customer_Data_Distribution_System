@@ -135,8 +135,8 @@
                 <tr>
                     <th style="width: 40px;"></th>
                     <th>Account Number</th>
-                    <th>Arrears</th>
-                    <th>Outstanding</th>
+<th>Initial Outstanding</th>
+                     <th>Current Outstanding</th>
                     <th>Status</th>
                     <th>Payment</th>
                     <th>Phone</th>

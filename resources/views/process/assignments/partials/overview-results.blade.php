@@ -22,8 +22,8 @@
                     <th scope="col">Product Label</th>
                     <th scope="col">Business Line</th>
                     <th scope="col">Assignment</th>
-                    <th scope="col" class="text-end">New Arrears (Rs.)</th>
-                    <th scope="col" class="text-end">Outstanding</th>
+<th scope="col" class="text-end">Initial Outstanding (Rs.)</th>
+                     <th scope="col" class="text-end">Current Outstanding</th>
                     <th scope="col">Status</th>
                 </tr>
             </thead>

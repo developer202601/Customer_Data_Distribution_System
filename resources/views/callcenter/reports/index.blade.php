@@ -627,9 +627,9 @@
                         <div class="row g-2 align-items-start">
                             <div class="col-8">
                                 <div class="row g-2">
-                                    <div class="col-6">Arrears: ${data.arrears ?? '—'}</div>
+                                    <div class="col-6">Initial Outstanding: ${data.arrears ?? '—'}</div>
                                     <div class="col-6">Bill: ${data.bill ?? '—'}</div>
-                                    <div class="col-12">Outstanding: ${outstandingDisplay}</div>
+                                    <div class="col-12">Current Outstanding: ${outstandingDisplay}</div>
                                     <div class="col-12">Status: ${statusBadge}</div>
                                     ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
                                 </div>
@@ -678,7 +678,7 @@
                                 const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
                                 const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                                 const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-                                btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
+                                btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Initial Outstanding: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'} — Current Outstanding: ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
                                 btn.addEventListener('click', async () => {
                                     const assignmentId = btn.dataset.assignmentId;
                                     document.getElementById('ccCallAssignmentId').value = assignmentId;

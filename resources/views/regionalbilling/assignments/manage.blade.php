@@ -403,6 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const NOT_RELEVANT_PERSON_OUTCOME = 'not relevant person contacted';
     const outstandingThreshold = @json($outstandingThreshold);
     let bootstrapModal = null;
+    let isFetchingDetails = false;
     if (assignmentRowModal && window.bootstrap) {
         bootstrapModal = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
         assignmentRowModal.style.display = 'none';
@@ -577,14 +578,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showModal() {
         if (!assignmentRowModal) return;
+        // If we used fallback last time, re-create Bootstrap instance
+        if (assignmentRowModal.classList.contains('cc-fallback-modal')) {
+            assignmentRowModal.classList.remove('cc-fallback-modal');
+            assignmentRowModal.style.display = '';
+            if (window.bootstrap) {
+                bootstrapModal = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
+            }
+        }
         if (bootstrapModal) {
             try {
-                assignmentRowModal.style.display = '';
                 bootstrapModal.show();
                 return;
             } catch (e) {
                 console.error('bootstrap modal show failed, falling back', e);
-                // fall through to fallback display
             }
         }
         assignmentRowModal.style.display = 'block';
@@ -600,6 +607,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function hideModal() {
         if (!assignmentRowModal) return;
+        // If Bootstrap modal was used, let it handle hiding properly
+        if (bootstrapModal && !assignmentRowModal.classList.contains('cc-fallback-modal')) {
+            bootstrapModal.hide();
+            return; // Bootstrap will trigger hidden.bs.modal event
+        }
+        // Fallback cleanup only
         assignmentRowModal.style.display = 'none';
         assignmentRowModal.classList.remove('cc-fallback-modal');
         const backdrop = document.getElementById('cc-fallback-backdrop');
@@ -635,7 +648,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const btn = ev.target.closest('[data-bs-dismiss="modal"]');
         if (!btn) return;
         const modal = btn.closest('.modal');
-        if (modal) hideModal();
+        if (modal) {
+            // Let Bootstrap handle dismiss; hidden.bs.modal event will fire
+            if (bootstrapModal && !modal.classList.contains('cc-fallback-modal')) {
+                return;
+            }
+            hideModal();
+        }
     });
 
     const tabPanels = { details: detailPanel, interactions: interactionsPanel };
@@ -991,20 +1010,26 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
                     </div>`;
                 btn.addEventListener('click', async () => {
-                    document.getElementById('ccCallAssignmentId').value = r.assignment_id;
-                    detailPanel.innerHTML = '<div class="text-muted small">Loading...</div>';
-                    interactionsPanel.innerHTML = '';
+                    if (isFetchingDetails) return;
+                    isFetchingDetails = true;
                     try {
-                        const details = await fetchDetails(r.assignment_id);
-                        if (!details) {
-                            detailFields.innerHTML = '<div class="text-danger small">Details unavailable.</div>';
-                            return;
+                        document.getElementById('ccCallAssignmentId').value = r.assignment_id;
+                        detailPanel.innerHTML = '<div class="text-muted small">Loading...</div>';
+                        interactionsPanel.innerHTML = '';
+                        try {
+                            const details = await fetchDetails(r.assignment_id);
+                            if (!details) {
+                                detailFields.innerHTML = '<div class="text-danger small">Details unavailable.</div>';
+                                return;
+                            }
+                            renderDetails(details);
+                            showModal();
+                        } catch (err) {
+                            console.error('Failed to load details', err);
+                            detailFields.innerHTML = '<div class="text-danger small">Failed to load details. Please try again.</div>';
                         }
-                        renderDetails(details);
-                        showModal();
-                    } catch (err) {
-                        console.error('Failed to load details', err);
-                        detailFields.innerHTML = '<div class="text-danger small">Failed to load details. Please try again.</div>';
+                    } finally {
+                        isFetchingDetails = false;
                     }
                 });
                 assignmentList.appendChild(btn);

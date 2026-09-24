@@ -492,42 +492,68 @@
                 const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
                 const paymentInput = document.getElementById('ccPaymentExpected');
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-                let assignmentModalInstance = null;
-                if (assignmentRowModal && window.bootstrap) assignmentModalInstance = new bootstrap.Modal(assignmentRowModal, {
-                    keyboard: true
-                });
+let assignmentModalInstance = null;
+    let isFetchingDetails = false;
+    if (assignmentRowModal && window.bootstrap) assignmentModalInstance = new bootstrap.Modal(assignmentRowModal, {
+        keyboard: true
+    });
 
-                function showModalOrFallback(node, bsInstance) {
-                    if (!node) return;
-                    if (bsInstance && typeof bsInstance.show === 'function') {
-                        node.style.display = '';
-                        bsInstance.show();
-                        return;
-                    }
-                    node.style.display = 'block';
-                    node.classList.add('cc-fallback-modal');
-                    if (!document.getElementById('cc-fallback-backdrop')) {
-                        const backdrop = document.createElement('div');
-                        backdrop.id = 'cc-fallback-backdrop';
-                        backdrop.className = 'cc-fallback-backdrop';
-                        backdrop.addEventListener('click', () => hideModalOrFallback(node));
-                        document.body.appendChild(backdrop);
-                    }
-                }
+function showModalOrFallback(node, bsInstance) {
+        if (!node) return;
+        // If we used fallback last time, re-create Bootstrap instance
+        if (node.classList.contains('cc-fallback-modal')) {
+            node.classList.remove('cc-fallback-modal');
+            node.style.display = '';
+            if (window.bootstrap) {
+                bsInstance = new bootstrap.Modal(node, { keyboard: true });
+                assignmentModalInstance = bsInstance;
+            }
+        }
+        if (bsInstance && typeof bsInstance.show === 'function') {
+            try {
+                node.style.display = '';
+                bsInstance.show();
+                return;
+            } catch (e) {
+                console.error('bootstrap modal show failed, falling back', e);
+            }
+        }
+        node.style.display = 'block';
+        node.classList.add('cc-fallback-modal');
+        if (!document.getElementById('cc-fallback-backdrop')) {
+            const backdrop = document.createElement('div');
+            backdrop.id = 'cc-fallback-backdrop';
+            backdrop.className = 'cc-fallback-backdrop';
+            backdrop.addEventListener('click', () => hideModalOrFallback(node));
+            document.body.appendChild(backdrop);
+        }
+    }
 
-                function hideModalOrFallback(node) {
-                    if (!node) return;
-                    node.style.display = 'none';
-                    node.classList.remove('cc-fallback-modal');
-                    const back = document.getElementById('cc-fallback-backdrop');
-                    if (back) back.remove();
-                }
+function hideModalOrFallback(node) {
+        if (!node) return;
+        // If Bootstrap modal was used, let it handle hiding properly
+        if (assignmentModalInstance && !node.classList.contains('cc-fallback-modal')) {
+            assignmentModalInstance.hide();
+            return; // Bootstrap will trigger hidden.bs.modal event
+        }
+        // Fallback cleanup only
+        node.style.display = 'none';
+        node.classList.remove('cc-fallback-modal');
+        const back = document.getElementById('cc-fallback-backdrop');
+        if (back) back.remove();
+    }
 
                 document.addEventListener('click', function(ev) {
                     const btn = ev.target.closest('[data-bs-dismiss="modal"]');
                     if (!btn) return;
                     const modal = btn.closest('.modal');
-                    if (modal) hideModalOrFallback(modal);
+                    if (modal) {
+                        // Let Bootstrap handle dismiss; hidden.bs.modal event will fire
+                        if (assignmentModalInstance && !modal.classList.contains('cc-fallback-modal')) {
+                            return;
+                        }
+                        hideModalOrFallback(modal);
+                    }
                 });
 
                 const selectedReportId = @json($selectedReport->id ?? null);
@@ -665,37 +691,49 @@
 
                 approvedUserEls.forEach(el => {
                     el.addEventListener('click', async function() {
-                        const userId = this.dataset.userId;
-                        const payload = await loadUserAccepted(userId);
-                        if (!assignmentList) return;
-                        assignmentList.innerHTML = '';
-                        if (!payload || !payload.rows || !payload.rows.length) {
-                            assignmentList.innerHTML = '<div class="small text-muted p-3">No accepted rows.</div>';
-                        } else {
-                            payload.rows.forEach(async r => {
-                                const btn = document.createElement('button');
-                                btn.type = 'button';
-                                btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-start';
-                                btn.dataset.assignmentId = r.assignment_id;
-                                const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
-                                const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
-                                const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
-                                const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                                const arrearsDisplay = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                                const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                                const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                                const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-                                btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
-                                btn.addEventListener('click', async () => {
-                                    const assignmentId = btn.dataset.assignmentId;
-                                    document.getElementById('ccCallAssignmentId').value = assignmentId;
-                                    const details = await loadAssignmentDetails(assignmentId);
-                                    renderDetails(details);
+                        if (isFetchingDetails) return;
+                        isFetchingDetails = true;
+                        try {
+                            const userId = this.dataset.userId;
+                            const payload = await loadUserAccepted(userId);
+                            if (!assignmentList) return;
+                            assignmentList.innerHTML = '';
+                            if (!payload || !payload.rows || !payload.rows.length) {
+                                assignmentList.innerHTML = '<div class="small text-muted p-3">No accepted rows.</div>';
+                            } else {
+                                payload.rows.forEach(async r => {
+                                    const btn = document.createElement('button');
+                                    btn.type = 'button';
+                                    btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-start';
+                                    btn.dataset.assignmentId = r.assignment_id;
+                                    const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
+                                    const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
+                                    const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
+                                    const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                                    const arrearsDisplay = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                                    const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                                    const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                                    const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                                    btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
+                                    btn.addEventListener('click', async () => {
+                                        if (isFetchingDetails) return;
+                                        isFetchingDetails = true;
+                                        try {
+                                            const assignmentId = btn.dataset.assignmentId;
+                                            document.getElementById('ccCallAssignmentId').value = assignmentId;
+                                            const details = await loadAssignmentDetails(assignmentId);
+                                            renderDetails(details);
+                                        } finally {
+                                            isFetchingDetails = false;
+                                        }
+                                    });
+                                    assignmentList.appendChild(btn);
                                 });
-                                assignmentList.appendChild(btn);
-                            });
+                            }
+                            showModalOrFallback(assignmentRowModal, assignmentModalInstance);
+                        } finally {
+                            isFetchingDetails = false;
                         }
-                        showModalOrFallback(assignmentRowModal, assignmentModalInstance);
                     });
                 });
 

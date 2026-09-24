@@ -87,14 +87,14 @@
                                 <table class="table mb-0">
                                     <thead>
                                     <tr>
-                                        <th>Report</th>
-                                        <th>Account</th>
-                                        <th>Customer Ref</th>
-<th>Initial Outstanding (Rs.)</th>
-                                         <th>Current Outstanding (Rs.)</th>
-                                        <th>Status</th>
-                                        <th>Payment</th>
-                                        <th>Status</th>
+<th>Report</th>
+                                         <th>Account</th>
+                                         <th>Customer Ref</th>
+                                         <th>Initial Outstanding (Rs.)</th>
+                                          <th>Current Outstanding (Rs.)</th>
+                                         <th>Payment Status</th>
+                                         <th>Payment</th>
+                                         <th>Assignment Status</th>
                                     </tr>
                                     </thead>
                                     <tbody>

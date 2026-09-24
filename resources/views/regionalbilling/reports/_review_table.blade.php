@@ -133,16 +133,16 @@
             <table class="table align-middle mb-0" id="reviewRowsTable">
             <thead>
                 <tr>
-                    <th style="width: 40px;"></th>
-                    <th>Account Number</th>
-<th>Initial Outstanding (Rs.)</th>
-                     <th>Current Outstanding (Rs.)</th>
-                    <th>Status</th>
-                    <th>Payment</th>
-                    <th>Phone</th>
-                    <th>Customer Ref</th>
-                    <th>Status</th>
-                    <th style="width: 120px;">More</th>
+<th style="width: 40px;"></th>
+                     <th>Account Number</th>
+                     <th>Initial Outstanding (Rs.)</th>
+                      <th>Current Outstanding (Rs.)</th>
+                     <th>Payment Status</th>
+                     <th>Payment</th>
+                     <th>Phone</th>
+                     <th>Customer Ref</th>
+                     <th>Visibility</th>
+                     <th style="width: 120px;">More</th>
                 </tr>
             </thead>
             <tbody>

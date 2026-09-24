@@ -23,7 +23,7 @@
                     <th scope="col">Business Line</th>
                     <th scope="col">Assignment</th>
 <th scope="col" class="text-end">Initial Outstanding (Rs.)</th>
-                     <th scope="col" class="text-end">Current Outstanding</th>
+                     <th scope="col" class="text-end">Current Outstanding (Rs.)</th>
                     <th scope="col">Status</th>
                 </tr>
             </thead>
@@ -35,8 +35,8 @@
                     <td>{{ $row->product_label ?? '—' }}</td>
                     <td>{{ $row->slt_business_line_value ?? '—' }}</td>
                     <td>{{ $resolveAssignment($row) }}</td>
-                    <td class="text-end">{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
-                    <td class="text-end">{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value - (float) ($row->payments_value ?? 0), 2) : '—' }}</td>
+<td class="text-end">{{ $row->new_arrears_value !== null ? 'Rs. ' . number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
+                     <td class="text-end">{{ $row->new_arrears_value !== null ? 'Rs. ' . number_format((float) $row->new_arrears_value - (float) ($row->payments_value ?? 0), 2) : '—' }}</td>
                     <td>
                         @php
                             $outstanding = $row->new_arrears_value !== null ? (float) $row->new_arrears_value - (float) ($row->payments_value ?? 0) : null;

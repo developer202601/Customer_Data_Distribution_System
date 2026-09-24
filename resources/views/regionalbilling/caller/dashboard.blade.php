@@ -90,8 +90,8 @@
                                         <th>Report</th>
                                         <th>Account</th>
                                         <th>Customer Ref</th>
-                                        <th>Initial Outstanding</th>
-                                        <th>Current Outstanding</th>
+<th>Initial Outstanding (Rs.)</th>
+                                         <th>Current Outstanding (Rs.)</th>
                                         <th>Status</th>
                                         <th>Payment</th>
                                         <th>Status</th>
@@ -104,8 +104,8 @@
                                                 <td>{{ $assignment->report?->dataset_month ?? ('Report #' . $assignment->call_center_report_id) }}</td>
                                                 <td>{{ $row?->account_num ?? '—' }}</td>
                                                 <td>{{ $row?->customer_ref ?? '—' }}</td>
-                                                <td>{{ $row?->new_arrears_value !== null ? number_format((float) $row?->new_arrears_value, 2) : '—' }}</td>
-                                                <td>{{ $row?->new_arrears_value !== null ? number_format((float) $row?->new_arrears_value - (float) ($row?->payments_value ?? 0), 2) : '—' }}</td>
+<td>{{ $row?->new_arrears_value !== null ? 'Rs. ' . number_format((float) $row?->new_arrears_value, 2) : '—' }}</td>
+                                                 <td>{{ $row?->new_arrears_value !== null ? 'Rs. ' . number_format((float) $row?->new_arrears_value - (float) ($row?->payments_value ?? 0), 2) : '—' }}</td>
                                                 <td>
                                                     @php
                                                         $outstanding = $row?->new_arrears_value !== null ? (float) $row?->new_arrears_value - (float) ($row?->payments_value ?? 0) : null;
@@ -118,7 +118,7 @@
                                                         <span class="badge bg-danger">Unpaid</span>
                                                     @endif
                                                 </td>
-                                                <td class="text-danger">{{ $row?->payments_value !== null ? number_format((float) $row?->payments_value, 2) : '—' }}</td>
+                                                <td class="text-danger">{{ $row?->payments_value !== null ? 'Rs. ' . number_format((float) $row?->payments_value, 2) : '—' }}</td>
                                                 <td>{{ $assignment->status ?? '—' }}</td>
                                             </tr>
                                         @endforeach

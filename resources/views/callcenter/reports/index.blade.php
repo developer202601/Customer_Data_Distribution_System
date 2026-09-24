@@ -630,10 +630,10 @@
                         <div class="row g-2 align-items-start">
                             <div class="col-8">
                                 <div class="row g-2">
-                                    <div class="col-6">Initial Outstanding: ${arrearsDisplay}</div>
-                                    <div class="col-6">Bill: ${billDisplay}</div>
-                                    <div class="col-6">Payment: ${paymentDisplay}</div>
-                                    <div class="col-6">Current Outstanding: ${outstandingDisplay}</div>
+                                    <div class="col-6">Initial Outstanding: Rs. ${arrearsDisplay}</div>
+                                    <div class="col-6">Bill: Rs. ${billDisplay}</div>
+                                    <div class="col-6">Payment: Rs. ${paymentDisplay}</div>
+                                    <div class="col-6">Current Outstanding: Rs. ${outstandingDisplay}</div>
                                     <div class="col-12">Status: ${statusBadge}</div>
                                     ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
                                 </div>
@@ -685,7 +685,7 @@
                                 const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                                 const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                                 const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-                                btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Initial Outstanding: ${arrearsDisplay} — Bill: ${billDisplay} — Current Outstanding: ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
+                                btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
                                 btn.addEventListener('click', async () => {
                                     const assignmentId = btn.dataset.assignmentId;
                                     document.getElementById('ccCallAssignmentId').value = assignmentId;

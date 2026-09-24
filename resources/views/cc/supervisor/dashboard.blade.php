@@ -119,10 +119,10 @@
                                     <td>{{ $c['supervisor'] }}</td>
                                     <td>{{ $c['total'] }}</td>
                                     <td>{{ $c['paid'] }}</td>
-                                    <td class="text-end">{{ number_format($c['paid_amount'], 2) }}</td>
-                                </tr>
-                                @empty
-                                <tr><td colspan="5" class="text-muted">No data available for the latest report.</td></tr>
+<td class="text-end">{{ $c['paid_amount'] !== null ? 'Rs. ' . number_format($c['paid_amount'], 2) : '—' }}</td>
+                                 </tr>
+                                 @empty
+                                 <tr><td colspan="5" class="text-muted">No data available for the latest report.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -152,10 +152,10 @@
                                     <td>{{ $c['supervisor'] }}</td>
                                     <td>{{ $c['total'] }}</td>
                                     <td>{{ $c['paid'] }}</td>
-                                    <td class="text-end">{{ number_format($c['paid_amount'], 2) }}</td>
-                                </tr>
-                                @empty
-                                <tr><td colspan="5" class="text-muted">No data available for all-time.</td></tr>
+<td class="text-end">{{ $c['paid_amount'] !== null ? 'Rs. ' . number_format($c['paid_amount'], 2) : '—' }}</td>
+                                 </tr>
+                                 @empty
+                                 <tr><td colspan="5" class="text-muted">No data available for all-time.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>

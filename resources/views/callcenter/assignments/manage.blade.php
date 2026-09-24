@@ -312,7 +312,7 @@
                                 <input type="date" name="payment_date" id="ccPaymentDate" class="form-control form-control-sm" disabled>
                             </div>
                             <div class="col-12" id="ccPaidAmountWrap" style="display:none;">
-                                <label class="form-label small">Paid amount</label>
+                                <label class="form-label small">Paid amount (Rs.)</label>
                                 <input type="number" step="0.01" name="paid_amount" id="ccPaidAmount" class="form-control form-control-sm" disabled>
                             </div>
                             <div class="col-12">
@@ -467,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function formatPaymentResult(interaction) {
         if (!interaction) return null;
         if (interaction.paid) {
-            const amount = interaction.paid_amount || '—';
+            const amount = interaction.paid_amount !== null && interaction.paid_amount !== undefined ? 'Rs. ' + Number(interaction.paid_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
             const date = interaction.payment_date ? ' on ' + interaction.payment_date : '';
             return 'Paid ' + amount + date;
         }
@@ -544,7 +544,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const expectationHtml = expectation ? `<div class="small text-uppercase text-muted mb-1">${expectation}</div>` : '';
                 const pay = paymentsByInteraction[String(i.id)];
                 if (pay) {
-                    const amount = pay.paid_amount ? pay.paid_amount : '—';
+                    const amount = pay.paid_amount !== null && pay.paid_amount !== undefined ? 'Rs. ' + Number(pay.paid_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                     const date = pay.payment_date ? pay.payment_date : '—';
                     const paidBy = pay.paid_by_agent ? pay.paid_by_agent : '—';
                     const lastContact = pay.last_contact_before_payment ? pay.last_contact_before_payment : null;
@@ -577,10 +577,10 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="row g-2 align-items-start">
                 <div class="col-8">
                     <div class="row g-2">
-                        <div class="col-6">Initial Outstanding: ${arrearsDisplay}</div>
-                        <div class="col-6">Bill: ${billDisplay}</div>
-                        <div class="col-6">Payment: ${paymentValue}</div>
-                        <div class="col-6">Current Outstanding: ${outstandingDisplay}</div>
+                        <div class="col-6">Initial Outstanding: Rs. ${arrearsDisplay}</div>
+                        <div class="col-6">Bill: Rs. ${billDisplay}</div>
+                        <div class="col-6">Payment: Rs. ${paymentValue}</div>
+                        <div class="col-6">Current Outstanding: Rs. ${outstandingDisplay}</div>
                         <div class="col-12">Status: ${statusBadge}</div>
                         ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
                     </div>
@@ -769,8 +769,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <strong>${r.address_name ?? '—'}</strong>
-                            <div class="small text-muted">Initial Outstanding: ${arrearsDisplay} — Bill: ${billDisplay} — Current Outstanding: ${outstandingDisplay} — Status: ${statusBadge}</div>
-                            <div class="small text-danger">Payment: ${paymentDisplay}</div>
+                            <div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div>
+                            <div class="small text-danger">Payment: Rs. ${paymentDisplay}</div>
                             <div class="small text-muted">
                                 Calls since assignment: ${r.call_count ?? 0}
                                 ${r.latest_outcome ? ' • Latest: ' + r.latest_outcome : ''}

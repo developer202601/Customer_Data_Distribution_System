@@ -135,8 +135,8 @@
                 <tr>
                     <th style="width: 40px;"></th>
                     <th>Account Number</th>
-<th>Initial Outstanding</th>
-                     <th>Current Outstanding</th>
+<th>Initial Outstanding (Rs.)</th>
+                     <th>Current Outstanding (Rs.)</th>
                     <th>Status</th>
                     <th>Payment</th>
                     <th>Phone</th>
@@ -160,8 +160,8 @@
                             <input class="form-check-input row-check" type="checkbox" name="row_ids[]" value="{{ $row->id }}" {{ (!empty($isLocked) || $isRtomPassed) ? 'disabled' : '' }}>
                         </td>
                         <td>{{ $row->account_num ?? '—' }}</td>
-                        <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
-                        <td>{{ $row->new_arrears_value !== null ? number_format((float) $row->new_arrears_value - (float) ($row->payments_value ?? 0), 2) : '—' }}</td>
+<td>{{ $row->new_arrears_value !== null ? 'Rs. ' . number_format((float) $row->new_arrears_value, 2) : '—' }}</td>
+                         <td>{{ $row->new_arrears_value !== null ? 'Rs. ' . number_format((float) $row->new_arrears_value - (float) ($row->payments_value ?? 0), 2) : '—' }}</td>
                         <td>
                             @php
                                 $outstanding = $row->new_arrears_value !== null ? (float) $row->new_arrears_value - (float) ($row->payments_value ?? 0) : null;
@@ -174,7 +174,7 @@
                                 <span class="badge bg-danger">Unpaid</span>
                             @endif
                         </td>
-                        <td class="text-danger">{{ $row->payments_value !== null ? number_format((float) $row->payments_value, 2) : '—' }}</td>
+                        <td class="text-danger">{{ $row->payments_value !== null ? 'Rs. ' . number_format((float) $row->payments_value, 2) : '—' }}</td>
                         <td>{{ $row->mobile_contact_tel ?? '—' }}</td>
                         <td>{{ $row->customer_ref ?? '—' }}</td>
                         <td>

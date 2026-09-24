@@ -120,10 +120,10 @@
                                     <td>{{ $s['supervisor'] }}</td>
                                     <td>{{ $s['total'] }}</td>
                                     <td>{{ $s['paid'] }}</td>
-                                    <td class="text-end">{{ number_format($s['paid_amount'], 2) }}</td>
-                                </tr>
-                                @empty
-                                <tr><td colspan="4" class="text-muted">No supervisors found for the latest report.</td></tr>
+<td class="text-end">{{ $s['paid_amount'] !== null ? 'Rs. ' . number_format($s['paid_amount'], 2) : '—' }}</td>
+                                 </tr>
+                                 @empty
+                                 <tr><td colspan="4" class="text-muted">No supervisors found for the latest report.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -151,10 +151,10 @@
                                     <td>{{ $s['supervisor'] }}</td>
                                     <td>{{ $s['total'] }}</td>
                                     <td>{{ $s['paid'] }}</td>
-                                    <td class="text-end">{{ number_format($s['paid_amount'], 2) }}</td>
-                                </tr>
-                                @empty
-                                <tr><td colspan="4" class="text-muted">No supervisors found for all-time.</td></tr>
+<td class="text-end">{{ $s['paid_amount'] !== null ? 'Rs. ' . number_format($s['paid_amount'], 2) : '—' }}</td>
+                                 </tr>
+                                 @empty
+                                 <tr><td colspan="4" class="text-muted">No supervisors found for all-time.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>

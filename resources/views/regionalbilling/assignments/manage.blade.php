@@ -342,7 +342,6 @@
                                 <label class="form-label small">Outcome</label>
                                 <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
                                     <option value="" disabled selected>Select outcome category</option>
-                                    <option value="paid">Already paid</option>
                                     <option value="promise_to_pay">Promise to pay</option>
                                     <option value="temporary_financial_difficulty">Temporary financial difficulty</option>
                                     <option value="billing_dispute">Billing / Dispute issues</option>
@@ -357,6 +356,10 @@
                                 <label class="form-label small">Outcome details</label>
                                 <div id="ccDependentOutcomeContainer"></div>
                             </div>
+                            <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
+                                <label class="form-label small">Select date</label>
+                                <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" min="{{ now()->toDateString() }}" disabled>
+                            </div>
                             <div class="col-12">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="ccNotRelevantPerson" name="not_relevant_person" value="1" disabled>
@@ -365,24 +368,12 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
-                                <label class="form-label small">Payment expected at</label>
-                                <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" disabled>
-                            </div>
-                            <div class="col-12" id="ccPaymentDateWrap" style="display:none;">
-                                <label class="form-label small">Payment date</label>
-                                <input type="date" name="payment_date" id="ccPaymentDate" class="form-control form-control-sm" disabled>
-                            </div>
-                            <div class="col-12" id="ccPaidAmountWrap" style="display:none;">
-                                <label class="form-label small">Paid amount</label>
-                                <input type="number" step="0.01" name="paid_amount" id="ccPaidAmount" class="form-control form-control-sm" disabled>
-                            </div>
                             <div class="col-12">
                                 <label class="form-label small">Note (optional)</label>
                                 <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" disabled></textarea>
                             </div>
                             <div class="col-12 d-flex gap-2">
-                                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save call</button>
+                                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save</button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                             </div>
                             <div class="col-12">
@@ -405,12 +396,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const callForm = document.getElementById('ccAssignmentCallForm');
     const outcomeEl = document.getElementById('ccCallOutcome');
     const paymentWrap = document.getElementById('ccPaymentExpectedWrap');
-    const paymentDateWrap = document.getElementById('ccPaymentDateWrap');
-    const paidAmountWrap = document.getElementById('ccPaidAmountWrap');
     const notRelevantPersonEl = document.getElementById('ccNotRelevantPerson');
     const paymentInput = document.getElementById('ccPaymentExpected');
-    const paymentDate = document.getElementById('ccPaymentDate');
-    const paidAmount = document.getElementById('ccPaidAmount');
     const statusField = document.getElementById('ccCallStatus');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const NOT_RELEVANT_PERSON_OUTCOME = 'not relevant person contacted';
@@ -419,6 +406,25 @@ document.addEventListener('DOMContentLoaded', function () {
     if (assignmentRowModal && window.bootstrap) {
         bootstrapModal = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
         assignmentRowModal.style.display = 'none';
+    }
+
+    function getLocalDateString(daysOffset = 0) {
+        const d = new Date();
+        d.setDate(d.getDate() + daysOffset);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    if (paymentInput) {
+        paymentInput.min = getLocalDateString(0);
+        paymentInput.addEventListener('change', function () {
+            const minDate = getLocalDateString(0);
+            if (this.value && this.value < minDate) {
+                this.value = minDate;
+            }
+        });
     }
 
     // Dependent dropdown options for each main category
@@ -510,34 +516,26 @@ document.addEventListener('DOMContentLoaded', function () {
         html += '</select>';
         container.innerHTML = html;
         wrap.style.display = 'block';
-        // attach change handler to dependent select to preserve payment fields behavior
+        // attach change handler to dependent select to handle payment expected date
         const dep = document.getElementById('ccOutcomeDetail');
         if (dep) {
             dep.addEventListener('change', function () {
                 const v = this.value || '';
-                // clear previous payment fields
-                clearPaymentFields();
-                if (v === 'will_pay_today') {
-                    // treat as payment date (today); 
-                    paymentDateWrap.style.display = 'block';
-                    if (paidAmountWrap) paidAmountWrap.style.display = 'none';
-                    const today = new Date().toISOString().slice(0,10);
-                    if (paymentDate) paymentDate.value = today;
-                } else if (v === 'will_pay_within_3_days' || v === 'will_pay_within_7_days') {
-                    paymentWrap.style.display = 'block';
-                    const days = v === 'will_pay_within_3_days' ? 3 : 7;
-                    const d = new Date(); d.setDate(d.getDate() + days);
-                    if (paymentInput) paymentInput.value = d.toISOString().slice(0,10);
-                } else if (v === 'salary_not_yet_credited' || v === 'bank_transfer_delay' || v === 'salary_delay') {
-                    // expected payment but date unknown
-                    paymentWrap.style.display = 'block';
-                } else if (v === 'paid') {
-                    paymentDateWrap.style.display = 'block';
-                    paidAmountWrap.style.display = 'block';
-                    const today = new Date().toISOString().slice(0,10);
-                    if (paymentDate) paymentDate.value = today;
+                if (selectedOutcome === 'promise_to_pay') {
+                    if (paymentWrap) paymentWrap.style.display = 'block';
+                    if (paymentInput) {
+                        paymentInput.disabled = false;
+                        paymentInput.min = getLocalDateString(0);
+                    }
+                    if (v === 'will_pay_today') {
+                        if (paymentInput) paymentInput.value = getLocalDateString(0);
+                    } else if (v === 'will_pay_within_3_days' || v === 'will_pay_within_7_days') {
+                        if (paymentInput) paymentInput.value = getLocalDateString(3);
+                    } else if (v === '') {
+                        if (paymentInput) paymentInput.value = '';
+                    }
                 } else {
-                    // leave payment fields hidden for other suboptions
+                    clearPaymentFields();
                 }
             });
         }
@@ -714,8 +712,6 @@ document.addEventListener('DOMContentLoaded', function () {
             notRelevantPersonEl.checked = false;
         }
         if (pay) pay.disabled = true;
-        if (paymentDate) paymentDate.disabled = true;
-        if (paidAmount) paidAmount.disabled = true;
         if (saveBtn) {
             saveBtn.disabled = true;
             saveBtn.classList.add('d-none');
@@ -800,7 +796,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 </div>
                 <div class="col-4 text-end">
-                    <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
+                    <!-- <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button> -->
                     <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
                 </div>
             </div>`;
@@ -821,7 +817,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (wrapper) wrapper.classList.add('cc-disabled');
                 // show a single red status message in the call-status area
                 if (reasonEl) {
-                    reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
+                    reasonEl.textContent = 'Call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
                     reasonEl.classList.remove('text-muted');
                     reasonEl.classList.add('text-danger');
                 }
@@ -829,23 +825,16 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 if (reasonEl) { reasonEl.textContent = ''; reasonEl.classList.remove('text-danger'); reasonEl.classList.add('text-muted'); }
                 if (startNoteEl) { startNoteEl.textContent = ''; startNoteEl.style.display = 'none'; }
-                if (startBtn) {
-                    startBtn.onclick = () => {
-                        if (outcome) outcome.disabled = false;
-                        if (note) note.disabled = false;
-                        if (notRelevantPersonEl) notRelevantPersonEl.disabled = false;
-                        if (pay) pay.disabled = false;
-                        if (paymentDate) paymentDate.disabled = false;
-                        if (paidAmount) paidAmount.disabled = false;
-                        if (saveBtn) {
-                            saveBtn.disabled = false;
-                            saveBtn.classList.remove('d-none');
-                        }
-                        if (wrapper) wrapper.classList.remove('cc-disabled');
-                        try { renderDependentDropdown(''); } catch (e) { /* ignore */ }
-                        startBtn.disabled = true;
-                    };
+                if (outcome) outcome.disabled = false;
+                if (note) note.disabled = false;
+                if (notRelevantPersonEl) notRelevantPersonEl.disabled = false;
+                if (pay) pay.disabled = false;
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('d-none');
                 }
+                if (wrapper) wrapper.classList.remove('cc-disabled');
+                try { renderDependentDropdown(''); } catch (e) { /* ignore */ }
             }
         } catch (e) { /* ignore */ }
     }
@@ -1045,11 +1034,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function clearPaymentFields() {
         if (paymentWrap) paymentWrap.style.display = 'none';
-        if (paymentDateWrap) paymentDateWrap.style.display = 'none';
-        if (paidAmountWrap) paidAmountWrap.style.display = 'none';
-        if (paymentInput) paymentInput.value = '';
-        if (paymentDate) paymentDate.value = '';
-        if (paidAmount) paidAmount.value = '';
+        if (paymentInput) {
+            paymentInput.value = '';
+            paymentInput.disabled = true;
+        }
     }
 
     notRelevantPersonEl?.addEventListener('change', function () {
@@ -1070,31 +1058,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const v = this.value;
         try { renderDependentDropdown(v); } catch (e) { /* ignore */ }
-        if (v === 'agreed to pay within 3 days' || v === 'agreed to pay within 7 days') {
-            paymentWrap.style.display = 'block';
-            paymentDateWrap.style.display = 'none';
-            paidAmountWrap.style.display = 'none';
-            const days = v.includes('3') ? 3 : 7;
-            const d = new Date();
-            d.setDate(d.getDate() + days);
-            paymentInput.value = d.toISOString().slice(0,10);
-            paymentDate.value = '';
-            paidAmount.value = '';
-        } else if (v === 'paid') {
-            paymentWrap.style.display = 'none';
-            paymentDateWrap.style.display = 'block';
-            paidAmountWrap.style.display = 'block';
-            paymentInput.value = '';
-            const today = new Date().toISOString().slice(0,10);
-            paymentDate.value = today;
-            paidAmount.value = '';
+        if (v === 'promise_to_pay') {
+            if (paymentWrap) paymentWrap.style.display = 'block';
+            if (paymentInput) {
+                paymentInput.disabled = false;
+                paymentInput.min = getLocalDateString(0);
+                paymentInput.value = '';
+            }
         } else {
-            paymentWrap.style.display = 'none';
-            paymentDateWrap.style.display = 'none';
-            paidAmountWrap.style.display = 'none';
-            paymentInput.value = '';
-            paymentDate.value = '';
-            paidAmount.value = '';
+            clearPaymentFields();
         }
     });
 
@@ -1109,12 +1081,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (notRelevantPersonEl && notRelevantPersonEl.checked) {
             formData.set('outcome', NOT_RELEVANT_PERSON_OUTCOME);
             formData.delete('payment_expected_at');
-            formData.delete('payment_date');
-            formData.delete('paid_amount');
-            formData.delete('paid');
-        }
-        if (outcomeEl && outcomeEl.value === 'paid' && !(notRelevantPersonEl && notRelevantPersonEl.checked)) {
-            formData.set('paid', '1');
         }
         try {
             const res = await fetch(`/rb/assignments/${aid}/interactions`, { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }, body: formData });

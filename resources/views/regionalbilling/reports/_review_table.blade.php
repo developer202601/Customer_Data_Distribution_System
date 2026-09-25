@@ -138,7 +138,7 @@
                      <th>Initial Outstanding (Rs.)</th>
                       <th>Current Outstanding (Rs.)</th>
                      <th>Payment Status</th>
-                     <th>Payment</th>
+                     <th>Payment (Rs.)</th>
                      <th>Phone</th>
                      <th>Customer Ref</th>
                      <th>Visibility</th>

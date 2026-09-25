@@ -94,7 +94,7 @@
                                               <th>Current Outstanding (Rs.)</th>
                                              <th>Payment Status</th>
                                              <th>Payment</th>
-                                             <th>Assignment Status</th>
+                                             <th>Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>

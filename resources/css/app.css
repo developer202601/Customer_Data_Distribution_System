@@ -306,6 +306,14 @@ body.theme-dark {
     z-index: 1140 !important;
 }
 
+/* Modal z-index must be above navbar (1200) */
+.modal-backdrop {
+    z-index: 1205 !important;
+}
+.modal {
+    z-index: 1210 !important;
+}
+
 
 /* Prevent small layout overflows and ensure height calculations are reliable */
 html,

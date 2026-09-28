@@ -403,6 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const NOT_RELEVANT_PERSON_OUTCOME = 'not relevant person contacted';
     const outstandingThreshold = @json($outstandingThreshold);
     let bootstrapModal = null;
+    let isFetchingDetails = false;
     if (assignmentRowModal && window.bootstrap) {
         bootstrapModal = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
         assignmentRowModal.style.display = 'none';
@@ -577,14 +578,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showModal() {
         if (!assignmentRowModal) return;
+        // If we used fallback last time, re-create Bootstrap instance
+        if (assignmentRowModal.classList.contains('cc-fallback-modal')) {
+            assignmentRowModal.classList.remove('cc-fallback-modal');
+            assignmentRowModal.style.display = '';
+            if (window.bootstrap) {
+                bootstrapModal = new bootstrap.Modal(assignmentRowModal, { keyboard: true });
+            }
+        }
         if (bootstrapModal) {
             try {
-                assignmentRowModal.style.display = '';
                 bootstrapModal.show();
                 return;
             } catch (e) {
                 console.error('bootstrap modal show failed, falling back', e);
-                // fall through to fallback display
             }
         }
         assignmentRowModal.style.display = 'block';
@@ -600,6 +607,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function hideModal() {
         if (!assignmentRowModal) return;
+        // If Bootstrap modal was used, let it handle hiding properly
+        if (bootstrapModal && !assignmentRowModal.classList.contains('cc-fallback-modal')) {
+            bootstrapModal.hide();
+            return; // Bootstrap will trigger hidden.bs.modal event
+        }
+        // Fallback cleanup only
         assignmentRowModal.style.display = 'none';
         assignmentRowModal.classList.remove('cc-fallback-modal');
         const backdrop = document.getElementById('cc-fallback-backdrop');
@@ -635,7 +648,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const btn = ev.target.closest('[data-bs-dismiss="modal"]');
         if (!btn) return;
         const modal = btn.closest('.modal');
-        if (modal) hideModal();
+        if (modal) {
+            // Let Bootstrap handle dismiss; hidden.bs.modal event will fire
+            if (bootstrapModal && !modal.classList.contains('cc-fallback-modal')) {
+                return;
+            }
+            hideModal();
+        }
     });
 
     const tabPanels = { details: detailPanel, interactions: interactionsPanel };
@@ -681,7 +700,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function formatPaymentResult(interaction) {
         if (!interaction) return null;
         if (interaction.paid) {
-            const amount = interaction.paid_amount || '—';
+            const amount = interaction.paid_amount !== null && interaction.paid_amount !== undefined ? 'Rs. ' + Number(interaction.paid_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
             const date = interaction.payment_date ? ' on ' + interaction.payment_date : '';
             return 'Paid ' + amount + date;
         }
@@ -769,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const expectationHtml = expectation ? `<div class="small text-uppercase text-muted mb-1">${expectation}</div>` : '';
                 const pay = paymentsByInteraction[String(i.id)];
                 if (pay) {
-                    const amount = pay.paid_amount ? pay.paid_amount : '—';
+                    const amount = pay.paid_amount !== null && pay.paid_amount !== undefined ? 'Rs. ' + Number(pay.paid_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                     const date = pay.payment_date ? pay.payment_date : '—';
                     const paidBy = pay.paid_by_agent ? pay.paid_by_agent : '—';
                     const lastContact = pay.last_contact_before_payment ? pay.last_contact_before_payment : null;
@@ -795,15 +814,17 @@ document.addEventListener('DOMContentLoaded', function () {
             const paymentNum = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value) : null;
             const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
             const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+            const arrearsDisplay = data.arrears !== null && data.arrears !== undefined ? Number(data.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+            const billDisplay = data.bill !== null && data.bill !== undefined ? Number(data.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
             const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
             let html = `
             <div class="row g-2 align-items-start">
                 <div class="col-8">
                     <div class="row g-2">
-                        <div class="col-6">Arrears: ${data.arrears ?? '—'}</div>
-                        <div class="col-6">Bill: ${data.bill ?? '—'}</div>
-                        <div class="col-6">Payment: ${paymentValue}</div>
-                        <div class="col-6">Outstanding: ${outstandingDisplay}</div>
+                        <div class="col-6">Initial Outstanding: Rs. ${arrearsDisplay}</div>
+                        <div class="col-6">Bill: Rs. ${billDisplay}</div>
+                        <div class="col-6">Payment: Rs. ${paymentValue}</div>
+                        <div class="col-6">Current Outstanding: Rs. ${outstandingDisplay}</div>
                         <div class="col-12">Status: ${statusBadge}</div>
                         ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
                     </div>
@@ -979,13 +1000,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.dataset.outcome = r.latest_outcome || '';
                 btn.dataset.paid = isPaid ? '1' : '0';
                 const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                const arrearsDisplay = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const statusBadge = outstandingNum === null ? '—' : (isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
                 btn.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <strong>${r.address_name ?? '—'}</strong>
-                            <div class="small text-muted">Arrears: ${r.arrears ?? '—'} — Bill: ${r.bill ?? '—'} — Outstanding: ${outstandingDisplay} — Status: ${statusBadge}</div>
-                            <div class="small text-danger">Payment: ${r.payment_value ?? '—'}</div>
+                            <div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div>
+                            <div class="small text-danger">Payment: Rs. ${paymentDisplay}</div>
                             <div class="small text-muted">
                                 Calls since assignment: ${r.call_count ?? 0}
                                 ${r.latest_outcome ? ' • Latest: ' + r.latest_outcome : ''}
@@ -999,20 +1023,26 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
                     </div>`;
                 btn.addEventListener('click', async () => {
-                    document.getElementById('ccCallAssignmentId').value = r.assignment_id;
-                    detailPanel.innerHTML = '<div class="text-muted small">Loading...</div>';
-                    interactionsPanel.innerHTML = '';
+                    if (isFetchingDetails) return;
+                    isFetchingDetails = true;
                     try {
-                        const details = await fetchDetails(r.assignment_id);
-                        if (!details) {
-                            detailFields.innerHTML = '<div class="text-danger small">Details unavailable.</div>';
-                            return;
+                        document.getElementById('ccCallAssignmentId').value = r.assignment_id;
+                        detailPanel.innerHTML = '<div class="text-muted small">Loading...</div>';
+                        interactionsPanel.innerHTML = '';
+                        try {
+                            const details = await fetchDetails(r.assignment_id);
+                            if (!details) {
+                                detailFields.innerHTML = '<div class="text-danger small">Details unavailable.</div>';
+                                return;
+                            }
+                            renderDetails(details);
+                            showModal();
+                        } catch (err) {
+                            console.error('Failed to load details', err);
+                            detailFields.innerHTML = '<div class="text-danger small">Failed to load details. Please try again.</div>';
                         }
-                        renderDetails(details);
-                        showModal();
-                    } catch (err) {
-                        console.error('Failed to load details', err);
-                        detailFields.innerHTML = '<div class="text-danger small">Failed to load details. Please try again.</div>';
+                    } finally {
+                        isFetchingDetails = false;
                     }
                 });
                 assignmentList.appendChild(btn);

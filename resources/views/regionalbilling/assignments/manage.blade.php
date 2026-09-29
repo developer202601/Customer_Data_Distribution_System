@@ -279,6 +279,18 @@
                                     {{-- Accepted rows (always shown below pending) --}}
                                     @if(true)
                                         <div class="mt-4">
+                                            {{-- Reminders Notification Banner --}}
+                                            <div id="ccRemindersBanner" class="alert alert-warning alert-dismissible fade show d-none mb-3 py-2 px-3 small w-100" role="alert">
+                                                <div class="d-flex align-items-center justify-content-between">
+                                                    <div>
+                                                        <span class="me-2 fs-6">🔔</span>
+                                                        <strong>Call Reminders Today:</strong> You have <span id="ccRemindersDueCount" class="fw-bold">0</span> customer(s) scheduled for follow-up today whose payments are still pending.
+                                                        <button type="button" class="btn btn-sm btn-link text-dark fw-bold text-decoration-underline p-0 ms-2" id="ccViewRemindersLink">View Reminders</button>
+                                                    </div>
+                                                    <button type="button" class="btn-close btn-sm p-2" data-bs-dismiss="alert" aria-label="Close"></button>
+                                                </div>
+                                            </div>
+
                                             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                                                 <p class="small text-uppercase text-muted mb-0">Accepted rows (click to view)</p>
                                                 <div class="btn-group btn-group-sm" role="group" aria-label="Assignment filters">
@@ -286,6 +298,7 @@
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="called">Called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary active" data-cc-filter="uncalled">Not called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="paid">Paid (0)</button>
+                                                    <button type="button" class="btn btn-outline-warning text-dark fw-semibold" data-cc-filter="reminders">Reminders (0)</button>
                                                 </div>
                                             </div>
                                             <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">
@@ -881,7 +894,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const latestReportId = assignmentList?.dataset.latestReportId || '';
     const userId = assignmentList?.dataset.userId || '';
     let paging = { page: 1, per_page: 50, has_more: false };
-    let filterCounts = { all: 0, called: 0, uncalled: 0, paid: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
+    let filterCounts = { all: 0, called: 0, uncalled: 0, paid: 0, reminders: 0, reminders_due: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
     // Always show previous-report rows by default so visible items match Accepted count.
     let showOldRows = true;
     let currentFilter = 'uncalled';
@@ -890,8 +903,32 @@ document.addEventListener('DOMContentLoaded', function () {
         filterButtons.forEach(btn => {
             const key = btn.dataset.ccFilter;
             const count = filterCounts[key] ?? 0;
-            btn.textContent = btn.textContent.replace(/\(.*\)/, `(${count})`);
+            if (key === 'reminders') {
+                if (filterCounts.reminders_due > 0) {
+                    btn.textContent = `Reminders (${count} - ${filterCounts.reminders_due} Due)`;
+                    btn.classList.remove('btn-outline-warning');
+                    btn.classList.add('btn-warning');
+                } else {
+                    btn.textContent = `Reminders (${count})`;
+                    btn.classList.remove('btn-warning');
+                    btn.classList.add('btn-outline-warning');
+                }
+            } else {
+                btn.textContent = btn.textContent.replace(/\(.*\)/, `(${count})`);
+            }
         });
+
+        // Reminders banner handling
+        const banner = document.getElementById('ccRemindersBanner');
+        const dueCountEl = document.getElementById('ccRemindersDueCount');
+        if (banner) {
+            if (filterCounts.reminders_due > 0) {
+                if (dueCountEl) dueCountEl.textContent = filterCounts.reminders_due;
+                banner.classList.remove('d-none');
+            } else {
+                banner.classList.add('d-none');
+            }
+        }
     }
 
     function applyFilter(filter) {
@@ -902,10 +939,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const overdue = row.dataset.overdue === '1';
             const outcome = (row.dataset.outcome || '').toLowerCase();
             const paid = row.dataset.paid === '1';
+            const reminder = row.dataset.reminder === '1';
             let show = true;
             if (targetFilter === 'called') show = called && !paid;
             else if (targetFilter === 'uncalled') show = !called && !paid;
             else if (targetFilter === 'paid') show = paid;
+            else if (targetFilter === 'reminders') show = reminder;
             else if (targetFilter === 'authorized') show = outcome === 'user not authorized';
             else if (targetFilter === 'promise_overdue') show = overdue;
             else if (targetFilter === 'number_invalid') show = outcome === 'number invalid';
@@ -933,6 +972,17 @@ document.addEventListener('DOMContentLoaded', function () {
             currentFilter = btn.dataset.ccFilter;
             applyFilter(currentFilter);
         });
+    });
+
+    document.getElementById('ccViewRemindersLink')?.addEventListener('click', () => {
+        const btn = document.querySelector('[data-cc-filter="reminders"]');
+        if (btn) {
+            filterButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = 'reminders';
+            applyFilter('reminders');
+            btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     });
 
     function updateOldRowToggle() {
@@ -964,7 +1014,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const rows = Array.isArray(data.rows) ? data.rows : [];
             if (!append) {
                 assignmentList.innerHTML = '';
-                filterCounts = { all: 0, called: 0, uncalled: 0, paid: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
+                filterCounts = { all: 0, called: 0, uncalled: 0, paid: 0, reminders: 0, reminders_due: 0, authorized: 0, promise_overdue: 0, number_invalid: 0, not_answered: 0, not_relevant_person: 0 };
             }
             rows.forEach(r => {
                 const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
@@ -984,6 +1034,27 @@ document.addEventListener('DOMContentLoaded', function () {
                 if ((r.latest_outcome || '').toLowerCase() === 'not answered') filterCounts.not_answered++;
                 if ((r.latest_outcome || '').toLowerCase() === 'not relevant person contacted') filterCounts.not_relevant_person++;
 
+                const isPromise = (r.latest_outcome || '').toLowerCase() === 'promise_to_pay' || (r.latest_outcome || '').toLowerCase().includes('agreed to pay');
+                const isReminder = !isPaid && (Boolean(r.is_reminder) || (isPromise && Boolean(r.latest_payment_expected_at)));
+                let reminderType = r.reminder_type || '';
+                if (isReminder && !reminderType && r.latest_payment_expected_at) {
+                    const todayStr = getLocalDateString(0);
+                    if (r.latest_payment_expected_at === todayStr) {
+                        reminderType = 'due_today';
+                    } else if (r.latest_payment_expected_at < todayStr) {
+                        reminderType = 'overdue';
+                    } else {
+                        reminderType = 'upcoming';
+                    }
+                }
+
+                if (isReminder) {
+                    filterCounts.reminders++;
+                    if (reminderType === 'due_today' || reminderType === 'overdue') {
+                        filterCounts.reminders_due++;
+                    }
+                }
+
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'list-group-item list-group-item-action accepted-row';
@@ -999,6 +1070,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.dataset.overdue = r.promise_overdue ? '1' : '0';
                 btn.dataset.outcome = r.latest_outcome || '';
                 btn.dataset.paid = isPaid ? '1' : '0';
+                btn.dataset.reminder = isReminder ? '1' : '0';
+                btn.dataset.reminderType = reminderType;
+
+                let reminderBadge = '';
+                let reminderNote = '';
+                if (isReminder) {
+                    if (reminderType === 'due_today') {
+                        reminderBadge = '<span class="badge bg-warning text-dark me-1">🔔 Due Today</span>';
+                        reminderNote = '<span class="badge bg-warning text-dark">Follow-up due today</span>';
+                    } else if (reminderType === 'overdue') {
+                        reminderBadge = '<span class="badge bg-danger me-1">⚠️ Overdue</span>';
+                        reminderNote = '<span class="badge bg-danger">Promise overdue</span>';
+                    } else if (reminderType === 'upcoming') {
+                        reminderBadge = '<span class="badge bg-secondary me-1">📅 Scheduled</span>';
+                        reminderNote = `<span class="badge bg-secondary-subtle text-secondary">Promised: ${r.latest_payment_expected_at}</span>`;
+                    }
+                }
+
                 const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const arrearsDisplay = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
@@ -1007,14 +1096,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>${r.address_name ?? '—'}</strong>
+                            <div>
+                                ${reminderBadge}
+                                <strong>${r.address_name ?? '—'}</strong>
+                            </div>
                             <div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div>
                             <div class="small text-danger">Payment: Rs. ${paymentDisplay}</div>
                             <div class="small text-muted">
                                 Calls since assignment: ${r.call_count ?? 0}
                                 ${r.latest_outcome ? ' • Latest: ' + r.latest_outcome : ''}
                                 ${r.latest_payment_expected_at ? ' • Due: ' + r.latest_payment_expected_at : ''}
-                                ${r.promise_overdue ? ' • <span class="text-danger">Promise overdue</span>' : ''}
+                                ${reminderNote ? ' • ' + reminderNote : (r.promise_overdue ? ' • <span class="text-danger">Promise overdue</span>' : '')}
                             </div>
                         </div>
                         <div class="text-muted small text-end">

@@ -7,6 +7,7 @@ use App\Jobs\ReassignCallCenterRows;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterInteraction;
 use App\Models\CallCenterReport;
+use App\Models\Configurations;
 use App\Models\MasterDatasetRow;
 use App\Models\User;
 use Carbon\Carbon;
@@ -247,16 +248,18 @@ class AssignmentController extends Controller
             $latestPaid = (bool) ($latestOverall->paid ?? false);
 
             $promiseOverdue = false;
-            if ($latestOverall && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
-                if (! $latestPaid && $latestOverall->payment_expected_at) {
-                    try {
-                        $due = Carbon::parse($latestOverall->payment_expected_at)->endOfDay();
-                        if ($due->lt($now)) {
-                            $promiseOverdue = true;
-                        }
-                    } catch (\Exception $e) {
-                        // ignore
+            $isPromiseOutcome = $latestOverall && (
+                $latestOutcome === 'promise_to_pay' ||
+                in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)
+            );
+            if ($isPromiseOutcome && ! $latestPaid && $latestOverall->payment_expected_at) {
+                try {
+                    $due = Carbon::parse($latestOverall->payment_expected_at)->endOfDay();
+                    if ($due->lt($now)) {
+                        $promiseOverdue = true;
                     }
+                } catch (\Exception $e) {
+                    // ignore
                 }
             }
 
@@ -487,11 +490,14 @@ class AssignmentController extends Controller
 
         $total = (clone $q)->count();
 
+        $threshold = (float) (Configurations::where('config_name', 'outstanding_threshold')->value('value') ?? 0);
+        $today = Carbon::today();
+
         $rows = $q->orderBy('id')
             ->skip($offset)
             ->take($perPage)
             ->get()
-            ->map(function ($a) {
+            ->map(function ($a) use ($threshold, $today) {
                 $row = $a->row;
                 $acct = $row->account_num ?? $row->customer_ref ?? null;
                 $callQBase = CallCenterInteraction::query();
@@ -520,16 +526,33 @@ class AssignmentController extends Controller
                 $latestOutcome = $latestOverall->outcome ?? null;
                 $latestPaymentExpected = $latestOverall && $latestOverall->payment_expected_at ? Carbon::parse($latestOverall->payment_expected_at)->toDateString() : null;
                 $promiseOverdue = false;
-                if ($latestOverall && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
-                    if (! empty($latestOverall->payment_expected_at)) {
-                        try {
-                            $due = Carbon::parse($latestOverall->payment_expected_at)->endOfDay();
-                            if ($due->lt(Carbon::now())) {
-                                $promiseOverdue = true;
-                            }
-                        } catch (\Exception $e) {
-                            $promiseOverdue = false;
+                $isReminder = false;
+                $reminderType = null;
+
+                $arrearsVal = optional($row)->new_arrears_value !== null ? (float) optional($row)->new_arrears_value : null;
+                $paymentVal = optional($row)->payments_value !== null ? (float) optional($row)->payments_value : 0.0;
+                $outstandingVal = $arrearsVal !== null ? ($arrearsVal - $paymentVal) : null;
+                $isPaidVal = $outstandingVal !== null && $outstandingVal < $threshold;
+
+                $isPromiseOutcome = $latestOverall && (
+                    $latestOutcome === 'promise_to_pay' ||
+                    in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)
+                );
+
+                if ($isPromiseOutcome && ! $isPaidVal && ! empty($latestOverall->payment_expected_at)) {
+                    try {
+                        $isReminder = true;
+                        $expectedDate = Carbon::parse($latestOverall->payment_expected_at)->startOfDay();
+                        if ($expectedDate->lt($today)) {
+                            $reminderType = 'overdue';
+                            $promiseOverdue = true;
+                        } elseif ($expectedDate->eq($today)) {
+                            $reminderType = 'due_today';
+                        } else {
+                            $reminderType = 'upcoming';
                         }
+                    } catch (\Exception $e) {
+                        $promiseOverdue = false;
                     }
                 }
 
@@ -546,6 +569,8 @@ class AssignmentController extends Controller
                     'latest_outcome' => $latestOutcome,
                     'latest_payment_expected_at' => $latestPaymentExpected,
                     'promise_overdue' => $promiseOverdue,
+                    'is_reminder' => $isReminder,
+                    'reminder_type' => $reminderType,
                 ];
             });
 

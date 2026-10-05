@@ -297,7 +297,6 @@
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="all">All (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="called">Called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary active" data-cc-filter="uncalled">Not called (0)</button>
-                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="paid">Paid (0)</button>
                                                     <button type="button" class="btn btn-outline-warning text-dark fw-semibold" data-cc-filter="reminders">Reminders (0)</button>
                                                 </div>
                                             </div>

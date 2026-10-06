@@ -1068,6 +1068,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Auto-poll for OMNI API updates every 30 seconds
     let omniPollInterval = setInterval(() => {
         if (document.hidden) return;
+        paging.page = 1;
         loadAssignments(false);
     }, 30000);
 
@@ -1077,6 +1078,8 @@ document.addEventListener('DOMContentLoaded', function () {
             clearInterval(omniPollInterval);
         } else {
             omniPollInterval = setInterval(() => {
+                if (document.hidden) return;
+                paging.page = 1;
                 loadAssignments(false);
             }, 30000);
         }

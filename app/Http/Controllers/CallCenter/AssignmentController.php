@@ -11,6 +11,7 @@ use App\Models\CallCenterInteraction;
 use App\Models\CallCenterReport;
 use App\Models\MasterDatasetRow;
 use App\Models\User;
+use App\Services\OmniBillPaymentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
@@ -411,11 +412,13 @@ class AssignmentController extends Controller
 
         $total = (clone $q)->count();
 
+        $omniService = app(OmniBillPaymentService::class);
+
         $rows = $q->orderBy('id')
             ->skip($offset)
             ->take($perPage)
             ->get()
-            ->map(function ($a) {
+            ->map(function ($a) use ($omniService) {
                 $row = $a->row;
                 $acct = $row->account_num ?? $row->customer_ref ?? null;
                 $callQBase = CallCenterInteraction::query();
@@ -457,14 +460,72 @@ class AssignmentController extends Controller
                     }
                 }
 
+                // OMNI API integration
+                $paymentsValue = optional($row)->payments_value;
+                $outstandingBalance = optional($row)->outstanding_balance;
+                $lastPaymentAmount = optional($row)->last_payment_amount;
+                $lastPaymentDate = optional($row)->last_payment_date;
+                $newArrearsValue = optional($row)->new_arrears_value;
+
+                if ($omniService && $row) {
+                    $telephoneNo = $row->product_label ?? null;
+                    $accountNo = $row->account_num ?? $row->customer_ref ?? null;
+
+                    if ($telephoneNo || $accountNo) {
+                        $lastFetched = $row->last_api_fetched;
+                        $shouldSkip = false;
+                        if ($lastFetched) {
+                            try {
+                                $fetchedAt = Carbon::parse($lastFetched);
+                                $shouldSkip = $fetchedAt->gt(Carbon::now()->subSeconds(30));
+                            } catch (\Exception $e) {
+                                // ignore parse error, proceed with API call
+                            }
+                        }
+
+                        if (! $shouldSkip) {
+                            $apiResponse = $omniService->fetchBillPayment($telephoneNo, $accountNo);
+                            $billingData = $omniService->extractBillingData($apiResponse);
+
+                            if ($billingData) {
+                                $apiLastPaymentAmount = OmniBillPaymentService::parseAmount($billingData['lastPaymentAmount'] ?? null);
+                                $apiLastPaymentDate = OmniBillPaymentService::parseApiDate($billingData['lastPaymentDate'] ?? null);
+
+                                // Deduplication: skip if both date and amount match stored values
+                                $isDuplicate = ($apiLastPaymentAmount === $lastPaymentAmount && $apiLastPaymentDate === $lastPaymentDate);
+
+                                if (! $isDuplicate && $apiLastPaymentAmount !== null) {
+                                    $paymentsValue = ($paymentsValue ?? 0) + $apiLastPaymentAmount;
+                                    $outstandingBalance = ($newArrearsValue ?? 0) - $paymentsValue;
+
+                                    $row->update([
+                                        'payments_value' => $paymentsValue,
+                                        'last_payment_amount' => $apiLastPaymentAmount,
+                                        'last_payment_date' => $apiLastPaymentDate,
+                                        'outstanding_balance' => $outstandingBalance,
+                                        'last_api_fetched' => now(),
+                                    ]);
+                                } else {
+                                    // Even if duplicate, update last_api_fetched to track fetch time
+                                    $row->update(['last_api_fetched' => now()]);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 return [
                     'assignment_id' => $a->id,
                     'row_id' => $a->master_dataset_row_id,
                     'report_id' => $a->call_center_report_id,
                     'address_name' => optional($row)->address_name,
-                    'arrears' => optional($row)->new_arrears_value,
+                    'arrears' => $newArrearsValue,
                     'bill' => optional($row)->latest_bill_mny,
-                    'payment_value' => optional($row)->payments_value,
+                    'payment_value' => $paymentsValue,
+                    'outstanding_balance' => $outstandingBalance,
+                    'last_payment_amount' => $lastPaymentAmount,
+                    'last_payment_date' => $lastPaymentDate,
+                    'last_api_fetched' => optional($row)->last_api_fetched,
                     'call_count' => $callCount,
                     'called_in_period' => $calledInPeriod,
                     'latest_outcome' => $latestOutcome,

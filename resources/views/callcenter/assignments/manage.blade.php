@@ -585,13 +585,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (selName) selName.textContent = data.address_name || data.name || '';
         if (selAmt) {
             const paymentValue = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-            const arrearsNum = data.arrears !== null && data.arrears !== undefined ? Number(data.arrears) : null;
-            const paymentNum = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value) : null;
-            const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
-            const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+            const outstandingBalance = data.outstanding_balance !== null && data.outstanding_balance !== undefined ? Number(data.outstanding_balance) : null;
+            const outstandingDisplay = outstandingBalance !== null ? outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
             const arrearsDisplay = data.arrears !== null && data.arrears !== undefined ? Number(data.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
             const billDisplay = data.bill !== null && data.bill !== undefined ? Number(data.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-            const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+            const statusBadge = outstandingBalance === null ? '—' : (outstandingBalance < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
             let html = `
             <div class="row g-2 align-items-start">
                 <div class="col-8">
@@ -749,8 +747,8 @@ document.addEventListener('DOMContentLoaded', function () {
             rows.forEach(r => {
                 const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
                 const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
-                const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
-                const isPaid = outstandingNum !== null && outstandingNum < outstandingThreshold;
+                const outstandingBalance = r.outstanding_balance !== null && r.outstanding_balance !== undefined ? Number(r.outstanding_balance) : null;
+                const isPaid = outstandingBalance !== null && outstandingBalance < outstandingThreshold;
 
                 filterCounts.all++;
                 if (isPaid) {
@@ -779,15 +777,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.dataset.overdue = r.promise_overdue ? '1' : '0';
                 btn.dataset.outcome = r.latest_outcome || '';
                 btn.dataset.paid = isPaid ? '1' : '0';
-                const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                const outstandingDisplay = outstandingBalance !== null ? outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const arrearsDisplay = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                const statusBadge = outstandingNum === null ? '—' : (isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                const statusBadge = outstandingBalance === null ? '—' : (isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                // OMNI API status indicator: spinner while loading, green check when complete
+                const hasApiData = r.last_api_fetched !== null && r.last_api_fetched !== undefined;
+                const apiIndicator = hasApiData 
+                    ? '<span class="badge bg-success ms-1 omni-done" title="OMNI data updated"><i class="bi bi-check-circle-fill"></i></span>'
+                    : '<span class="badge bg-secondary ms-1 omni-pending" title="OMNI data pending"><i class="bi bi-arrow-repeat"></i></span>';
                 btn.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>${r.address_name ?? '—'}</strong>
+                            <strong>${r.address_name ?? '—'}</strong>${apiIndicator}
                             <div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div>
                             <div class="small text-danger">Payment: Rs. ${paymentDisplay}</div>
                             <div class="small text-muted">
@@ -854,6 +857,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // initial fetch
     loadAssignments(false);
+
+    // Auto-poll for OMNI API updates every 30 seconds
+    let omniPollInterval = setInterval(() => {
+        if (document.hidden) return;
+        loadAssignments(false);
+    }, 30000);
+
+    // Pause polling when tab is hidden
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            clearInterval(omniPollInterval);
+        } else {
+            omniPollInterval = setInterval(() => {
+                loadAssignments(false);
+            }, 30000);
+        }
+    });
 
     function clearPaymentFields() {
         if (paymentWrap) paymentWrap.style.display = 'none';

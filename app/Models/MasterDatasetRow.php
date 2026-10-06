@@ -67,6 +67,10 @@ class MasterDatasetRow extends Model
         'exclusion_reason',
         'assigned_to',
         'exclusion_priority',
+        'last_payment_amount',
+        'last_payment_date',
+        'outstanding_balance',
+        'last_api_fetched',
     ];
 
     protected $casts = [
@@ -86,6 +90,10 @@ class MasterDatasetRow extends Model
         'latest_effective_dtm' => 'date',
         'excluded' => 'boolean',
         'exclusion_priority' => 'integer',
+        'last_payment_amount' => 'decimal:2',
+        'last_payment_date' => 'date',
+        'outstanding_balance' => 'decimal:2',
+        'last_api_fetched' => 'datetime',
     ];
 
     public function process(): BelongsTo

@@ -644,14 +644,12 @@ function hideModalOrFallback(node) {
                     const selAmt = document.getElementById('ccSelectedAmounts');
                     if (selName) selName.textContent = data.address_name || data.name || '';
                     if (selAmt) {
-                        const arrearsNum = data.arrears !== null && data.arrears !== undefined ? Number(data.arrears) : null;
-                        const paymentNum = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value) : null;
-                        const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
-                        const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                        const outstandingBalance = data.outstanding_balance !== null && data.outstanding_balance !== undefined ? Number(data.outstanding_balance) : null;
+                        const outstandingDisplay = outstandingBalance !== null ? outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                         const arrearsDisplay = data.arrears !== null && data.arrears !== undefined ? Number(data.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                         const billDisplay = data.bill !== null && data.bill !== undefined ? Number(data.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                         const paymentDisplay = data.payment_value !== null && data.payment_value !== undefined ? Number(data.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                        const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                        const statusBadge = outstandingBalance === null ? '—' : (outstandingBalance < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
                         let html = `
                         <div class="row g-2 align-items-start">
                             <div class="col-8">
@@ -706,15 +704,18 @@ function hideModalOrFallback(node) {
                                     btn.type = 'button';
                                     btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-start';
                                     btn.dataset.assignmentId = r.assignment_id;
-                                    const arrearsNum = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears) : null;
-                                    const paymentNum = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value) : null;
-                                    const outstandingNum = arrearsNum !== null ? arrearsNum - (paymentNum || 0) : null;
-                                    const outstandingDisplay = outstandingNum !== null ? outstandingNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+                                    const outstandingBalance = r.outstanding_balance !== null && r.outstanding_balance !== undefined ? Number(r.outstanding_balance) : null;
+                                    const outstandingDisplay = outstandingBalance !== null ? outstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                                     const arrearsDisplay = r.arrears !== null && r.arrears !== undefined ? Number(r.arrears).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                                     const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                                     const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-                                    const statusBadge = outstandingNum === null ? '—' : (outstandingNum < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-                                    btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong><div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
+                                    const statusBadge = outstandingBalance === null ? '—' : (outstandingBalance < outstandingThreshold ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
+                                    // OMNI API status indicator
+                                    const hasApiData = r.last_api_fetched !== null && r.last_api_fetched !== undefined;
+                                    const apiIndicator = hasApiData 
+                                        ? '<span class="badge bg-success ms-1 omni-done" title="OMNI data updated"><i class="bi bi-check-circle-fill"></i></span>'
+                                        : '<span class="badge bg-secondary ms-1 omni-pending" title="OMNI data pending"><i class="bi bi-arrow-repeat"></i></span>';
+                                    btn.innerHTML = `<div><strong>${r.address_name ?? '—'}</strong>${apiIndicator}<div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div></div><div class="text-muted small">#${r.row_id}</div>`;
                                     btn.addEventListener('click', async () => {
                                         if (isFetchingDetails) return;
                                         isFetchingDetails = true;
@@ -735,6 +736,30 @@ function hideModalOrFallback(node) {
                             isFetchingDetails = false;
                         }
                     });
+                });
+
+                // Auto-poll for OMNI API updates every 30 seconds
+                let omniPollInterval = setInterval(() => {
+                    if (document.hidden) return;
+                    const activeUserEl = document.querySelector('.cc-approved-user.active');
+                    if (activeUserEl) {
+                        activeUserEl.click();
+                    }
+                }, 30000);
+
+                // Pause polling when tab is hidden
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        clearInterval(omniPollInterval);
+                    } else {
+                        omniPollInterval = setInterval(() => {
+                            if (document.hidden) return;
+                            const activeUserEl = document.querySelector('.cc-approved-user.active');
+                            if (activeUserEl) {
+                                activeUserEl.click();
+                            }
+                        }, 30000);
+                    }
                 });
 
                 outcomeEl?.addEventListener('change', function() {

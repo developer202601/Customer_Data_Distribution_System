@@ -44,8 +44,7 @@ class OmniBillPaymentService
                 ->withHeaders([
                     'Content-Type' => 'application/x-www-form-urlencoded',
                 ])
-                ->asForm()
-                ->post($this->apiUrl, [
+                ->get($this->apiUrl, [
                     'telephoneNo' => $telephoneNo ?? '',
                     'accountNo' => $accountNo ?? '',
                     'secretCode' => $this->secretCode,

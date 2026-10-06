@@ -17,7 +17,8 @@ Integrates external OMNI API to refresh bill payment data on the assignments pag
 
 ### 2. Service Layer
 **`app/Services/OmniBillPaymentService.php`:**
-- Sends POST request to OMNI API
+- Sends **GET** request to OMNI API (matches original curl `--request GET`)
+- Parameters sent as query string: `telephoneNo`, `accountNo`, `secretCode`
 - Uses `telephoneNo` (from `product_label`) and `accountNo` (from `account_num`)
 - Includes `secretCode` from config (env-based)
 - 10-second timeout with graceful error handling

@@ -395,6 +395,7 @@ class AssignmentController extends Controller
 
         $reportId = $request->query('report');
         $includeCompleted = filter_var($request->query('include_completed', false), FILTER_VALIDATE_BOOLEAN);
+        $skipOmni = filter_var($request->query('skip_omni', false), FILTER_VALIDATE_BOOLEAN);
         $perPage = max(1, min((int) $request->query('per_page', 50), 200));
         $page = max(1, (int) $request->query('page', 1));
         $offset = ($page - 1) * $perPage;
@@ -418,7 +419,7 @@ class AssignmentController extends Controller
             ->skip($offset)
             ->take($perPage)
             ->get()
-            ->map(function ($a) use ($omniService) {
+            ->map(function ($a) use ($omniService, $skipOmni) {
                 $row = $a->row;
                 $acct = $row->account_num ?? $row->customer_ref ?? null;
                 $callQBase = CallCenterInteraction::query();
@@ -467,7 +468,7 @@ class AssignmentController extends Controller
                 $lastPaymentDate = optional($row)->last_payment_date;
                 $newArrearsValue = optional($row)->new_arrears_value;
 
-                if ($omniService && $row) {
+                if ($omniService && $row && ! $skipOmni) {
                     $telephoneNo = $row->product_label ?? null;
                     $accountNo = $row->account_num ?? $row->customer_ref ?? null;
 
@@ -494,7 +495,8 @@ class AssignmentController extends Controller
                                 // Deduplication: skip if both date and amount match stored values
                                 $isDuplicate = ($apiLastPaymentAmount === $lastPaymentAmount && $apiLastPaymentDate === $lastPaymentDate);
 
-                                if (! $isDuplicate && $apiLastPaymentAmount !== null) {
+                                // Only accumulate if API payment date is newer than stored date
+                                if (! $isDuplicate && $apiLastPaymentAmount !== null && $apiLastPaymentDate !== null && ($lastPaymentDate === null || $apiLastPaymentDate > $lastPaymentDate)) {
                                     $paymentsValue = ($paymentsValue ?? 0) + $apiLastPaymentAmount;
                                     $outstandingBalance = ($newArrearsValue ?? 0) - $paymentsValue;
 

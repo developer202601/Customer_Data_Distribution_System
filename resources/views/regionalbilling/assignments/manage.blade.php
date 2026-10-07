@@ -289,7 +289,6 @@
                                                 </div>
                                             </div>
                                             <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">
-                                                <div class="list-group-item text-muted small">Loading accepted rows...</div>
                                             </div>
                                             <div class="d-flex justify-content-center mt-2">
                                                 <button type="button" class="btn btn-outline-primary btn-sm d-none" id="ccLoadMoreBtn">Load more</button>
@@ -935,13 +934,17 @@ document.addEventListener('DOMContentLoaded', function () {
         updateOldRowToggle();
     }
 
-    async function loadAssignments(append = false) {
+    async function loadAssignments(append = false, background = false) {
         if (!assignmentList || !userId) return;
         const params = new URLSearchParams({ page: paging.page, per_page: paging.per_page });
         if (reportId) params.append('report', reportId);
         // Always include completed assignments for the accepted rows view
         params.append('include_completed', '1');
-        assignmentList.innerHTML = append ? assignmentList.innerHTML : '<div class="list-group-item text-muted small">Loading accepted rows...</div>';
+        // Skip OMNI API call on initial load - load from DB only
+        if (!background && !append) {
+            params.append('skip_omni', '1');
+            assignmentList.innerHTML = '<div class="list-group-item text-center py-4"><span class="spinner-border spinner-border-sm text-secondary" role="status"></span></div>';
+        }
         try {
             const res = await fetch(`/rb/assignments/${userId}/rows?${params.toString()}`, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!res.ok) throw new Error('Failed to load');
@@ -989,8 +992,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 const billDisplay = r.bill !== null && r.bill !== undefined ? Number(r.bill).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const statusBadge = outstandingBalance === null ? '—' : (isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
-                // OMNI API status indicator: spinner while loading, green check when complete
-                const hasApiData = r.last_api_fetched !== null && r.last_api_fetched !== undefined;
+                // OMNI API status indicator
+                const today = new Date();
+                const lastFetched = r.last_api_fetched ? new Date(r.last_api_fetched) : null;
+                const hasApiData = lastFetched !== null && lastFetched.toDateString() >= today.toDateString();
                 const apiIndicator = hasApiData 
                     ? '<span class="badge bg-success ms-1 omni-done" title="OMNI data updated"><i class="bi bi-check-circle-fill"></i></span>'
                     : '<span class="badge bg-secondary ms-1 omni-pending" title="OMNI data pending"><i class="bi bi-arrow-repeat"></i></span>';
@@ -1055,8 +1060,10 @@ document.addEventListener('DOMContentLoaded', function () {
             applyFilter(currentFilter);
         } catch (e) {
             console.error(e);
-            assignmentList.innerHTML = '<div class="list-group-item text-danger small">Failed to load rows.</div>';
-            if (loadMoreBtn) loadMoreBtn.classList.add('d-none');
+            if (!background) {
+                assignmentList.innerHTML = '<div class="list-group-item text-danger small">Failed to load rows.</div>';
+                if (loadMoreBtn) loadMoreBtn.classList.add('d-none');
+            }
         }
     }
 
@@ -1065,11 +1072,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // initial fetch
     loadAssignments(false);
 
-    // Auto-poll for OMNI API updates every 30 seconds
+    // Auto-poll for OMNI API updates every 30 seconds (background)
     let omniPollInterval = setInterval(() => {
         if (document.hidden) return;
         paging.page = 1;
-        loadAssignments(false);
+        loadAssignments(false, true);
     }, 30000);
 
     // Pause polling when tab is hidden
@@ -1080,7 +1087,7 @@ document.addEventListener('DOMContentLoaded', function () {
             omniPollInterval = setInterval(() => {
                 if (document.hidden) return;
                 paging.page = 1;
-                loadAssignments(false);
+                loadAssignments(false, true);
             }, 30000);
         }
     });

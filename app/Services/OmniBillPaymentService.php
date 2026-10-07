@@ -15,11 +15,14 @@ class OmniBillPaymentService
 
     private int $timeout;
 
+    private bool $verifySsl;
+
     public function __construct()
     {
         $this->apiUrl = config('omni.api_url', '');
         $this->secretCode = config('omni.secret_code', '');
         $this->timeout = config('omni.timeout', 10);
+        $this->verifySsl = config('omni.verify_ssl', true);
     }
 
     /**
@@ -39,16 +42,31 @@ class OmniBillPaymentService
             return null;
         }
 
+        // Ensure telephone number has a leading 0 for Sri Lankan numbers
+        if ($telephoneNo !== null && $telephoneNo !== '') {
+            $telephoneNo = (string) $telephoneNo;
+            if (! str_starts_with($telephoneNo, '0') && ctype_digit($telephoneNo)) {
+                $telephoneNo = '0' . $telephoneNo;
+            }
+        }
+
         try {
-            $response = Http::timeout($this->timeout)
+            $request = Http::timeout($this->timeout)
                 ->withHeaders([
                     'Content-Type' => 'application/x-www-form-urlencoded',
-                ])
-                ->get($this->apiUrl, [
-                    'telephoneNo' => $telephoneNo ?? '',
-                    'accountNo' => $accountNo ?? '',
-                    'secretCode' => $this->secretCode,
                 ]);
+
+            if (! $this->verifySsl) {
+                $request = $request->withoutVerifying();
+            }
+
+            $response = $request->send('GET', $this->apiUrl, [
+                'body' => http_build_query([
+                    'telephoneNo' => $telephoneNo ?? '',
+                    'accountNo'   => $accountNo ?? '',
+                    'secretCode'  => $this->secretCode,
+                ]),
+            ]);
 
             if (! $response->successful()) {
                 \Log::error('OMNI API non-200 response', [

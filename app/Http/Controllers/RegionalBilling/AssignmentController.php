@@ -553,7 +553,7 @@ class AssignmentController extends Controller
                         if ($lastFetched) {
                             try {
                                 $fetchedAt = Carbon::parse($lastFetched);
-                                $shouldSkip = $fetchedAt->gt(Carbon::now()->subSeconds(30));
+                                $shouldSkip = $fetchedAt->gt(Carbon::now()->subSeconds(25));
                             } catch (\Exception $e) {
                                 // ignore parse error, proceed with API call
                             }
@@ -585,6 +585,9 @@ class AssignmentController extends Controller
                                     // Even if duplicate, update last_api_fetched to track fetch time
                                     $row->update(['last_api_fetched' => now()]);
                                 }
+                            } else {
+                                // API call was made but returned no billing data; still update fetch time
+                                $row->update(['last_api_fetched' => now()]);
                             }
                         }
                     }

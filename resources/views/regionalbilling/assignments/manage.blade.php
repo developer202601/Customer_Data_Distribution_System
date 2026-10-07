@@ -129,6 +129,34 @@
         margin: calc(var(--cc-navbar-offset) / 2) auto 1.5rem auto;
     }
 
+    #ccViewRemindersLink {
+        color: #212529 !important;
+        background: transparent !important;
+        text-decoration: underline !important;
+        box-shadow: none !important;
+        outline: none !important;
+        border: none !important;
+        cursor: pointer;
+    }
+    #ccViewRemindersLink:hover,
+    #ccViewRemindersLink:focus,
+    #ccViewRemindersLink:active {
+        color: #000000 !important;
+        background: transparent !important;
+        text-decoration: underline !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    .theme-dark #ccViewRemindersLink {
+        color: #f5f9ff !important;
+    }
+    .theme-dark #ccViewRemindersLink:hover,
+    .theme-dark #ccViewRemindersLink:focus,
+    .theme-dark #ccViewRemindersLink:active {
+        color: #ffffff !important;
+        background: transparent !important;
+    }
+
     /* Fallback modal (used when JS bootstrap fails): position below navbar and keep horizontally centered */
     .cc-fallback-modal {
         position: fixed !important;
@@ -285,7 +313,7 @@
                                                     <div>
                                                         <span class="me-2 fs-6">🔔</span>
                                                         <strong>Call Reminders Today:</strong> You have <span id="ccRemindersDueCount" class="fw-bold">0</span> customer(s) scheduled for follow-up today whose payments are still pending.
-                                                        <button type="button" class="btn btn-sm btn-link text-dark fw-bold text-decoration-underline p-0 ms-2" id="ccViewRemindersLink">View Reminders</button>
+                                                        <a href="javascript:void(0)" class="text-dark fw-bold text-decoration-underline ms-2" id="ccViewRemindersLink">View Reminders</a>
                                                     </div>
                                                     <button type="button" class="btn-close btn-sm p-2" data-bs-dismiss="alert" aria-label="Close"></button>
                                                 </div>
@@ -297,7 +325,7 @@
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="all">All (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary" data-cc-filter="called">Called (0)</button>
                                                     <button type="button" class="btn btn-outline-secondary active" data-cc-filter="uncalled">Not called (0)</button>
-                                                    <button type="button" class="btn btn-outline-warning text-dark fw-semibold" data-cc-filter="reminders">Reminders (0)</button>
+                                                    <button type="button" class="btn btn-outline-secondary" data-cc-filter="reminders">Reminders (0)</button>
                                                 </div>
                                             </div>
                                             <div class="list-group list-group-flush" id="ccAssignmentList" data-user-id="{{ $userId }}" data-report-id="{{ $reportId }}" data-latest-report-id="{{ $latestReportId ?? '' }}" data-latest-report-pending="{{ $latestReportPending ?? 0 }}">
@@ -902,19 +930,7 @@ document.addEventListener('DOMContentLoaded', function () {
         filterButtons.forEach(btn => {
             const key = btn.dataset.ccFilter;
             const count = filterCounts[key] ?? 0;
-            if (key === 'reminders') {
-                if (filterCounts.reminders_due > 0) {
-                    btn.textContent = `Reminders (${count} - ${filterCounts.reminders_due} Due)`;
-                    btn.classList.remove('btn-outline-warning');
-                    btn.classList.add('btn-warning');
-                } else {
-                    btn.textContent = `Reminders (${count})`;
-                    btn.classList.remove('btn-warning');
-                    btn.classList.add('btn-outline-warning');
-                }
-            } else {
-                btn.textContent = btn.textContent.replace(/\(.*\)/, `(${count})`);
-            }
+            btn.textContent = btn.textContent.replace(/\(.*\)/, `(${count})`);
         });
 
         // Reminders banner handling

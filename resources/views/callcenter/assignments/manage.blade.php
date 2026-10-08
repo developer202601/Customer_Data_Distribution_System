@@ -787,9 +787,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const paymentDisplay = r.payment_value !== null && r.payment_value !== undefined ? Number(r.payment_value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
                 const statusBadge = outstandingBalance === null ? '—' : (isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
                 // OMNI API status indicator: spinner while loading, green check when complete
-                const today = new Date();
-                const lastFetched = r.last_api_fetched ? new Date(r.last_api_fetched) : null;
-                const hasApiData = lastFetched !== null && lastFetched.toDateString() >= today.toDateString();
+                const today = new Date().setHours(0, 0, 0, 0);
+                const lastFetched = r.last_api_fetched ? new Date(r.last_api_fetched).setHours(0, 0, 0, 0) : null;
+                const hasApiData = lastFetched !== null && lastFetched >= today;
                 const apiIndicator = hasApiData 
                     ? '<span class="badge bg-success ms-1 omni-done" title="OMNI data updated"><i class="bi bi-check-circle-fill"></i></span>'
                     : '<span class="badge bg-secondary ms-1 omni-pending" title="OMNI data pending"><i class="bi bi-arrow-repeat"></i></span>';

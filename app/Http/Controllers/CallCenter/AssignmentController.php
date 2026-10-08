@@ -508,12 +508,8 @@ class AssignmentController extends Controller
                                         'last_api_fetched' => now(),
                                     ]);
                                 } else {
-                                    // Even if duplicate, update last_api_fetched to track fetch time
                                     $row->update(['last_api_fetched' => now()]);
                                 }
-                            } else {
-                                // API call was made but returned no billing data; still update fetch time
-                                $row->update(['last_api_fetched' => now()]);
                             }
                         }
                     }

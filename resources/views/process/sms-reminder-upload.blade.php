@@ -26,6 +26,7 @@
                             <div>
                                 <h1 class="process-upload-title mb-1">SMS Reminder Files Upload</h1>
                                 <p class="text-muted mb-0">Upload a Microsoft Excel (.xlsx) workbook with exact headers: <code>PRODUCT_LABEL</code>, <code>SMS_1</code>, <code>SMS_2</code>, and <code>DATASET_MONTH</code>.</p>
+                                <p class="mb-0 mt-2"><a href="{{ asset('downloads/sms-reminder-sample.xlsx') }}" class="link-primary" target="_blank" rel="noopener" data-loader-off="1">Download a sample Excel file with required columns</a></p>
                             </div>
                         </div>
                         <div class="d-flex gap-2">
@@ -78,8 +79,6 @@
 
     </div>
 </div>
-
-@endsection
 
 @push('scripts')
 <script nonce="{{ $cspNonce ?? '' }}">

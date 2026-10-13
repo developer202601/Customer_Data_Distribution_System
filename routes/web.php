@@ -1,11 +1,12 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AssignmentController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BillRangeController;
 use App\Http\Controllers\CallCenter\DashboardController as CallCenterDashboardController;
 use App\Http\Controllers\CallCenter\ReportController as CallCenterReportController;
 use App\Http\Controllers\CallCenter\UserController as CallCenterUserController;
-use App\Http\Controllers\DatasetReportsController;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExclusionUploadController;
 use App\Http\Controllers\MasterDatasetUploadController;
@@ -15,9 +16,8 @@ use App\Http\Controllers\PaymentUploadController;
 use App\Http\Controllers\ProcessFileController;
 use App\Http\Controllers\ProcessRunningController;
 use App\Http\Controllers\ProcessStatusController;
+use App\Http\Controllers\SmsReminderUploadController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\BillRangeController;
 
 Route::middleware('session.auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -38,6 +38,7 @@ Route::middleware('session.auth')->group(function () {
         if ($request->session()->get('user.is_admin')) {
             return redirect()->route('process.assignments.reports')->with('status', 'File uploads are reserved for normal users.');
         }
+
         return view('process.payment-upload');
     })->name('payment.upload');
     Route::post('/payments/update', [PaymentUploadController::class, 'update'])->name('payments.update');
@@ -45,6 +46,13 @@ Route::middleware('session.auth')->group(function () {
     Route::get('/payments/history', [PaymentUploadController::class, 'history'])->name('payments.history');
     Route::get('/payments/progress/{token}', [PaymentUploadController::class, 'progress'])->name('payments.progress');
     Route::get('/payments/progress/stream/{token}', [PaymentUploadController::class, 'progressStream'])->name('payments.progress.stream');
+
+    Route::get('/sms-reminder/upload', [SmsReminderUploadController::class, 'create'])->name('sms_reminder.upload');
+    Route::post('/sms-reminders/update', [SmsReminderUploadController::class, 'update'])->name('sms_reminders.update');
+    Route::get('/sms-reminders', [SmsReminderUploadController::class, 'index'])->name('sms_reminders.index');
+    Route::get('/sms-reminders/history', [SmsReminderUploadController::class, 'history'])->name('sms_reminders.history');
+    Route::get('/sms-reminders/progress/{token}', [SmsReminderUploadController::class, 'progress'])->name('sms_reminders.progress');
+    Route::get('/sms-reminders/progress/stream/{token}', [SmsReminderUploadController::class, 'progressStream'])->name('sms_reminders.progress.stream');
     Route::post('/process/upload', [ProcessFileController::class, 'store'])->name('process.upload.store');
     Route::post('/process/upload/cancel', [ProcessFileController::class, 'cancel'])->name('process.upload.cancel');
     Route::get('/process/upload/progress/{token}', [ProcessFileController::class, 'progress'])->name('process.upload.progress');
@@ -85,9 +93,9 @@ Route::middleware('session.auth')->group(function () {
 
     // Manual pass-to-calling-units routes — each triggers report creation for the given segment/system
     Route::post('/process/assignments/{process}/pass-ccs', [PassReportController::class, 'passCCS'])->name('process.assignments.pass-ccs');
-    Route::post('/process/assignments/{process}/pass-cc',  [PassReportController::class, 'passCC'])->name('process.assignments.pass-cc');
-    Route::post('/process/assignments/{process}/pass-s',   [PassReportController::class, 'passS'])->name('process.assignments.pass-s');
-    Route::post('/process/assignments/{process}/pass-rb',  [PassReportController::class, 'passRB'])->name('process.assignments.pass-rb');
+    Route::post('/process/assignments/{process}/pass-cc', [PassReportController::class, 'passCC'])->name('process.assignments.pass-cc');
+    Route::post('/process/assignments/{process}/pass-s', [PassReportController::class, 'passS'])->name('process.assignments.pass-s');
+    Route::post('/process/assignments/{process}/pass-rb', [PassReportController::class, 'passRB'])->name('process.assignments.pass-rb');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/admin/adminconfig', [AdminController::class, 'config'])->name('admin.config');
     Route::post('/admin/users', [AdminController::class, 'createUser'])->name('admin.createUser');

@@ -65,6 +65,14 @@
                 </div>
             </a>
         </div>
+        <div class="col-lg-6">
+            <a href="{{ route('sms_reminder.upload') }}" class="dashboard-card h-100" role="button" aria-label="Open SMS reminder files upload page">
+                <div class="dashboard-card-body">
+                    <h2 class="dashboard-card-title">Upload SMS Reminders</h2>
+                    <p class="dashboard-card-description">Upload the monthly SMS reminder file</p>
+                </div>
+            </a>
+        </div>
         <!-- <div class="col-lg-6">
             <a href="{{ route('master.upload.history') }}" class="dashboard-card h-100" role="button" aria-label="Review master upload history">
                 <div class="dashboard-card-body">

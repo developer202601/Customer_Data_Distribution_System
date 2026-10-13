@@ -57,14 +57,14 @@
                 </div>
             </a>
         </div>
-        <div class="col-lg-6">
+        <!-- <div class="col-lg-6">
             <a href="{{ route('payment.upload') }}" class="dashboard-card h-100" role="button" aria-label="Open payment files upload page">
                 <div class="dashboard-card-body">
                     <h2 class="dashboard-card-title">Upload Payment Files</h2>
                     <p class="dashboard-card-description">Upload the monthly payment files</p>
                 </div>
             </a>
-        </div>
+        </div> -->
         <div class="col-lg-6">
             <a href="{{ route('sms_reminder.upload') }}" class="dashboard-card h-100" role="button" aria-label="Open SMS reminder files upload page">
                 <div class="dashboard-card-body">

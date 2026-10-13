@@ -67,7 +67,7 @@ class AssignmentController extends Controller
 
         $users = User::where('system', 'rb')
             ->where('status', 1)
-            ->where('assignment', 'rtom_' . $rtomValue)
+            ->where('assignment', 'rtom_'.$rtomValue)
             ->get();
 
         $sharedIds = [];
@@ -97,7 +97,7 @@ class AssignmentController extends Controller
             ->value('region');
 
         // Fallback to full table search in case it's not found in the latest process
-        if (!$region) {
+        if (! $region) {
             $region = MasterDatasetRow::query()
                 ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtomValue))])
                 ->whereNotNull('region')
@@ -113,7 +113,7 @@ class AssignmentController extends Controller
         $currentUser = $user->supervisor ? User::find($user->supervisor) : null;
         while ($currentUser) {
             $currentAssignment = $currentUser->assignment ?? null;
-            if ($currentAssignment && !str_starts_with($currentAssignment, 'caller_') && !str_starts_with($currentAssignment, 'rtom_') && !str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
+            if ($currentAssignment && ! str_starts_with($currentAssignment, 'caller_') && ! str_starts_with($currentAssignment, 'rtom_') && ! str_starts_with($currentAssignment, 'supervisor_') && $currentAssignment !== 'super') {
                 return $currentAssignment;
             }
             $currentUser = $currentUser->supervisor ? User::find($currentUser->supervisor) : null;
@@ -121,6 +121,7 @@ class AssignmentController extends Controller
 
         $assignment = strtolower(trim((string) $user->assignment));
         $rtomValue = preg_replace('/^rtom_/', '', $assignment);
+
         return $rtomValue ? $this->deriveRegionFromRtom($rtomValue) : null;
     }
 
@@ -296,7 +297,7 @@ class AssignmentController extends Controller
             $r = CallCenterReport::regionalBilling()->find((int) $reportId);
             if ($r) {
                 $dm = $r->dataset_month;
-                $reportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($r->dataset_month ?: 'Unknown report');
+                $reportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4).'/'.substr($dm, 4, 2).' report' : ($r->dataset_month ?: 'Unknown report');
             }
         }
 
@@ -312,7 +313,7 @@ class AssignmentController extends Controller
                 ->where('rejected', false);
             if ($latestPendingItems->count() > 0) {
                 $latestReportAllReassigned = $latestPendingItems->every(function ($a) {
-                    return !empty($a->reassignment_origin_id);
+                    return ! empty($a->reassignment_origin_id);
                 });
             }
         }
@@ -321,7 +322,7 @@ class AssignmentController extends Controller
             $lr = CallCenterReport::regionalBilling()->find((int) $latestReportId);
             if ($lr) {
                 $dm = $lr->dataset_month;
-                $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($lr->dataset_month ?: 'Report #' . $lr->id);
+                $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4).'/'.substr($dm, 4, 2).' report' : ($lr->dataset_month ?: 'Report #'.$lr->id);
             }
         }
 
@@ -346,7 +347,9 @@ class AssignmentController extends Controller
     {
         $reportId = $request->query('report');
         $query = CallCenterAssignment::regionalBilling()->where('assigned_user_id', $userId)->where('accepted', false);
-        if ($reportId) $query->where('call_center_report_id', (int) $reportId);
+        if ($reportId) {
+            $query->where('call_center_report_id', (int) $reportId);
+        }
 
         $assignments = $query->get();
         $acceptedIds = [];
@@ -360,10 +363,12 @@ class AssignmentController extends Controller
                 'locked_by' => null,
             ]);
             $acceptedIds[] = $assignment->id;
-            if ($assignment->master_dataset_row_id) $masterRowIds[] = $assignment->master_dataset_row_id;
+            if ($assignment->master_dataset_row_id) {
+                $masterRowIds[] = $assignment->master_dataset_row_id;
+            }
         }
 
-        if (!empty($masterRowIds)) {
+        if (! empty($masterRowIds)) {
             $masterRowIds = array_values(array_unique($masterRowIds));
             $prevQuery = CallCenterAssignment::regionalBilling()->where('assigned_user_id', $userId)
                 ->whereIn('master_dataset_row_id', $masterRowIds)
@@ -395,6 +400,7 @@ class AssignmentController extends Controller
                     ->where('status', 'pending')
                     ->count();
             }
+
             return response()->json([
                 'accepted' => $assignments->count(),
                 'total_pending' => $totalPending,
@@ -410,10 +416,12 @@ class AssignmentController extends Controller
     {
         $reportId = $request->query('report');
         $query = CallCenterAssignment::regionalBilling()->where('assigned_user_id', $userId)->where('rejected', false);
-        if ($reportId) $query->where('call_center_report_id', (int) $reportId);
+        if ($reportId) {
+            $query->where('call_center_report_id', (int) $reportId);
+        }
 
         $requiresReasonRaw = $request->input('requires_reason', '1');
-        $requiresReason = !in_array($requiresReasonRaw, ['0', 'false', 0, false], true);
+        $requiresReason = ! in_array($requiresReasonRaw, ['0', 'false', 0, false], true);
         $payload = $request->validate([
             'requires_reason' => 'required|in:0,1',
             'rejection_note' => $requiresReason ? 'required|string|max:600' : 'nullable|string|max:600',
@@ -422,7 +430,7 @@ class AssignmentController extends Controller
         $assignments = $query->get();
         $rejectedBy = $request->session()->get('user.id');
 
-        if (isset($payload['requires_reason']) && (string)$payload['requires_reason'] === '0') {
+        if (isset($payload['requires_reason']) && (string) $payload['requires_reason'] === '0') {
             foreach ($assignments as $assignment) {
                 if (! empty($assignment->reassignment_origin_id) && empty($assignment->accepted)) {
                     $this->reopenOriginalRejectedAssignment($assignment);
@@ -434,6 +442,7 @@ class AssignmentController extends Controller
                     if (empty($assignment->accepted)) {
                         $this->reopenOriginalRejectedAssignment($assignment);
                     }
+
                     continue;
                 }
                 $assignment->update([
@@ -453,6 +462,7 @@ class AssignmentController extends Controller
                 ->where('accepted', true)
                 ->where('status', 'pending')
                 ->count();
+
             return response()->json([
                 'rejected' => $assignments->count(),
                 'total_pending' => $totalPending,
@@ -485,7 +495,9 @@ class AssignmentController extends Controller
         } else {
             $q->where('accepted', true)->where('status', 'pending');
         }
-        if ($reportId) $q->where('call_center_report_id', (int) $reportId);
+        if ($reportId) {
+            $q->where('call_center_report_id', (int) $reportId);
+        }
 
         $total = (clone $q)->count();
 
@@ -640,8 +652,8 @@ class AssignmentController extends Controller
                 'id' => $i->id,
                 'agent_id' => $i->agent_id,
                 'agent_name' => $i->agent ? ($i->agent->name ?? $i->agent->username ?? null) : null,
-                    'outcome' => $i->outcome,
-                    'outcome_detail' => $i->outcome_detail ?? null,
+                'outcome' => $i->outcome,
+                'outcome_detail' => $i->outcome_detail ?? null,
                 'note' => $i->note,
                 'account_number' => $i->account_number ?? null,
                 'paid' => (bool) ($i->paid ?? false),
@@ -656,7 +668,7 @@ class AssignmentController extends Controller
         try {
             $chron = $interactionsRaw->sortBy('created_at');
             $paymentEvents = $chron->filter(function ($i) {
-                return (! empty($i->paid) || ! empty($i->payment_date) || ! empty($i->paid_amount));
+                return ! empty($i->paid) || ! empty($i->payment_date) || ! empty($i->paid_amount);
             });
             foreach ($paymentEvents as $p) {
                 $paymentDate = $p->payment_date ?? $p->created_at;
@@ -713,6 +725,8 @@ class AssignmentController extends Controller
             'account_num' => $r->account_num ?? null,
             'sales_person' => $r->sales_person ?? null,
             'sales_channel' => $r->sales_channel ?? null,
+            'sms_1' => $r->sms_1 ?? null,
+            'sms_2' => $r->sms_2 ?? null,
             'interactions' => $interactions,
             'payments' => $payments,
             'call_count' => $callCount,
@@ -763,6 +777,7 @@ class AssignmentController extends Controller
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['error' => 'Unauthenticated'], 401);
             }
+
             return Redirect::route('login');
         }
 
@@ -790,7 +805,9 @@ class AssignmentController extends Controller
 
         DB::transaction(function () use ($interaction, $payload) {
             $assignment = CallCenterAssignment::regionalBilling()->find($interaction->assignment_id);
-            if (! $assignment) return;
+            if (! $assignment) {
+                return;
+            }
 
             $assignment->locked_at = null;
             $assignment->locked_by = null;
@@ -867,6 +884,7 @@ class AssignmentController extends Controller
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json(['error' => 'Cannot reject an accepted row.'], 409);
                 }
+
                 return Redirect::route('rb.assignments.manage')->withErrors(['reject' => 'Cannot reject an accepted row.']);
             }
 
@@ -874,6 +892,7 @@ class AssignmentController extends Controller
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['rejected' => true, 'reassigned_copy_deleted' => true]);
             }
+
             return Redirect::route('rb.assignments.manage')->with('status', 'Reassigned row discarded; original reopened.');
         }
 
@@ -971,7 +990,7 @@ class AssignmentController extends Controller
         $dbUser = User::find($sessionUser['id'] ?? 0);
         $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
 
-        if (!$region) {
+        if (! $region) {
             return Redirect::route('rb.reports.summary', ['report' => $report->id])
                 ->withErrors(['distribute' => 'Could not determine region for your RTOM.']);
         }
@@ -989,7 +1008,7 @@ class AssignmentController extends Controller
                     ->whereRaw('LOWER(TRIM(region_name)) = ?', [strtolower(trim($region))])
                     ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtom))])
                     ->exists();
-                if (!$passed) {
+                if (! $passed) {
                     return Redirect::route('rb.reports.summary', ['report' => $report->id])
                         ->withErrors(['distribute' => 'Distribution is blocked. The Regional Admin has not passed the report for your RTOM yet.']);
                 }
@@ -1032,7 +1051,7 @@ class AssignmentController extends Controller
         $fixedTotal = array_sum($manualCounts);
         if ($fixedTotal > $total) {
             return Redirect::route('rb.reports.summary', ['report' => $report->id])
-                ->withErrors(['distribute' => 'Manual assignment total (' . $fixedTotal . ') exceeds available rows (' . $total . ').']);
+                ->withErrors(['distribute' => 'Manual assignment total ('.$fixedTotal.') exceeds available rows ('.$total.').']);
         }
 
         if (! empty($manualCounts) && empty($freeCallerIds) && $fixedTotal < $total) {
@@ -1182,8 +1201,8 @@ class AssignmentController extends Controller
         $userIds = $request->input('user_ids', []);
         $action = $request->input('action');
 
-        $assignmentIds = array_map('intval', array_filter($assignmentIds, fn($id) => is_numeric($id) && $id > 0));
-        $userIds = array_map('intval', array_filter($userIds, fn($id) => is_numeric($id) && $id > 0));
+        $assignmentIds = array_map('intval', array_filter($assignmentIds, fn ($id) => is_numeric($id) && $id > 0));
+        $userIds = array_map('intval', array_filter($userIds, fn ($id) => is_numeric($id) && $id > 0));
 
         if ($action === 'pool') {
             $userIds = [];

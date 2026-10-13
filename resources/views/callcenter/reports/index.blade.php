@@ -658,8 +658,10 @@ function hideModalOrFallback(node) {
                                     <div class="col-6">Bill: Rs. ${billDisplay}</div>
                                     <div class="col-6">Payment: Rs. ${paymentDisplay}</div>
                                     <div class="col-6">Current Outstanding: Rs. ${outstandingDisplay}</div>
-                                    <div class="col-12">Status: ${statusBadge}</div>
-                                    ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
+                                     <div class="col-12">Status: ${statusBadge}</div>
+                                     <div class="col-12">SMS Reminder 1: ${data.sms_1 ?? '—'}</div>
+                                     <div class="col-12">SMS Reminder 2: ${data.sms_2 ?? '—'}</div>
+                                     ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
                                 </div>
                             </div>
                             <div class="col-4 text-end">

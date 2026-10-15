@@ -71,6 +71,8 @@ class MasterDatasetRow extends Model
         'last_payment_date',
         'outstanding_balance',
         'last_api_fetched',
+        'sms_1',
+        'sms_2',
     ];
 
     protected $casts = [

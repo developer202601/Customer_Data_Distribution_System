@@ -745,7 +745,8 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         detailPanel.innerHTML = `
-            <div class="mb-2"><strong>Phone:</strong> ${data.phone ?? '—'}</div>
+            <div class="mb-2"><strong>Alt. Contact no:</strong> ${data.phone ?? '—'}</div>
+            <div class="mb-2"><strong>Telephone no:</strong> ${data.product_label ?? '—'}</div>
             <div class="mb-2"><strong>Address:</strong> ${data.address ?? '—'}</div>
             <div class="mb-2"><strong>RTO:</strong> ${data.rtom ?? '—'}</div>
             <div class="mb-2"><strong>Customer ref:</strong> ${data.customer_ref ?? '—'}</div>
@@ -808,9 +809,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="col-6">Initial Outstanding: Rs. ${arrearsDisplay}</div>
                         <div class="col-6">Bill: Rs. ${billDisplay}</div>
                         <div class="col-6">Payment: Rs. ${paymentValue}</div>
-                        <div class="col-6">Current Outstanding: Rs. ${outstandingDisplay}</div>
-                        <div class="col-12">Status: ${statusBadge}</div>
-                        ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
+                         <div class="col-6">Current Outstanding: Rs. ${outstandingDisplay}</div>
+                         <div class="col-12">Status: ${statusBadge}</div>
+                         <div class="col-12">SMS Reminder 1: ${data.sms_1 ?? '—'}</div>
+                         <div class="col-12">SMS Reminder 2: ${data.sms_2 ?? '—'}</div>
+                         ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
                     </div>
                 </div>
                 <div class="col-4 text-end">

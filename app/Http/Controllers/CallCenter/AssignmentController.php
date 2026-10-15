@@ -9,7 +9,6 @@ use App\Jobs\ReassignCallCenterRows;
 use App\Models\CallCenterAssignment;
 use App\Models\CallCenterInteraction;
 use App\Models\CallCenterReport;
-use App\Models\MasterDatasetRow;
 use App\Models\User;
 use App\Services\OmniBillPaymentService;
 use Carbon\Carbon;
@@ -21,6 +20,7 @@ use Illuminate\Support\Facades\Redirect;
 class AssignmentController extends Controller
 {
     use InteractsWithSharedSegmentAdmins;
+
     private function ensureSegmentAdmin(): array
     {
         $sessionUser = session('user');
@@ -35,7 +35,7 @@ class AssignmentController extends Controller
 
         return [
             'sessionUser' => $sessionUser,
-            'assignment'  => $assignment,
+            'assignment' => $assignment,
         ];
     }
 
@@ -43,9 +43,9 @@ class AssignmentController extends Controller
     {
         return match ($assignment) {
             'segment_ccs' => 'call center staff',
-            'segment_cc'  => 'call center',
-            'segment_s'   => 'staff',
-            default       => '',
+            'segment_cc' => 'call center',
+            'segment_s' => 'staff',
+            default => '',
         };
     }
 
@@ -220,7 +220,7 @@ class AssignmentController extends Controller
             $r = CallCenterReport::callCenter()->find((int) $reportId);
             if ($r) {
                 $dm = $r->dataset_month;
-                $reportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($r->dataset_month ?: 'Unknown report');
+                $reportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4).'/'.substr($dm, 4, 2).' report' : ($r->dataset_month ?: 'Unknown report');
             }
         }
 
@@ -236,7 +236,7 @@ class AssignmentController extends Controller
                 ->where('rejected', false);
             if ($latestPendingItems->count() > 0) {
                 $latestReportAllReassigned = $latestPendingItems->every(function ($a) {
-                    return !empty($a->reassignment_origin_id);
+                    return ! empty($a->reassignment_origin_id);
                 });
             }
         }
@@ -245,7 +245,7 @@ class AssignmentController extends Controller
             $lr = CallCenterReport::callCenter()->find((int) $latestReportId);
             if ($lr) {
                 $dm = $lr->dataset_month;
-                $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4) . '/' . substr($dm, 4, 2) . ' report' : ($lr->dataset_month ?: 'Report #' . $lr->id);
+                $latestReportLabel = ($dm && strlen($dm) === 6) ? substr($dm, 0, 4).'/'.substr($dm, 4, 2).' report' : ($lr->dataset_month ?: 'Report #'.$lr->id);
             }
         }
 
@@ -270,7 +270,9 @@ class AssignmentController extends Controller
     {
         $reportId = $request->query('report');
         $query = CallCenterAssignment::callCenter()->where('assigned_user_id', $userId)->where('accepted', false);
-        if ($reportId) $query->where('call_center_report_id', (int) $reportId);
+        if ($reportId) {
+            $query->where('call_center_report_id', (int) $reportId);
+        }
 
         $assignments = $query->get();
         $acceptedIds = [];
@@ -284,10 +286,12 @@ class AssignmentController extends Controller
                 'locked_by' => null,
             ]);
             $acceptedIds[] = $assignment->id;
-            if ($assignment->master_dataset_row_id) $masterRowIds[] = $assignment->master_dataset_row_id;
+            if ($assignment->master_dataset_row_id) {
+                $masterRowIds[] = $assignment->master_dataset_row_id;
+            }
         }
 
-        if (!empty($masterRowIds)) {
+        if (! empty($masterRowIds)) {
             $masterRowIds = array_values(array_unique($masterRowIds));
             $prevQuery = CallCenterAssignment::callCenter()->where('assigned_user_id', $userId)
                 ->whereIn('master_dataset_row_id', $masterRowIds)
@@ -319,6 +323,7 @@ class AssignmentController extends Controller
                     ->where('status', 'pending')
                     ->count();
             }
+
             return response()->json([
                 'accepted' => $assignments->count(),
                 'total_pending' => $totalPending,
@@ -334,10 +339,12 @@ class AssignmentController extends Controller
     {
         $reportId = $request->query('report');
         $query = CallCenterAssignment::callCenter()->where('assigned_user_id', $userId)->where('rejected', false);
-        if ($reportId) $query->where('call_center_report_id', (int) $reportId);
+        if ($reportId) {
+            $query->where('call_center_report_id', (int) $reportId);
+        }
 
         $requiresReasonRaw = $request->input('requires_reason', '1');
-        $requiresReason = !in_array($requiresReasonRaw, ['0', 'false', 0, false], true);
+        $requiresReason = ! in_array($requiresReasonRaw, ['0', 'false', 0, false], true);
         $payload = $request->validate([
             'requires_reason' => 'required|in:0,1',
             'rejection_note' => $requiresReason ? 'required|string|max:600' : 'nullable|string|max:600',
@@ -346,7 +353,7 @@ class AssignmentController extends Controller
         $assignments = $query->get();
         $rejectedBy = $request->session()->get('user.id');
 
-        if (isset($payload['requires_reason']) && (string)$payload['requires_reason'] === '0') {
+        if (isset($payload['requires_reason']) && (string) $payload['requires_reason'] === '0') {
             foreach ($assignments as $assignment) {
                 if (! empty($assignment->reassignment_origin_id) && empty($assignment->accepted)) {
                     $this->reopenOriginalRejectedAssignment($assignment);
@@ -358,6 +365,7 @@ class AssignmentController extends Controller
                     if (empty($assignment->accepted)) {
                         $this->reopenOriginalRejectedAssignment($assignment);
                     }
+
                     continue;
                 }
                 $assignment->update([
@@ -377,6 +385,7 @@ class AssignmentController extends Controller
                 ->where('accepted', true)
                 ->where('status', 'pending')
                 ->count();
+
             return response()->json([
                 'rejected' => $assignments->count(),
                 'total_pending' => $totalPending,
@@ -409,7 +418,9 @@ class AssignmentController extends Controller
         } else {
             $q->where('accepted', true)->where('status', 'pending');
         }
-        if ($reportId) $q->where('call_center_report_id', (int) $reportId);
+        if ($reportId) {
+            $q->where('call_center_report_id', (int) $reportId);
+        }
 
         $total = (clone $q)->count();
 
@@ -449,7 +460,7 @@ class AssignmentController extends Controller
                 $latestPaymentExpected = $latestOverall && $latestOverall->payment_expected_at ? Carbon::parse($latestOverall->payment_expected_at)->toDateString() : null;
                 $promiseOverdue = false;
                 if ($latestOverall && in_array($latestOutcome, ['agreed to pay within 3 days', 'agreed to pay within 7 days'], true)) {
-                    if (!empty($latestOverall->payment_expected_at)) {
+                    if (! empty($latestOverall->payment_expected_at)) {
                         try {
                             $due = Carbon::parse($latestOverall->payment_expected_at)->endOfDay();
                             if ($due->lt(Carbon::now())) {
@@ -580,7 +591,7 @@ class AssignmentController extends Controller
         try {
             $chron = $interactionsRaw->sortBy('created_at');
             $paymentEvents = $chron->filter(function ($i) {
-                return (! empty($i->paid) || ! empty($i->payment_date) || ! empty($i->paid_amount));
+                return ! empty($i->paid) || ! empty($i->payment_date) || ! empty($i->paid_amount);
             });
             foreach ($paymentEvents as $p) {
                 $paymentDate = $p->payment_date ?? $p->created_at;
@@ -630,12 +641,15 @@ class AssignmentController extends Controller
             'bill' => $r->latest_bill_mny ?? null,
             'payment_value' => $r->payments_value ?? null,
             'phone' => $r->mobile_contact_tel ?? null,
+            'product_label' => $r->product_label ?? null,
             'address' => $r->full_address ?? null,
             'rtom' => $r->rtom ?? null,
             'customer_ref' => $r->customer_ref ?? null,
             'account_num' => $r->account_num ?? null,
             'sales_person' => $r->sales_person ?? null,
             'sales_channel' => $r->sales_channel ?? null,
+            'sms_1' => $r->sms_1 ?? null,
+            'sms_2' => $r->sms_2 ?? null,
             'interactions' => $interactions,
             'payments' => $payments,
             'call_count' => $callCount,
@@ -686,6 +700,7 @@ class AssignmentController extends Controller
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['error' => 'Unauthenticated'], 401);
             }
+
             return Redirect::route('login');
         }
 
@@ -713,7 +728,9 @@ class AssignmentController extends Controller
 
         DB::transaction(function () use ($interaction, $payload) {
             $assignment = CallCenterAssignment::callCenter()->find($interaction->assignment_id);
-            if (! $assignment) return;
+            if (! $assignment) {
+                return;
+            }
 
             $assignment->locked_at = null;
             $assignment->locked_by = null;
@@ -790,6 +807,7 @@ class AssignmentController extends Controller
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json(['error' => 'Cannot reject an accepted row.'], 409);
                 }
+
                 return Redirect::route('cc.assignments.manage')->withErrors(['reject' => 'Cannot reject an accepted row.']);
             }
 
@@ -797,6 +815,7 @@ class AssignmentController extends Controller
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['rejected' => true, 'reassigned_copy_deleted' => true]);
             }
+
             return Redirect::route('cc.assignments.manage')->with('status', 'Reassigned row discarded; original reopened.');
         }
 
@@ -839,27 +858,27 @@ class AssignmentController extends Controller
 
         $report = CallCenterReport::callCenter()->findOrFail((int) $reportId);
 
-        $userIds = array_values(array_filter((array) $request->input('user_ids', []), fn($v) => is_numeric($v) && (int)$v > 0));
+        $userIds = array_values(array_filter((array) $request->input('user_ids', []), fn ($v) => is_numeric($v) && (int) $v > 0));
         $perUser = $request->input('per_user', null);
 
         $sessionAssignment = strtolower(trim((string) ($session['assignment'] ?? '')));
-        $isSegmentAdmin    = str_starts_with($sessionAssignment, 'segment_');
+        $isSegmentAdmin = str_starts_with($sessionAssignment, 'segment_');
 
         // Auto-fetch callers belonging to all shared segment admins in this segment
         if (empty($userIds) && $isSegmentAdmin) {
-            $callerAssignment = 'caller_' . substr($sessionAssignment, strlen('segment_'));
+            $callerAssignment = 'caller_'.substr($sessionAssignment, strlen('segment_'));
             $sharedIds = $this->getSharedSegmentAdminIds();
             $userIds = User::where('system', 'cc')
                 ->where('assignment', $callerAssignment)
                 ->whereIn('supervisor', $sharedIds)
                 ->where('status', 1)
                 ->pluck('id')
-                ->map(fn($id) => (int) $id)
+                ->map(fn ($id) => (int) $id)
                 ->values()
                 ->toArray();
         }
 
-        $userIds = array_values(array_filter($userIds, fn($id) => is_numeric($id) && (int)$id > 0));
+        $userIds = array_values(array_filter($userIds, fn ($id) => is_numeric($id) && (int) $id > 0));
 
         if (empty($userIds)) {
             return redirect()->route('cc.reports', ['report' => $reportId])
@@ -867,7 +886,7 @@ class AssignmentController extends Controller
         }
 
         // Scope row IDs to this segment's bucket when distributing as segment admin
-        $rowIds = collect($report->row_ids ?? [])->map(fn($id) => (int) $id)->filter(fn($id) => $id > 0)->values()->all();
+        $rowIds = collect($report->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
 
         if ($isSegmentAdmin) {
             $bucketLabel = $this->segmentBucketLabel($sessionAssignment);
@@ -875,7 +894,7 @@ class AssignmentController extends Controller
                 $rowIds = \App\Models\MasterDatasetRow::whereIn('id', $rowIds)
                     ->whereRaw('LOWER(TRIM(assigned_to)) = ?', [$bucketLabel])
                     ->pluck('id')
-                    ->map(fn($id) => (int) $id)
+                    ->map(fn ($id) => (int) $id)
                     ->values()
                     ->all();
             }
@@ -886,14 +905,14 @@ class AssignmentController extends Controller
                 ->withErrors(['reassign' => 'No rows available for your segment in this report.']);
         }
 
-        if (!empty($userIds)) {
+        if (! empty($userIds)) {
             try {
                 User::whereIn('id', $userIds)->update(['fixed' => 1]);
             } catch (\Exception $e) {
             }
         }
 
-        if (!empty($userIds)) {
+        if (! empty($userIds)) {
             DB::transaction(function () use ($userIds, $reportId) {
                 foreach ($userIds as $uid) {
                     $priorIds = CallCenterAssignment::callCenter()->where('assigned_user_id', (int) $uid)
@@ -928,8 +947,8 @@ class AssignmentController extends Controller
         $userIds = $request->input('user_ids', []);
         $action = $request->input('action');
 
-        $assignmentIds = array_map('intval', array_filter($assignmentIds, fn($id) => is_numeric($id) && $id > 0));
-        $userIds = array_map('intval', array_filter($userIds, fn($id) => is_numeric($id) && $id > 0));
+        $assignmentIds = array_map('intval', array_filter($assignmentIds, fn ($id) => is_numeric($id) && $id > 0));
+        $userIds = array_map('intval', array_filter($userIds, fn ($id) => is_numeric($id) && $id > 0));
 
         if ($action === 'pool') {
             $userIds = [];

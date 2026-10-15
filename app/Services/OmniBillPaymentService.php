@@ -11,7 +11,7 @@ class OmniBillPaymentService
 {
     private string $apiUrl;
 
-    private string $secretCode;
+    private string $clientKey;
 
     private int $timeout;
 
@@ -20,7 +20,7 @@ class OmniBillPaymentService
     public function __construct()
     {
         $this->apiUrl = config('omni.api_url', '');
-        $this->secretCode = config('omni.secret_code', '');
+        $this->clientKey = config('omni.client_key', '');
         $this->timeout = config('omni.timeout', 10);
         $this->verifySsl = config('omni.verify_ssl', true);
     }
@@ -34,10 +34,10 @@ class OmniBillPaymentService
      */
     public function fetchBillPayment(?string $telephoneNo, ?string $accountNo): ?array
     {
-        if (empty($this->apiUrl) || empty($this->secretCode)) {
+        if (empty($this->apiUrl) || empty($this->clientKey)) {
             \Log::error('OMNI API configuration missing', [
                 'api_url' => $this->apiUrl,
-                'has_secret' => ! empty($this->secretCode),
+                'has_client_key' => ! empty($this->clientKey),
             ]);
             return null;
         }
@@ -50,23 +50,23 @@ class OmniBillPaymentService
             }
         }
 
+        $query = [
+            'telephoneNo' => $telephoneNo ?? '',
+            'accountNo'   => $accountNo ?? '',
+        ];
+
         try {
             $request = Http::timeout($this->timeout)
                 ->withHeaders([
                     'Content-Type' => 'application/x-www-form-urlencoded',
+                    'ClientKey'  => $this->clientKey,
                 ]);
 
             if (! $this->verifySsl) {
                 $request = $request->withoutVerifying();
             }
 
-            $response = $request->send('GET', $this->apiUrl, [
-                'body' => http_build_query([
-                    'telephoneNo' => $telephoneNo ?? '',
-                    'accountNo'   => $accountNo ?? '',
-                    'secretCode'  => $this->secretCode,
-                ]),
-            ]);
+            $response = $request->get($this->apiUrl, $query);
 
             if (! $response->successful()) {
                 \Log::error('OMNI API non-200 response', [

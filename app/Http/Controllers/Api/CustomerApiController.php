@@ -34,10 +34,10 @@ class CustomerApiController extends Controller
             ], 404);
         }
 
-        // 2. Fetch the system outstanding arrears threshold
+        //  Fetch the system outstanding arrears threshold
         $threshold = (float) (Configurations::where('config_name', 'outstanding_threshold')->value('value') ?? 0);
 
-        // 3. Build optimized query
+        //  Build optimized query
         $query = DB::table('call_center_row_assignments as a')
             ->join('master_dataset_rows as r', 'a.master_dataset_row_id', '=', 'r.id')
             // Condition 1: Latest report
@@ -64,7 +64,7 @@ class CustomerApiController extends Controller
             ->whereNotNull(DB::raw('COALESCE(r.account_num, r.customer_ref)'))
             ->distinct();
 
-        // 4. Handle pagination if requested, otherwise return complete collection
+        //  Handle pagination if requested, otherwise return complete collection
         if ($request->has('page') || $request->has('per_page')) {
             $perPage = min((int) $request->query('per_page', 100), 1000);
             $paginated = $query->paginate($perPage);

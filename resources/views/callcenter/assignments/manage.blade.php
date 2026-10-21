@@ -319,7 +319,7 @@
                                 <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" disabled></textarea>
                             </div>
                             <div class="col-12 d-flex gap-2">
-                                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save call</button>
+                                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save</button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                             </div>
                             <div class="col-12">
@@ -507,7 +507,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const note = document.getElementById('ccCallNote');
         const pay = document.getElementById('ccPaymentExpected');
         const saveBtn = document.getElementById('ccSaveCallBtn');
-        let startBtn = document.getElementById('ccStartCallBtn');
         const wrapper = document.getElementById('ccCallFormWrapperAssign');
         if (outcome) outcome.disabled = true;
         if (note) note.disabled = true;
@@ -522,7 +521,6 @@ document.addEventListener('DOMContentLoaded', function () {
             saveBtn.disabled = true;
             saveBtn.classList.add('d-none');
         }
-        if (startBtn) startBtn.disabled = false;
         if (wrapper) wrapper.classList.add('cc-disabled');
 
         if (!data) {
@@ -604,29 +602,26 @@ document.addEventListener('DOMContentLoaded', function () {
                          ${data.call_count ? `<div class="col-12">Calls since assignment: ${data.call_count}</div>` : ''}
                     </div>
                 </div>
-                <div class="col-4 text-end">
-                    <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button>
-                    <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
+                 <div class="col-4 text-end">
+                     <!-- <button type="button" id="ccStartCallBtn" class="btn btn-sm btn-outline-primary">Start call</button> -->
+                     <div id="ccStartCallNote" class="small text-danger mt-2" style="display:none">Call not allowed for this row.</div>
                 </div>
             </div>`;
-            selAmt.innerHTML = html;
-            startBtn = document.getElementById('ccStartCallBtn');
-            if (startBtn) startBtn.disabled = false;
-        }
+             selAmt.innerHTML = html;
+         }
 
-        // If this row belongs to a previous report, keep interactions read-only and show reason text
+         // If this row belongs to a previous report, keep interactions read-only and show reason text
         try {
             const currentLatest = assignmentList?.dataset.latestReportId || '';
             const reasonEl = document.getElementById('ccCallStatus');
             const startNoteEl = document.getElementById('ccStartCallNote');
 
             if (data.report_id && String(data.report_id) !== String(currentLatest)) {
-                if (startBtn) startBtn.disabled = true;
                 if (saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('d-none'); }
                 if (wrapper) wrapper.classList.add('cc-disabled');
                 // show a single red status message in the call-status area
                 if (reasonEl) {
-                    reasonEl.textContent = 'Start call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
+                    reasonEl.textContent = 'Call disabled: this row is from an earlier report. Accept or reject newer assignments to enable calls.';
                     reasonEl.classList.remove('text-muted');
                     reasonEl.classList.add('text-danger');
                 }
@@ -634,22 +629,17 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 if (reasonEl) { reasonEl.textContent = ''; reasonEl.classList.remove('text-danger'); reasonEl.classList.add('text-muted'); }
                 if (startNoteEl) { startNoteEl.textContent = ''; startNoteEl.style.display = 'none'; }
-                if (startBtn) {
-                    startBtn.onclick = () => {
-                        if (outcome) outcome.disabled = false;
-                        if (note) note.disabled = false;
-                        if (notRelevantPersonEl) notRelevantPersonEl.disabled = false;
-                        if (pay) pay.disabled = false;
-                        if (paymentDate) paymentDate.disabled = false;
-                        if (paidAmount) paidAmount.disabled = false;
-                        if (saveBtn) {
-                            saveBtn.disabled = false;
-                            saveBtn.classList.remove('d-none');
-                        }
-                        if (wrapper) wrapper.classList.remove('cc-disabled');
-                        startBtn.disabled = true;
-                    };
+                if (outcome) outcome.disabled = false;
+                if (note) note.disabled = false;
+                if (notRelevantPersonEl) notRelevantPersonEl.disabled = false;
+                if (pay) pay.disabled = false;
+                if (paymentDate) paymentDate.disabled = false;
+                if (paidAmount) paidAmount.disabled = false;
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('d-none');
                 }
+                if (wrapper) wrapper.classList.remove('cc-disabled');
             }
         } catch (e) { /* ignore */ }
     }
@@ -978,11 +968,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     saveBtn.disabled = true;
                     saveBtn.classList.add('d-none');
                 }
-                const wrapper = document.getElementById('ccCallFormWrapperAssign');
-                if (wrapper) wrapper.classList.add('cc-disabled');
-                const startBtn = document.getElementById('ccStartCallBtn');
-                if (startBtn) startBtn.disabled = false;
-            } catch (e) {
+                 const wrapper = document.getElementById('ccCallFormWrapperAssign');
+                 if (wrapper) wrapper.classList.add('cc-disabled');
+             } catch (e) {
                 console.error('Error clearing form after save', e);
             }
             // refresh details to include the new interaction

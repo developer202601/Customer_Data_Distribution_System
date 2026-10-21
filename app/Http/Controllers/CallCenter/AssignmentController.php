@@ -640,6 +640,7 @@ class AssignmentController extends Controller
             'arrears' => $r->new_arrears_value ?? null,
             'bill' => $r->latest_bill_mny ?? null,
             'payment_value' => $r->payments_value ?? null,
+            'outstanding_balance' => $r->outstanding_balance ?? null,
             'phone' => $r->mobile_contact_tel ?? null,
             'product_label' => $r->product_label ?? null,
             'address' => $r->full_address ?? null,

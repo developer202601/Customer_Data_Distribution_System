@@ -533,7 +533,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         detailPanel.innerHTML = `
-            <div class="mb-2"><strong>Alt. Contact no:</strong> ${data.phone ?? '—'}</div>
+            <div class="mb-2"><strong>Contact no:</strong> ${data.phone ?? '—'}</div>
             <div class="mb-2"><strong>Telephone no:</strong> ${data.product_label ?? '—'}</div>
             <div class="mb-2"><strong>Address:</strong> ${data.address ?? '—'}</div>
             <div class="mb-2"><strong>RTO:</strong> ${data.rtom ?? '—'}</div>

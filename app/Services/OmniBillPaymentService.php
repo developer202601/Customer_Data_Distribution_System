@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\MasterDatasetRow;
+use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Logger;
 
 class OmniBillPaymentService
 {
@@ -16,6 +17,11 @@ class OmniBillPaymentService
     private int $timeout;
 
     private bool $verifySsl;
+
+    /**
+     * Seconds since last_api_fetched during which a page-view request may skip the API.
+     */
+    public const FRESHNESS_WINDOW_SECONDS = 25;
 
     public function __construct()
     {
@@ -28,8 +34,6 @@ class OmniBillPaymentService
     /**
      * Fetch bill payment data from OMNI API.
      *
-     * @param string|null $telephoneNo
-     * @param string|null $accountNo
      * @return array|null Decoded JSON response, or null on failure
      */
     public function fetchBillPayment(?string $telephoneNo, ?string $accountNo): ?array
@@ -39,6 +43,7 @@ class OmniBillPaymentService
                 'api_url' => $this->apiUrl,
                 'has_client_key' => ! empty($this->clientKey),
             ]);
+
             return null;
         }
 
@@ -46,20 +51,20 @@ class OmniBillPaymentService
         if ($telephoneNo !== null && $telephoneNo !== '') {
             $telephoneNo = (string) $telephoneNo;
             if (! str_starts_with($telephoneNo, '0') && ctype_digit($telephoneNo)) {
-                $telephoneNo = '0' . $telephoneNo;
+                $telephoneNo = '0'.$telephoneNo;
             }
         }
 
         $query = [
             'telephoneNo' => $telephoneNo ?? '',
-            'accountNo'   => $accountNo ?? '',
+            'accountNo' => $accountNo ?? '',
         ];
 
         try {
             $request = Http::timeout($this->timeout)
                 ->withHeaders([
                     'Content-Type' => 'application/x-www-form-urlencoded',
-                    'ClientKey'  => $this->clientKey,
+                    'ClientKey' => $this->clientKey,
                 ]);
 
             if (! $this->verifySsl) {
@@ -75,6 +80,7 @@ class OmniBillPaymentService
                     'telephoneNo' => $telephoneNo,
                     'accountNo' => $accountNo,
                 ]);
+
                 return null;
             }
 
@@ -84,6 +90,7 @@ class OmniBillPaymentService
                 \Log::error('OMNI API invalid JSON response', [
                     'body' => $response->body(),
                 ]);
+
                 return null;
             }
 
@@ -94,6 +101,7 @@ class OmniBillPaymentService
                 'telephoneNo' => $telephoneNo,
                 'accountNo' => $accountNo,
             ]);
+
             return null;
         } catch (RequestException $e) {
             \Log::error('OMNI API request error', [
@@ -101,6 +109,7 @@ class OmniBillPaymentService
                 'telephoneNo' => $telephoneNo,
                 'accountNo' => $accountNo,
             ]);
+
             return null;
         } catch (\Exception $e) {
             \Log::error('OMNI API unexpected error', [
@@ -108,6 +117,7 @@ class OmniBillPaymentService
                 'telephoneNo' => $telephoneNo,
                 'accountNo' => $accountNo,
             ]);
+
             return null;
         }
     }
@@ -115,7 +125,6 @@ class OmniBillPaymentService
     /**
      * Extract billing inquiry data from API response.
      *
-     * @param array|null $apiResponse
      * @return array|null First item from listofbillingInquiryType, or null
      */
     public function extractBillingData(?array $apiResponse): ?array
@@ -143,9 +152,6 @@ class OmniBillPaymentService
 
     /**
      * Parse a date string from API format (YYYY/MM/DD) to Y-m-d.
-     *
-     * @param string|null $dateStr
-     * @return string|null
      */
     public static function parseApiDate(?string $dateStr): ?string
     {
@@ -155,7 +161,7 @@ class OmniBillPaymentService
 
         $dateStr = trim($dateStr);
         if (preg_match('/^(\d{4})\/(\d{2})\/(\d{2})$/', $dateStr, $m)) {
-            return $m[1] . '-' . $m[2] . '-' . $m[3];
+            return $m[1].'-'.$m[2].'-'.$m[3];
         }
 
         if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dateStr, $m)) {
@@ -168,8 +174,7 @@ class OmniBillPaymentService
     /**
      * Parse a decimal amount from API response.
      *
-     * @param string|float|int|null $amount
-     * @return float|null
+     * @param  string|float|int|null  $amount
      */
     public static function parseAmount($amount): ?float
     {
@@ -187,5 +192,80 @@ class OmniBillPaymentService
         }
 
         return (float) $cleaned;
+    }
+
+    /**
+     * Refresh a single row's bill-payment data from the OMNI API.
+     *
+     * Mirrors the per-row logic embedded in the CallCenter and RegionalBilling
+     * AssignmentController::userRows() methods so the nightly cron job and the
+     * UI share identical behaviour.
+     *
+     * @param  bool  $skipFreshness  Bypass the last_api_fetched freshness skip (used by batch jobs).
+     * @return string updated|skipped_duplicate|skipped_no_change|skipped_fresh|skipped_no_identifiers|api_error|skipped_no_response
+     */
+    public function refreshRow(MasterDatasetRow $row, bool $skipFreshness = false): string
+    {
+        $lastPaymentAmount = $row->last_payment_amount;
+        $lastPaymentDate = $row->last_payment_date;
+        $paymentsValue = $row->payments_value;
+        $newArrearsValue = $row->new_arrears_value;
+
+        $telephoneNo = $row->product_label ?? null;
+        $accountNo = $row->account_num ?? $row->customer_ref ?? null;
+
+        if (! $telephoneNo && ! $accountNo) {
+            return 'skipped_no_identifiers';
+        }
+
+        if (! $skipFreshness) {
+            $lastFetched = $row->last_api_fetched;
+            if ($lastFetched) {
+                try {
+                    $fetchedAt = Carbon::parse($lastFetched);
+                    $window = (int) config('omni.freshness_window_seconds', self::FRESHNESS_WINDOW_SECONDS);
+                    if ($fetchedAt->gt(Carbon::now()->subSeconds($window))) {
+                        return 'skipped_fresh';
+                    }
+                } catch (\Exception $e) {
+                    // ignore parse error, proceed with API call
+                }
+            }
+        }
+
+        $apiResponse = $this->fetchBillPayment($telephoneNo, $accountNo);
+        $billingData = $this->extractBillingData($apiResponse);
+
+        if (! $billingData) {
+            return $apiResponse === null ? 'api_error' : 'skipped_no_response';
+        }
+
+        $apiLastPaymentAmount = self::parseAmount($billingData['lastPaymentAmount'] ?? null);
+        $apiLastPaymentDate = self::parseApiDate($billingData['lastPaymentDate'] ?? null);
+
+        $storedAmount = $lastPaymentAmount !== null ? round((float) $lastPaymentAmount, 2) : null;
+        $storedDate = $lastPaymentDate !== null ? Carbon::parse($lastPaymentDate)->toDateString() : null;
+
+        $isDuplicate = ($apiLastPaymentAmount === $storedAmount && $apiLastPaymentDate === $storedDate);
+
+        if (! $isDuplicate && $apiLastPaymentAmount !== null && $apiLastPaymentDate !== null && ($storedDate === null || $apiLastPaymentDate > $storedDate)) {
+            $paymentsValue = ($paymentsValue ?? 0) + $apiLastPaymentAmount;
+            $outstandingBalance = ($newArrearsValue ?? 0) - $paymentsValue;
+
+            $row->update([
+                'payments_value' => $paymentsValue,
+                'last_payment_amount' => $apiLastPaymentAmount,
+                'last_payment_date' => $apiLastPaymentDate,
+                'outstanding_balance' => $outstandingBalance,
+                'last_api_fetched' => now(),
+            ]);
+
+            return 'updated';
+        }
+
+        // Fetched successfully but no newer/unique payment to apply: record the fetch time.
+        $row->update(['last_api_fetched' => now()]);
+
+        return $isDuplicate ? 'skipped_duplicate' : 'skipped_no_change';
     }
 }

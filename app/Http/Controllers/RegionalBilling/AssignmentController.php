@@ -549,7 +549,7 @@ class AssignmentController extends Controller
                     }
                 }
 
-                // OMNI API integration
+                // OMNI API integration (dedup/accumulate logic lives in OmniBillPaymentService::refreshRow)
                 $paymentsValue = optional($row)->payments_value;
                 $outstandingBalance = optional($row)->outstanding_balance;
                 $lastPaymentAmount = optional($row)->last_payment_amount;
@@ -557,50 +557,7 @@ class AssignmentController extends Controller
                 $newArrearsValue = optional($row)->new_arrears_value;
 
                 if ($omniService && $row && ! $skipOmni) {
-                    $telephoneNo = $row->product_label ?? null;
-                    $accountNo = $row->account_num ?? $row->customer_ref ?? null;
-
-                    if ($telephoneNo || $accountNo) {
-                        $lastFetched = $row->last_api_fetched;
-                        $shouldSkip = false;
-                        if ($lastFetched) {
-                            try {
-                                $fetchedAt = Carbon::parse($lastFetched);
-                                $shouldSkip = $fetchedAt->gt(Carbon::now()->subSeconds(25));
-                            } catch (\Exception $e) {
-                                // ignore parse error, proceed with API call
-                            }
-                        }
-
-                        if (! $shouldSkip) {
-                            $apiResponse = $omniService->fetchBillPayment($telephoneNo, $accountNo);
-                            $billingData = $omniService->extractBillingData($apiResponse);
-
-                            if ($billingData) {
-                                $apiLastPaymentAmount = OmniBillPaymentService::parseAmount($billingData['lastPaymentAmount'] ?? null);
-                                $apiLastPaymentDate = OmniBillPaymentService::parseApiDate($billingData['lastPaymentDate'] ?? null);
-
-                                // Deduplication: skip if both date and amount match stored values
-                                $isDuplicate = ($apiLastPaymentAmount === $lastPaymentAmount && $apiLastPaymentDate === $lastPaymentDate);
-
-                                // Only accumulate if API payment date is newer than stored date
-                                if (! $isDuplicate && $apiLastPaymentAmount !== null && $apiLastPaymentDate !== null && ($lastPaymentDate === null || $apiLastPaymentDate > $lastPaymentDate)) {
-                                    $paymentsValue = ($paymentsValue ?? 0) + $apiLastPaymentAmount;
-                                    $outstandingBalance = ($newArrearsValue ?? 0) - $paymentsValue;
-
-                                    $row->update([
-                                        'payments_value' => $paymentsValue,
-                                        'last_payment_amount' => $apiLastPaymentAmount,
-                                        'last_payment_date' => $apiLastPaymentDate,
-                                        'outstanding_balance' => $outstandingBalance,
-                                        'last_api_fetched' => now(),
-                                    ]);
-                                } else {
-                                    $row->update(['last_api_fetched' => now()]);
-                                }
-                            }
-                        }
-                    }
+                    $omniService->refreshRow($row);
                 }
 
                 return [

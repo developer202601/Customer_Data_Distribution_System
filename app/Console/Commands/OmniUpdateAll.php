@@ -93,13 +93,27 @@ class OmniUpdateAll extends Command
 
         $lock = null;
         if (Schema::hasTable('job_batches')) {
+            $now = now()->getTimestamp();
+            $staleAfter = (int) Config::get('omni.batch_stale_after_seconds', 86400);
+            $staleBefore = $now - $staleAfter;
+
+            $cleared = DB::table('job_batches')
+                ->where('name', 'omni:update-all')
+                ->whereNull('finished_at')
+                ->where('created_at', '<', $staleBefore)
+                ->delete();
+
+            if ($cleared > 0) {
+                $this->warn("Cleared {$cleared} abandoned omni:update-all batch(es) (stale > {$staleAfter}s) and will re-dispatch.");
+            }
+
             $running = DB::table('job_batches')
                 ->where('name', 'omni:update-all')
                 ->whereNull('finished_at')
                 ->exists();
 
             if ($running) {
-                $this->warn('A previous omni:update-all batch is still running (unfinished job_batches row). Exiting without dispatching.');
+                $this->warn('A recent omni:update-all batch is still running (unfinished job_batches row). Exiting without dispatching.');
 
                 return self::SUCCESS;
             }

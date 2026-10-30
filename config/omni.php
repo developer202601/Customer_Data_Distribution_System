@@ -9,4 +9,6 @@ return [
     'refresh_interval_hours' => (int) env('OMNI_REFRESH_INTERVAL_HOURS', 24),
     'chunk_size' => (int) env('OMNI_CHUNK_SIZE', 50),
     'freshness_window_seconds' => (int) env('OMNI_FRESHNESS_WINDOW_SECONDS', 25),
+
+    'batch_stale_after_seconds' => (int) env('OMNI_BATCH_STALE_AFTER_SECONDS', 86400),
 ];

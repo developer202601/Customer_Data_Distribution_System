@@ -100,11 +100,14 @@ class OmniUpdateAll extends Command
             $cleared = DB::table('job_batches')
                 ->where('name', 'omni:update-all')
                 ->whereNull('finished_at')
-                ->where('created_at', '<', $staleBefore)
+                ->where(function ($q) use ($staleBefore) {
+                    $q->where('total_jobs', 0)
+                        ->orWhere('created_at', '<', $staleBefore);
+                })
                 ->delete();
 
             if ($cleared > 0) {
-                $this->warn("Cleared {$cleared} abandoned omni:update-all batch(es) (stale > {$staleAfter}s) and will re-dispatch.");
+                $this->warn("Cleared {$cleared} abandoned omni:update-all batch(es) (empty or stale > {$staleAfter}s) and will re-dispatch.");
             }
 
             $running = DB::table('job_batches')

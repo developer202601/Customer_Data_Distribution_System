@@ -105,11 +105,49 @@
     const errorAlert = document.getElementById('sms-reminder-error-alert');
     const successAlert = document.getElementById('sms-reminder-success-alert');
 
+    let processingInProgress = false;
+
     if (!fileInput || !submitBtn) {
         return;
     }
 
-    function setProgress(percentage, label, meta) {
+    function setProcessingLock(lock) {
+        processingInProgress = lock;
+
+        if (backBtn) {
+            if (lock) {
+                backBtn.classList.add('disabled');
+                backBtn.setAttribute('aria-disabled', 'true');
+                backBtn.style.pointerEvents = 'none';
+                backBtn.style.opacity = '0.5';
+                backBtn.tabIndex = -1;
+            } else {
+                backBtn.classList.remove('disabled');
+                backBtn.removeAttribute('aria-disabled');
+                backBtn.style.pointerEvents = '';
+                backBtn.style.opacity = '';
+                backBtn.tabIndex = 0;
+            }
+        }
+    }
+
+    if (backBtn) {
+        backBtn.addEventListener('click', function(e) {
+            if (processingInProgress) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        });
+    }
+
+    window.addEventListener('beforeunload', function(e) {
+        if (processingInProgress) {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        }
+    });
         if (!progressBlock || !progressBar) {
             return;
         }

@@ -997,15 +997,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 const statusBadge = outstandingBalance === null ? '—' : (isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>');
                 // OMNI API status indicator
                 const today = new Date().setHours(0, 0, 0, 0);
-                const lastFetched = r.last_api_fetched ? new Date(r.last_api_fetched).setHours(0, 0, 0, 0) : null;
-                const hasApiData = lastFetched !== null && lastFetched >= today;
+                const lastFetchedDate = r.last_api_fetched ? new Date(r.last_api_fetched) : null;
+                const lastFetchedMidnight = lastFetchedDate ? new Date(lastFetchedDate).setHours(0, 0, 0, 0) : null;
+                const hasApiData = lastFetchedMidnight !== null && lastFetchedMidnight >= today;
                 const apiIndicator = hasApiData 
                     ? '<span class="badge bg-success ms-1 omni-done" title="OMNI data updated"><i class="bi bi-check-circle-fill"></i></span>'
                     : '<span class="badge bg-secondary ms-1 omni-pending" title="OMNI data pending"><i class="bi bi-arrow-repeat"></i></span>';
+                let lastUpdatedHtml = '';
+                if (lastFetchedDate && !isNaN(lastFetchedDate.getTime())) {
+                    try {
+                        lastUpdatedHtml = ' <span class="small text-muted">Last Updated: ' + lastFetchedDate.toLocaleString('en-GB') + '</span>';
+                    } catch (e) {
+                        lastUpdatedHtml = '';
+                    }
+                }
                 btn.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>${r.address_name ?? '—'}</strong>${apiIndicator}
+                            <strong>${r.address_name ?? '—'}</strong>${apiIndicator}${lastUpdatedHtml}
                             <div class="small text-muted">Initial Outstanding: Rs. ${arrearsDisplay} — Bill: Rs. ${billDisplay} — Current Outstanding: Rs. ${outstandingDisplay} — Status: ${statusBadge}</div>
                             <div class="small text-danger">Payment: Rs. ${paymentDisplay}</div>
                             <div class="small text-muted">

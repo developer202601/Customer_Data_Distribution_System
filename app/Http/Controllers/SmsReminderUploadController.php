@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessSmsReminderUpload;
 use App\Models\SmsReminderUpload;
-use App\Support\SmsReminderIngestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -86,38 +86,12 @@ class SmsReminderUploadController extends Controller
             'last_updated_at' => now()->toIso8601String(),
         ], now()->addMinutes(60));
 
-        $service = new SmsReminderIngestionService;
-        $storedPath = $path;
-        $originalNameForService = $originalName;
-        $userIdForService = $userId;
-        $tokenForService = $token;
-
-        register_shutdown_function(function () use ($service, $storedPath, $originalNameForService, $userIdForService, $tokenForService) {
-            try {
-                $service->run($tokenForService, $storedPath, $originalNameForService, $userIdForService);
-            } catch (\Throwable $e) {
-                Cache::put('process:sms_reminder:upload:'.$tokenForService, [
-                    'status' => 'failed',
-                    'progress' => 100,
-                    'message' => 'SMS reminder processing failed.',
-                    'error' => $e->getMessage(),
-                    'finished_at' => time(),
-                ], now()->addMinutes(60));
-
-                SmsReminderUpload::where('token', $tokenForService)->update([
-                    'status' => 'failed',
-                    'progress' => 100,
-                    'message' => 'SMS reminder processing failed.',
-                    'error' => $e->getMessage(),
-                    'finished_at' => time(),
-                ]);
-            }
-        });
+        ProcessSmsReminderUpload::dispatch($token, $path, $originalName, $userId);
 
         return response()->json([
             'status' => 'ok',
             'token' => $token,
-            'message' => 'SMS reminder file uploaded. Processing started.',
+            'message' => 'SMS reminder file uploaded. Processing queued.',
         ]);
     }
 

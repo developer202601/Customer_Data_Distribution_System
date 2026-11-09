@@ -79,6 +79,9 @@
                 </div>
 
                 <div class="mt-4">
+                    @if(session('status'))
+                        <div class="alert alert-success">{{ session('status') }}</div>
+                    @endif
                     @if($errors->has('distribute'))
                         <div class="alert alert-warning">{{ $errors->first('distribute') }}</div>
                     @endif
@@ -96,7 +99,7 @@
                                         <div class="mb-2 d-flex align-items-center gap-2">
                                             <input type="checkbox" id="rb-select-all-callers" />
                                             <label for="rb-select-all-callers" class="small mb-0">Select all</label>
-                                            <div class="small text-muted ms-2">Distributable rows: <strong id="rb-distributable-count">{{ $unassigned }}</strong></div>
+                                            <div class="small text-muted ms-2">Distributable rows: <strong id="rb-distributable-count">{{ $unassigned }}</strong> <span id="rb-distribute-hint" class="small ms-1"></span></div>
                                         </div>
 
                                         <style nonce="{{ $cspNonce ?? '' }}">
@@ -186,7 +189,7 @@
                                             @endforeach
                                         </div>
                                         <div class="mt-3">
-                                            <button type="submit" id="rb-distribute-btn" class="btn btn-primary btn-sm w-100" {{ $unassigned <= 0 ? 'disabled' : '' }}>Distribute</button>
+                                            <button type="submit" id="rb-distribute-btn" class="btn btn-primary btn-sm w-100" disabled>Distribute</button>
                                         </div>
                                     </div>
                                 </form>
@@ -198,11 +201,14 @@
                                         const selectAll = document.getElementById('rb-select-all-callers');
                                         const searchInput = document.getElementById('rb-user-search');
                                         const distributableCountEl = document.getElementById('rb-distributable-count');
+                                        const hintEl = document.getElementById('rb-distribute-hint');
                                         const submitBtn = document.getElementById('rb-distribute-btn');
+                                        const form = submitBtn?.closest('form');
 
                                         function updateRowDisplay() {
-                                            let total = 0;
-                                            let selectedCount = 0;
+                                            const selectedCbs = checkboxes.filter(cb => cb.checked);
+                                            const selectedCount = selectedCbs.length;
+
                                             checkboxes.forEach(cb => {
                                                 const row = cb.closest('.cc-user-row');
                                                 const badge = row?.querySelector('.rb-share-badge');
@@ -213,53 +219,111 @@
                                                         input.value = '';
                                                     }
                                                     if (badge) badge.textContent = '0';
-                                                    return;
-                                                }
-
-                                                selectedCount += 1;
-                                                if (input) {
-                                                    input.disabled = false;
-                                                    const value = Number(input.value || 0);
-                                                    if (badge) badge.textContent = value > 0 ? String(value) : 'Auto';
-                                                    total += value;
+                                                } else {
+                                                    if (input) input.disabled = false;
                                                 }
                                             });
 
+                                            if (selectedCount === 0 || distributable <= 0) {
+                                                if (submitBtn) submitBtn.disabled = true;
+                                                if (distributableCountEl) {
+                                                    distributableCountEl.textContent = String(distributable);
+                                                    distributableCountEl.classList.remove('text-danger', 'text-warning');
+                                                }
+                                                if (hintEl) {
+                                                    hintEl.textContent = '';
+                                                    hintEl.className = 'small ms-1';
+                                                }
+                                                return;
+                                            }
+
+                                            let manualSum = 0;
+                                            const autoCbs = [];
+
+                                            selectedCbs.forEach(cb => {
+                                                const row = cb.closest('.cc-user-row');
+                                                const input = row?.querySelector('.rb-user-count-input');
+                                                const valStr = input ? input.value.trim() : '';
+                                                const val = valStr === '' ? 0 : Math.max(0, parseInt(valStr, 10) || 0);
+
+                                                if (valStr !== '' && val > 0) {
+                                                    manualSum += val;
+                                                } else {
+                                                    autoCbs.push(cb);
+                                                }
+                                            });
+
+                                            const autoCount = autoCbs.length;
+                                            const remainingForAuto = distributable - manualSum;
+                                            let totalAllocated = 0;
+
+                                            selectedCbs.forEach(cb => {
+                                                const row = cb.closest('.cc-user-row');
+                                                const input = row?.querySelector('.rb-user-count-input');
+                                                const badge = row?.querySelector('.rb-share-badge');
+                                                const valStr = input ? input.value.trim() : '';
+                                                const val = valStr === '' ? 0 : Math.max(0, parseInt(valStr, 10) || 0);
+
+                                                if (valStr !== '' && val > 0) {
+                                                    if (badge) badge.textContent = String(val);
+                                                    totalAllocated += val;
+                                                }
+                                            });
+
+                                            if (autoCount > 0) {
+                                                if (remainingForAuto > 0) {
+                                                    const base = Math.floor(remainingForAuto / autoCount);
+                                                    let rem = remainingForAuto % autoCount;
+                                                    autoCbs.forEach(cb => {
+                                                        const row = cb.closest('.cc-user-row');
+                                                        const badge = row?.querySelector('.rb-share-badge');
+                                                        const add = rem > 0 ? 1 : 0;
+                                                        const share = base + add;
+                                                        if (badge) badge.textContent = String(share);
+                                                        if (rem > 0) rem -= 1;
+                                                        totalAllocated += share;
+                                                    });
+                                                } else {
+                                                    autoCbs.forEach(cb => {
+                                                        const row = cb.closest('.cc-user-row');
+                                                        const badge = row?.querySelector('.rb-share-badge');
+                                                        if (badge) badge.textContent = '0';
+                                                    });
+                                                }
+                                            }
+
+                                            const unallocated = distributable - totalAllocated;
+                                            const allAllocated = (totalAllocated === distributable && selectedCount > 0);
+
                                             if (submitBtn) {
-                                                submitBtn.disabled = (selectedCount === 0 || distributable <= 0);
+                                                submitBtn.disabled = !allAllocated;
                                             }
 
-                                            const remaining = distributable - total;
                                             if (distributableCountEl) {
-                                                distributableCountEl.textContent = String(remaining >= 0 ? remaining : 0);
-                                                distributableCountEl.classList.toggle('text-danger', remaining < 0);
+                                                distributableCountEl.textContent = String(unallocated >= 0 ? unallocated : 0);
+                                                distributableCountEl.classList.toggle('text-danger', unallocated < 0);
                                             }
-                                        }
 
-                                        function validateCounts() {
-                                            const remaining = distributable - countInputs.reduce((sum, input) => {
-                                                if (input.disabled) return sum;
-                                                return sum + Number(input.value || 0);
-                                            }, 0);
-                                            return remaining >= 0;
+                                            if (hintEl) {
+                                                if (unallocated > 0) {
+                                                    hintEl.textContent = `(${unallocated} unallocated - all ${distributable} rows must be selected to distribute)`;
+                                                    hintEl.className = 'text-warning small ms-1';
+                                                } else if (unallocated < 0) {
+                                                    hintEl.textContent = `(exceeds distributable rows by ${Math.abs(unallocated)})`;
+                                                    hintEl.className = 'text-danger small ms-1';
+                                                } else {
+                                                    hintEl.textContent = `(all ${distributable} rows selected)`;
+                                                    hintEl.className = 'text-success small ms-1';
+                                                }
+                                            }
                                         }
 
                                         checkboxes.forEach(cb => {
-                                            cb.addEventListener('change', function() {
-                                                updateRowDisplay();
-                                                validateCounts();
-                                            });
+                                            cb.addEventListener('change', updateRowDisplay);
                                         });
 
                                         countInputs.forEach(input => {
-                                            input.addEventListener('input', function() {
-                                                const row = input.closest('.cc-user-row');
-                                                const badge = row?.querySelector('.rb-share-badge');
-                                                const value = Number(input.value || 0);
-                                                if (badge) badge.textContent = value > 0 ? String(value) : 'Auto';
-                                                updateRowDisplay();
-                                                validateCounts();
-                                            });
+                                            input.addEventListener('input', updateRowDisplay);
                                         });
 
                                         selectAll?.addEventListener('change', function() {
@@ -281,7 +345,13 @@
                                             });
                                         });
 
-                                        if (distributableCountEl) distributableCountEl.textContent = String(distributable);
+                                        form?.addEventListener('submit', function(e) {
+                                            if (submitBtn?.disabled) {
+                                                e.preventDefault();
+                                                return false;
+                                            }
+                                        });
+
                                         updateRowDisplay();
                                     });
                                 </script>
@@ -390,79 +460,4 @@
     </div>
 </div>
 
-@push('scripts')
-<script nonce="{{ $cspNonce ?? '' }}">
-document.addEventListener('DOMContentLoaded', function () {
-    const selectAll = document.getElementById('rb-select-all-callers');
-    const checkboxes = Array.from(document.querySelectorAll('.rb-caller-check'));
-    const searchInput = document.getElementById('rb-user-search');
-    const distributable = Number(@json((int) ($unassigned ?? 0)));
-    const distributableCountEl = document.getElementById('rb-distributable-count');
-
-    function updateShares() {
-        const selected = checkboxes.filter(function (cb) {
-            return cb.checked;
-        });
-        const count = selected.length;
-        const badges = document.querySelectorAll('.rb-share-badge');
-        if (count === 0 || distributable <= 0) {
-            badges.forEach(function (b) {
-                b.textContent = '0';
-            });
-            return;
-        }
-
-        const base = Math.floor(distributable / count);
-        let rem = distributable % count;
-        checkboxes.forEach(function (cb) {
-            const row = cb.closest('.cc-user-row');
-            const badge = row ? row.querySelector('.rb-share-badge') : null;
-            if (!badge) return;
-            if (!cb.checked) {
-                badge.textContent = '0';
-                return;
-            }
-            const add = rem > 0 ? 1 : 0;
-            badge.textContent = String(base + add);
-            if (rem > 0) rem -= 1;
-        });
-    }
-
-    checkboxes.forEach(function (cb) {
-        cb.addEventListener('change', updateShares);
-    });
-
-    if (selectAll) {
-        selectAll.addEventListener('change', function () {
-            const checked = !!selectAll.checked;
-            checkboxes.forEach(function (cb) {
-                const row = cb.closest('.cc-user-row');
-                if (row && row.style.display === 'none') return;
-                cb.checked = checked;
-            });
-            updateShares();
-        });
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            const q = String(searchInput.value || '').trim().toLowerCase();
-            checkboxes.forEach(function (cb) {
-                const row = cb.closest('.cc-user-row');
-                if (!row) return;
-                const nameEl = row.querySelector('.cc-user-name');
-                const text = (nameEl ? nameEl.textContent : '').toLowerCase();
-                row.style.display = (q === '' || text.includes(q)) ? '' : 'none';
-            });
-        });
-    }
-
-    if (distributableCountEl) {
-        distributableCountEl.textContent = String(distributable);
-    }
-
-    updateShares();
-});
-</script>
-@endpush
 @endsection

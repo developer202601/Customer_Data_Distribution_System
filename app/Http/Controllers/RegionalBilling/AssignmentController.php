@@ -888,7 +888,7 @@ class AssignmentController extends Controller
         $inputUserIds = $request->input('user_ids', []);
         $inputUserIds = array_values(array_filter(array_map('intval', (array) $inputUserIds), fn ($id) => $id > 0));
         if (empty($inputUserIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'Select at least one caller to distribute rows.']);
         }
 
@@ -919,7 +919,7 @@ class AssignmentController extends Controller
 
         $selectedCallerIds = $callerIds;
         if (empty($selectedCallerIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'No valid callers selected for this RTOM admin.']);
         }
 
@@ -928,7 +928,7 @@ class AssignmentController extends Controller
 
         $reportRowIds = collect($report->row_ids ?? [])->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->values()->all();
         if (empty($reportRowIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'This report has no rows to distribute.']);
         }
 
@@ -941,7 +941,7 @@ class AssignmentController extends Controller
 
         $candidateIds = array_values(array_diff($reportRowIds, $hiddenRowIds));
         if (empty($candidateIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'No visible rows available to distribute.']);
         }
 
@@ -949,7 +949,7 @@ class AssignmentController extends Controller
         $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
 
         if (! $region) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'Could not determine region for your RTOM.']);
         }
 
@@ -967,7 +967,7 @@ class AssignmentController extends Controller
                     ->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower(trim($rtom))])
                     ->exists();
                 if (! $passed) {
-                    return Redirect::route('rb.reports.summary', ['report' => $report->id])
+                    return Redirect::route('rb.reports', ['report' => $report->id])
                         ->withErrors(['distribute' => 'Distribution is blocked. The Regional Admin has not passed the report for your RTOM yet.']);
                 }
             }
@@ -985,7 +985,7 @@ class AssignmentController extends Controller
                 ->all();
 
         if (empty($rtomRowIds)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'No rows matched your RTOM in this report.']);
         }
 
@@ -1001,19 +1001,19 @@ class AssignmentController extends Controller
 
         $rowsToDistribute = array_values(array_diff($rtomRowIds, $alreadyAssignedRowIds));
         if (empty($rowsToDistribute)) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->with('status', 'All visible rows for this RTOM are already assigned.');
         }
 
         $total = count($rowsToDistribute);
         $fixedTotal = array_sum($manualCounts);
         if ($fixedTotal > $total) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'Manual assignment total ('.$fixedTotal.') exceeds available rows ('.$total.').']);
         }
 
         if (! empty($manualCounts) && empty($freeCallerIds) && $fixedTotal < $total) {
-            return Redirect::route('rb.reports.summary', ['report' => $report->id])
+            return Redirect::route('rb.reports', ['report' => $report->id])
                 ->withErrors(['distribute' => 'Manual assignment totals must cover all distributable rows or leave at least one caller without a fixed quota.']);
         }
 
@@ -1062,7 +1062,7 @@ class AssignmentController extends Controller
             }
         });
 
-        return Redirect::route('rb.reports.summary', ['report' => $report->id])
+        return Redirect::route('rb.reports', ['report' => $report->id])
             ->with('status', 'Rows distributed to selected callers.');
     }
 

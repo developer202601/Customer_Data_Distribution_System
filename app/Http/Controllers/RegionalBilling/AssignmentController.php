@@ -1155,6 +1155,14 @@ class AssignmentController extends Controller
 
     public function reassign(Request $request, $reportId)
     {
+        $ctx = $this->ensureRtomAdmin();
+        $sessionUser = $ctx['sessionUser'];
+        $rtom = $ctx['rtom'];
+        $dbUser = User::find($sessionUser['id'] ?? 0);
+        $region = $dbUser ? $this->getRtomAdminRegion($dbUser) : null;
+
+        $report = CallCenterReport::regionalBilling()->findOrFail((int) $reportId);
+
         $assignmentIds = $request->input('assignment_ids', []);
         $userIds = $request->input('user_ids', []);
         $action = $request->input('action');
@@ -1162,17 +1170,65 @@ class AssignmentController extends Controller
         $assignmentIds = array_map('intval', array_filter($assignmentIds, fn ($id) => is_numeric($id) && $id > 0));
         $userIds = array_map('intval', array_filter($userIds, fn ($id) => is_numeric($id) && $id > 0));
 
-        if ($action === 'pool') {
-            $userIds = [];
-        }
-
         if (empty($assignmentIds)) {
             return Redirect::route('rb.reports', ['report' => $reportId])->withErrors(['reassign' => 'Select at least one rejected assignment to reassign.']);
         }
 
-        Bus::dispatchSync(new ReassignCallCenterRows($assignmentIds, $userIds));
+        if ($action !== 'pool' && empty($userIds)) {
+            return Redirect::route('rb.reports', ['report' => $reportId])->withErrors(['reassign' => 'Select at least one caller to redistribute to, or click Return to pool.']);
+        }
 
-        return Redirect::route('rb.reports', ['report' => $reportId])->with('status', 'Reassignment queued.');
+        // Scope assignment IDs to this report and current RTOM
+        $validAssignmentIds = CallCenterAssignment::regionalBilling()
+            ->where('call_center_report_id', $report->id)
+            ->whereIn('id', $assignmentIds)
+            ->whereHas('row', function ($query) use ($rtom, $region) {
+                if ($rtom) {
+                    $query->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtom)]);
+                }
+                if ($region) {
+                    $query->whereRaw('LOWER(TRIM(region)) = ?', [strtolower($region)]);
+                }
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (empty($validAssignmentIds)) {
+            return Redirect::route('rb.reports', ['report' => $reportId])->withErrors(['reassign' => 'No matching rejected assignments found for your RTOM.']);
+        }
+
+        $allRejectedCount = CallCenterAssignment::regionalBilling()
+            ->where('call_center_report_id', $report->id)
+            ->rejected()
+            ->where('status', 'pending')
+            ->whereHas('row', function ($query) use ($rtom, $region) {
+                if ($rtom) {
+                    $query->whereRaw('LOWER(TRIM(rtom)) = ?', [strtolower($rtom)]);
+                }
+                if ($region) {
+                    $query->whereRaw('LOWER(TRIM(region)) = ?', [strtolower($region)]);
+                }
+            })
+            ->count();
+
+        if (count($validAssignmentIds) < $allRejectedCount) {
+            return Redirect::route('rb.reports', ['report' => $reportId])
+                ->withErrors(['reassign' => 'All remaining rejected records must be selected to redistribute.']);
+        }
+
+        if ($action === 'pool') {
+            $userIds = [];
+        }
+
+        Bus::dispatchSync(new ReassignCallCenterRows($validAssignmentIds, $userIds));
+
+        $count = count($validAssignmentIds);
+        $statusMsg = $action === 'pool'
+            ? ($count . ' rejected row(s) returned to pool.')
+            : ($count . ' rejected row(s) redistributed successfully.');
+
+        return Redirect::route('rb.reports', ['report' => $reportId])->with('status', $statusMsg);
     }
 
     private function reopenOriginalRejectedAssignment(CallCenterAssignment $assignment): CallCenterAssignment

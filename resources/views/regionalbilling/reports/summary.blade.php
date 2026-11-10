@@ -85,6 +85,9 @@
                     @if($errors->has('distribute'))
                         <div class="alert alert-warning">{{ $errors->first('distribute') }}</div>
                     @endif
+                    @if($errors->has('reassign'))
+                        <div class="alert alert-warning">{{ $errors->first('reassign') }}</div>
+                    @endif
 
                     @if(($callers ?? collect())->isEmpty())
                         <div class="alert alert-info">No active callers found under your account. Create callers first, then distribute rows.</div>
@@ -369,7 +372,7 @@
                                 <div class="card-body flex-grow-1">
                                     <h3 class="h6 text-uppercase text-muted small mb-3">Rejected assignments</h3>
                                     @php $hasRejected = false; @endphp
-                                    <ul class="list-unstyled mb-0">
+                                    <ul class="list-unstyled mb-2">
                                         @foreach($callers as $caller)
                                             @php $count = (int) ($rejectedCounts[$caller->id] ?? 0); @endphp
                                             @if($count > 0)
@@ -381,13 +384,149 @@
                                                             &nbsp;&mdash;&nbsp;<span class="text-muted">{{ $caller->name }}</span>
                                                         @endif
                                                     </div>
-                                                    <span class="badge bg-warning text-dark small">{{ $count }}</span>
+                                                    <span class="badge bg-warning text-dark small">{{ $count }} rejected</span>
                                                 </li>
                                             @endif
                                         @endforeach
                                     </ul>
-                                    @if(!$hasRejected)
-                                    <p class="text-muted small mb-0">No rejected rows for this report.</p>
+                                    @if(!$hasRejected && ($rejectedAssignments ?? collect())->isEmpty())
+                                        <p class="text-muted small mb-0">No rejected rows for this report.</p>
+                                    @else
+                                        <form method="post" action="{{ route('rb.reports.reassign', $report->id) }}" id="rb-reassign-form" class="mt-3">
+                                            @csrf
+                                            <div class="mb-3">
+                                                <label class="small text-muted mb-1 fw-semibold">Select callers to redistribute to</label>
+                                                <div style="max-height: 130px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 0.375rem; padding: 0.5rem;" class="bg-light bg-opacity-25 mb-2">
+                                                    @php
+                                                        $rejectedUserIds = ($rejectedAssignments ?? collect())->pluck('assigned_user_id')->filter()->unique()->all();
+                                                    @endphp
+                                                    @foreach($callers as $caller)
+                                                        @php $wasRejecting = in_array($caller->id, $rejectedUserIds, true); @endphp
+                                                        <div class="form-check small mb-1">
+                                                            <input class="form-check-input rb-reassign-user" type="checkbox" name="user_ids[]" value="{{ $caller->id }}" id="rb-reassign-user-{{ $caller->id }}">
+                                                            <label class="form-check-label" for="rb-reassign-user-{{ $caller->id }}">
+                                                                <strong>{{ $caller->username }}</strong>
+                                                                @if(!empty($caller->name))
+                                                                    <span class="text-muted">&mdash; {{ $caller->name }}</span>
+                                                                @endif
+                                                                @if($wasRejecting)
+                                                                    <span class="badge bg-light text-muted border ms-1" style="font-size: 0.7rem;">declined</span>
+                                                                @endif
+                                                            </label>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                                <div class="d-flex gap-2">
+                                                    <button type="submit" id="rb-reassign-submit-btn" class="btn btn-sm btn-primary flex-grow-1" disabled>Redistribute</button>
+                                                    <button type="submit" name="action" value="pool" id="rb-pool-submit-btn" class="btn btn-sm btn-outline-secondary" title="Return declined rows back to unassigned pool">Return to pool</button>
+                                                </div>
+                                            </div>
+
+                                            <label class="small text-muted mb-1 fw-semibold">Declined records <span id="rb-reject-hint" class="small ms-1"></span></label>
+                                            <div class="table-responsive border rounded" style="max-height: 200px; overflow-y: auto;">
+                                                <table class="table table-sm table-hover mb-0 align-middle" style="font-size: 0.8rem;">
+                                                    <thead class="table-light sticky-top">
+                                                        <tr>
+                                                            <th scope="col" style="width: 28px;">
+                                                                <input type="checkbox" id="rb-reject-select-all" checked>
+                                                            </th>
+                                                            <th scope="col">Row / Acc</th>
+                                                            <th scope="col">Declined by</th>
+                                                            <th scope="col">Reason</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach(($rejectedAssignments ?? collect()) as $assignment)
+                                                        <tr>
+                                                            <td>
+                                                                <input type="checkbox" class="form-check-input rb-reject-check" name="assignment_ids[]" value="{{ $assignment->id }}" checked>
+                                                            </td>
+                                                            <td class="text-nowrap">
+                                                                <strong>#{{ $assignment->master_dataset_row_id }}</strong>
+                                                                @if(!empty($assignment->row?->account_num))
+                                                                    <div class="text-muted" style="font-size: 0.75rem;">{{ $assignment->row->account_num }}</div>
+                                                                @endif
+                                                            </td>
+                                                            <td class="text-nowrap">
+                                                                {{ optional($assignment->agent)->username ?? optional($assignment->rejectedBy)->username ?? '—' }}
+                                                            </td>
+                                                            <td class="small text-muted" title="{{ $assignment->rejection_note }}">
+                                                                {{ \Illuminate\Support\Str::limit($assignment->rejection_note ?? 'No reason', 20) }}
+                                                            </td>
+                                                        </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </form>
+                                        <script nonce="{{ $cspNonce ?? '' }}">
+                                            document.addEventListener('DOMContentLoaded', function() {
+                                                const rejectSelectAll = document.getElementById('rb-reject-select-all');
+                                                const rejectCheckboxes = Array.from(document.querySelectorAll('.rb-reject-check'));
+                                                const reassignUserCheckboxes = Array.from(document.querySelectorAll('.rb-reassign-user'));
+                                                const reassignSubmitBtn = document.getElementById('rb-reassign-submit-btn');
+                                                const poolSubmitBtn = document.getElementById('rb-pool-submit-btn');
+                                                const rejectHintEl = document.getElementById('rb-reject-hint');
+                                                const reassignForm = document.getElementById('rb-reassign-form');
+
+                                                function updateReassignButtons() {
+                                                    const totalRows = rejectCheckboxes.length;
+                                                    const checkedRows = rejectCheckboxes.filter(cb => cb.checked).length;
+                                                    const checkedUsers = reassignUserCheckboxes.filter(cb => cb.checked).length;
+                                                    const allRowsSelected = (totalRows > 0 && checkedRows === totalRows);
+
+                                                    if (reassignSubmitBtn) {
+                                                        reassignSubmitBtn.disabled = (!allRowsSelected || checkedUsers === 0);
+                                                    }
+                                                    if (poolSubmitBtn) {
+                                                        poolSubmitBtn.disabled = !allRowsSelected;
+                                                    }
+
+                                                    if (rejectHintEl) {
+                                                        if (totalRows === 0) {
+                                                            rejectHintEl.textContent = '';
+                                                        } else if (checkedRows < totalRows) {
+                                                            const unselected = totalRows - checkedRows;
+                                                            rejectHintEl.textContent = `(${unselected} unselected - all ${totalRows} must be selected)`;
+                                                            rejectHintEl.className = 'text-warning small ms-1';
+                                                        } else {
+                                                            rejectHintEl.textContent = `(all ${totalRows} selected)`;
+                                                            rejectHintEl.className = 'text-success small ms-1';
+                                                        }
+                                                    }
+                                                }
+
+                                                rejectSelectAll?.addEventListener('change', function() {
+                                                    const checked = this.checked;
+                                                    rejectCheckboxes.forEach(cb => { cb.checked = checked; });
+                                                    updateReassignButtons();
+                                                });
+
+                                                rejectCheckboxes.forEach(cb => {
+                                                    cb.addEventListener('change', function() {
+                                                        if (rejectSelectAll) {
+                                                            rejectSelectAll.checked = rejectCheckboxes.length > 0 && rejectCheckboxes.every(c => c.checked);
+                                                        }
+                                                        updateReassignButtons();
+                                                    });
+                                                });
+
+                                                reassignUserCheckboxes.forEach(cb => {
+                                                    cb.addEventListener('change', updateReassignButtons);
+                                                });
+
+                                                reassignForm?.addEventListener('submit', function(e) {
+                                                    const totalRows = rejectCheckboxes.length;
+                                                    const checkedRows = rejectCheckboxes.filter(cb => cb.checked).length;
+                                                    if (totalRows > 0 && checkedRows < totalRows) {
+                                                        e.preventDefault();
+                                                        alert('All remaining rejected records must be selected to redistribute.');
+                                                    }
+                                                });
+
+                                                updateReassignButtons();
+                                            });
+                                        </script>
                                     @endif
                                 </div>
                             </div>

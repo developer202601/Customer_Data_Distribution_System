@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\RegionalBilling;
 
 use App\Http\Controllers\Controller;
+use App\Models\CallCenterAssignment;
 use App\Models\CallCenterReportHiddenRow;
 use App\Models\CallCenterReportRegionReview;
 use App\Models\CallCenterReport;
@@ -383,6 +384,8 @@ class ReportController extends Controller
                 ->where('a.call_center_report_id', $report->id)
                 ->where('a.report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
                 ->whereIn('a.master_dataset_row_id', $rtomScopedRowIds)
+                ->where('a.status', '<>', 'completed')
+                ->orderBy('a.id', 'asc')
                 ->select([
                     'a.master_dataset_row_id',
                     'a.assigned_user_id',
@@ -450,6 +453,7 @@ class ReportController extends Controller
                 ->where('report_type', CallCenterReport::REPORT_TYPE_REGIONAL_BILLING)
                 ->whereIn('master_dataset_row_id', $rtomScopedRowIds)
                 ->where('assigned_user_id', $caller->id)
+                ->where('status', '<>', 'completed')
                 ->where(function ($q) {
                     $q->whereNull('accepted')->orWhere('accepted', false);
                 })
@@ -478,10 +482,22 @@ class ReportController extends Controller
             ->whereIn('master_dataset_row_id', $rtomScopedRowIds)
             ->whereNotNull('assigned_user_id')
             ->where('rejected', true)
+            ->where('status', 'pending')
             ->groupBy('assigned_user_id')
             ->pluck('count', 'assigned_user_id')
             ->map(fn ($count) => (int) $count)
             ->all();
+
+        $rejectedAssignments = empty($rtomScopedRowIds)
+            ? collect()
+            : CallCenterAssignment::regionalBilling()
+                ->with(['row', 'rejectedBy', 'agent'])
+                ->where('call_center_report_id', $report->id)
+                ->whereIn('master_dataset_row_id', $rtomScopedRowIds)
+                ->rejected()
+                ->where('status', 'pending')
+                ->orderByDesc('rejected_at')
+                ->get();
 
         $anyAssigned = $assigned > 0;
 
@@ -500,6 +516,7 @@ class ReportController extends Controller
             'pendingCounts' => $pendingCounts,
             'acceptedCounts' => $acceptedCounts,
             'rejectedCounts' => $rejectedCounts,
+            'rejectedAssignments' => $rejectedAssignments,
             'anyAssigned' => $anyAssigned,
         ]);
     }

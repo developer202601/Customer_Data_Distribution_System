@@ -79,8 +79,14 @@
                 </div>
 
                 <div class="mt-4">
+                    @if(session('status'))
+                        <div class="alert alert-success">{{ session('status') }}</div>
+                    @endif
                     @if($errors->has('distribute'))
                         <div class="alert alert-warning">{{ $errors->first('distribute') }}</div>
+                    @endif
+                    @if($errors->has('reassign'))
+                        <div class="alert alert-warning">{{ $errors->first('reassign') }}</div>
                     @endif
 
                     @if(($callers ?? collect())->isEmpty())
@@ -96,7 +102,7 @@
                                         <div class="mb-2 d-flex align-items-center gap-2">
                                             <input type="checkbox" id="rb-select-all-callers" />
                                             <label for="rb-select-all-callers" class="small mb-0">Select all</label>
-                                            <div class="small text-muted ms-2">Distributable rows: <strong id="rb-distributable-count">{{ $unassigned }}</strong></div>
+                                            <div class="small text-muted ms-2">Distributable rows: <strong id="rb-distributable-count">{{ $unassigned }}</strong> <span id="rb-distribute-hint" class="small ms-1"></span></div>
                                         </div>
 
                                         <style nonce="{{ $cspNonce ?? '' }}">
@@ -186,7 +192,7 @@
                                             @endforeach
                                         </div>
                                         <div class="mt-3">
-                                            <button type="submit" id="rb-distribute-btn" class="btn btn-primary btn-sm w-100" {{ $unassigned <= 0 ? 'disabled' : '' }}>Distribute</button>
+                                            <button type="submit" id="rb-distribute-btn" class="btn btn-primary btn-sm w-100" disabled>Distribute</button>
                                         </div>
                                     </div>
                                 </form>
@@ -198,11 +204,14 @@
                                         const selectAll = document.getElementById('rb-select-all-callers');
                                         const searchInput = document.getElementById('rb-user-search');
                                         const distributableCountEl = document.getElementById('rb-distributable-count');
+                                        const hintEl = document.getElementById('rb-distribute-hint');
                                         const submitBtn = document.getElementById('rb-distribute-btn');
+                                        const form = submitBtn?.closest('form');
 
                                         function updateRowDisplay() {
-                                            let total = 0;
-                                            let selectedCount = 0;
+                                            const selectedCbs = checkboxes.filter(cb => cb.checked);
+                                            const selectedCount = selectedCbs.length;
+
                                             checkboxes.forEach(cb => {
                                                 const row = cb.closest('.cc-user-row');
                                                 const badge = row?.querySelector('.rb-share-badge');
@@ -213,53 +222,111 @@
                                                         input.value = '';
                                                     }
                                                     if (badge) badge.textContent = '0';
-                                                    return;
-                                                }
-
-                                                selectedCount += 1;
-                                                if (input) {
-                                                    input.disabled = false;
-                                                    const value = Number(input.value || 0);
-                                                    if (badge) badge.textContent = value > 0 ? String(value) : 'Auto';
-                                                    total += value;
+                                                } else {
+                                                    if (input) input.disabled = false;
                                                 }
                                             });
 
+                                            if (selectedCount === 0 || distributable <= 0) {
+                                                if (submitBtn) submitBtn.disabled = true;
+                                                if (distributableCountEl) {
+                                                    distributableCountEl.textContent = String(distributable);
+                                                    distributableCountEl.classList.remove('text-danger', 'text-warning');
+                                                }
+                                                if (hintEl) {
+                                                    hintEl.textContent = '';
+                                                    hintEl.className = 'small ms-1';
+                                                }
+                                                return;
+                                            }
+
+                                            let manualSum = 0;
+                                            const autoCbs = [];
+
+                                            selectedCbs.forEach(cb => {
+                                                const row = cb.closest('.cc-user-row');
+                                                const input = row?.querySelector('.rb-user-count-input');
+                                                const valStr = input ? input.value.trim() : '';
+                                                const val = valStr === '' ? 0 : Math.max(0, parseInt(valStr, 10) || 0);
+
+                                                if (valStr !== '' && val > 0) {
+                                                    manualSum += val;
+                                                } else {
+                                                    autoCbs.push(cb);
+                                                }
+                                            });
+
+                                            const autoCount = autoCbs.length;
+                                            const remainingForAuto = distributable - manualSum;
+                                            let totalAllocated = 0;
+
+                                            selectedCbs.forEach(cb => {
+                                                const row = cb.closest('.cc-user-row');
+                                                const input = row?.querySelector('.rb-user-count-input');
+                                                const badge = row?.querySelector('.rb-share-badge');
+                                                const valStr = input ? input.value.trim() : '';
+                                                const val = valStr === '' ? 0 : Math.max(0, parseInt(valStr, 10) || 0);
+
+                                                if (valStr !== '' && val > 0) {
+                                                    if (badge) badge.textContent = String(val);
+                                                    totalAllocated += val;
+                                                }
+                                            });
+
+                                            if (autoCount > 0) {
+                                                if (remainingForAuto > 0) {
+                                                    const base = Math.floor(remainingForAuto / autoCount);
+                                                    let rem = remainingForAuto % autoCount;
+                                                    autoCbs.forEach(cb => {
+                                                        const row = cb.closest('.cc-user-row');
+                                                        const badge = row?.querySelector('.rb-share-badge');
+                                                        const add = rem > 0 ? 1 : 0;
+                                                        const share = base + add;
+                                                        if (badge) badge.textContent = String(share);
+                                                        if (rem > 0) rem -= 1;
+                                                        totalAllocated += share;
+                                                    });
+                                                } else {
+                                                    autoCbs.forEach(cb => {
+                                                        const row = cb.closest('.cc-user-row');
+                                                        const badge = row?.querySelector('.rb-share-badge');
+                                                        if (badge) badge.textContent = '0';
+                                                    });
+                                                }
+                                            }
+
+                                            const unallocated = distributable - totalAllocated;
+                                            const allAllocated = (totalAllocated === distributable && selectedCount > 0);
+
                                             if (submitBtn) {
-                                                submitBtn.disabled = (selectedCount === 0 || distributable <= 0);
+                                                submitBtn.disabled = !allAllocated;
                                             }
 
-                                            const remaining = distributable - total;
                                             if (distributableCountEl) {
-                                                distributableCountEl.textContent = String(remaining >= 0 ? remaining : 0);
-                                                distributableCountEl.classList.toggle('text-danger', remaining < 0);
+                                                distributableCountEl.textContent = String(unallocated >= 0 ? unallocated : 0);
+                                                distributableCountEl.classList.toggle('text-danger', unallocated < 0);
                                             }
-                                        }
 
-                                        function validateCounts() {
-                                            const remaining = distributable - countInputs.reduce((sum, input) => {
-                                                if (input.disabled) return sum;
-                                                return sum + Number(input.value || 0);
-                                            }, 0);
-                                            return remaining >= 0;
+                                            if (hintEl) {
+                                                if (unallocated > 0) {
+                                                    hintEl.textContent = `(${unallocated} unallocated - all ${distributable} rows must be selected to distribute)`;
+                                                    hintEl.className = 'text-warning small ms-1';
+                                                } else if (unallocated < 0) {
+                                                    hintEl.textContent = `(exceeds distributable rows by ${Math.abs(unallocated)})`;
+                                                    hintEl.className = 'text-danger small ms-1';
+                                                } else {
+                                                    hintEl.textContent = `(all ${distributable} rows selected)`;
+                                                    hintEl.className = 'text-success small ms-1';
+                                                }
+                                            }
                                         }
 
                                         checkboxes.forEach(cb => {
-                                            cb.addEventListener('change', function() {
-                                                updateRowDisplay();
-                                                validateCounts();
-                                            });
+                                            cb.addEventListener('change', updateRowDisplay);
                                         });
 
                                         countInputs.forEach(input => {
-                                            input.addEventListener('input', function() {
-                                                const row = input.closest('.cc-user-row');
-                                                const badge = row?.querySelector('.rb-share-badge');
-                                                const value = Number(input.value || 0);
-                                                if (badge) badge.textContent = value > 0 ? String(value) : 'Auto';
-                                                updateRowDisplay();
-                                                validateCounts();
-                                            });
+                                            input.addEventListener('input', updateRowDisplay);
                                         });
 
                                         selectAll?.addEventListener('change', function() {
@@ -281,7 +348,13 @@
                                             });
                                         });
 
-                                        if (distributableCountEl) distributableCountEl.textContent = String(distributable);
+                                        form?.addEventListener('submit', function(e) {
+                                            if (submitBtn?.disabled) {
+                                                e.preventDefault();
+                                                return false;
+                                            }
+                                        });
+
                                         updateRowDisplay();
                                     });
                                 </script>
@@ -299,7 +372,7 @@
                                 <div class="card-body flex-grow-1">
                                     <h3 class="h6 text-uppercase text-muted small mb-3">Rejected assignments</h3>
                                     @php $hasRejected = false; @endphp
-                                    <ul class="list-unstyled mb-0">
+                                    <ul class="list-unstyled mb-2">
                                         @foreach($callers as $caller)
                                             @php $count = (int) ($rejectedCounts[$caller->id] ?? 0); @endphp
                                             @if($count > 0)
@@ -311,13 +384,149 @@
                                                             &nbsp;&mdash;&nbsp;<span class="text-muted">{{ $caller->name }}</span>
                                                         @endif
                                                     </div>
-                                                    <span class="badge bg-warning text-dark small">{{ $count }}</span>
+                                                    <span class="badge bg-warning text-dark small">{{ $count }} rejected</span>
                                                 </li>
                                             @endif
                                         @endforeach
                                     </ul>
-                                    @if(!$hasRejected)
-                                    <p class="text-muted small mb-0">No rejected rows for this report.</p>
+                                    @if(!$hasRejected && ($rejectedAssignments ?? collect())->isEmpty())
+                                        <p class="text-muted small mb-0">No rejected rows for this report.</p>
+                                    @else
+                                        <form method="post" action="{{ route('rb.reports.reassign', $report->id) }}" id="rb-reassign-form" class="mt-3">
+                                            @csrf
+                                            <div class="mb-3">
+                                                <label class="small text-muted mb-1 fw-semibold">Select callers to redistribute to</label>
+                                                <div style="max-height: 130px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 0.375rem; padding: 0.5rem;" class="bg-light bg-opacity-25 mb-2">
+                                                    @php
+                                                        $rejectedUserIds = ($rejectedAssignments ?? collect())->pluck('assigned_user_id')->filter()->unique()->all();
+                                                    @endphp
+                                                    @foreach($callers as $caller)
+                                                        @php $wasRejecting = in_array($caller->id, $rejectedUserIds, true); @endphp
+                                                        <div class="form-check small mb-1">
+                                                            <input class="form-check-input rb-reassign-user" type="checkbox" name="user_ids[]" value="{{ $caller->id }}" id="rb-reassign-user-{{ $caller->id }}">
+                                                            <label class="form-check-label" for="rb-reassign-user-{{ $caller->id }}">
+                                                                <strong>{{ $caller->username }}</strong>
+                                                                @if(!empty($caller->name))
+                                                                    <span class="text-muted">&mdash; {{ $caller->name }}</span>
+                                                                @endif
+                                                                @if($wasRejecting)
+                                                                    <span class="badge bg-light text-muted border ms-1" style="font-size: 0.7rem;">declined</span>
+                                                                @endif
+                                                            </label>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                                <div class="d-flex gap-2">
+                                                    <button type="submit" id="rb-reassign-submit-btn" class="btn btn-sm btn-primary flex-grow-1" disabled>Redistribute</button>
+                                                    <button type="submit" name="action" value="pool" id="rb-pool-submit-btn" class="btn btn-sm btn-outline-secondary" title="Return declined rows back to unassigned pool">Return to pool</button>
+                                                </div>
+                                            </div>
+
+                                            <label class="small text-muted mb-1 fw-semibold">Declined records <span id="rb-reject-hint" class="small ms-1"></span></label>
+                                            <div class="table-responsive border rounded" style="max-height: 200px; overflow-y: auto;">
+                                                <table class="table table-sm table-hover mb-0 align-middle" style="font-size: 0.8rem;">
+                                                    <thead class="table-light sticky-top">
+                                                        <tr>
+                                                            <th scope="col" style="width: 28px;">
+                                                                <input type="checkbox" id="rb-reject-select-all" checked>
+                                                            </th>
+                                                            <th scope="col">Row / Acc</th>
+                                                            <th scope="col">Declined by</th>
+                                                            <th scope="col">Reason</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach(($rejectedAssignments ?? collect()) as $assignment)
+                                                        <tr>
+                                                            <td>
+                                                                <input type="checkbox" class="form-check-input rb-reject-check" name="assignment_ids[]" value="{{ $assignment->id }}" checked>
+                                                            </td>
+                                                            <td class="text-nowrap">
+                                                                <strong>#{{ $assignment->master_dataset_row_id }}</strong>
+                                                                @if(!empty($assignment->row?->account_num))
+                                                                    <div class="text-muted" style="font-size: 0.75rem;">{{ $assignment->row->account_num }}</div>
+                                                                @endif
+                                                            </td>
+                                                            <td class="text-nowrap">
+                                                                {{ optional($assignment->agent)->username ?? optional($assignment->rejectedBy)->username ?? '—' }}
+                                                            </td>
+                                                            <td class="small text-muted" title="{{ $assignment->rejection_note }}">
+                                                                {{ \Illuminate\Support\Str::limit($assignment->rejection_note ?? 'No reason', 20) }}
+                                                            </td>
+                                                        </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </form>
+                                        <script nonce="{{ $cspNonce ?? '' }}">
+                                            document.addEventListener('DOMContentLoaded', function() {
+                                                const rejectSelectAll = document.getElementById('rb-reject-select-all');
+                                                const rejectCheckboxes = Array.from(document.querySelectorAll('.rb-reject-check'));
+                                                const reassignUserCheckboxes = Array.from(document.querySelectorAll('.rb-reassign-user'));
+                                                const reassignSubmitBtn = document.getElementById('rb-reassign-submit-btn');
+                                                const poolSubmitBtn = document.getElementById('rb-pool-submit-btn');
+                                                const rejectHintEl = document.getElementById('rb-reject-hint');
+                                                const reassignForm = document.getElementById('rb-reassign-form');
+
+                                                function updateReassignButtons() {
+                                                    const totalRows = rejectCheckboxes.length;
+                                                    const checkedRows = rejectCheckboxes.filter(cb => cb.checked).length;
+                                                    const checkedUsers = reassignUserCheckboxes.filter(cb => cb.checked).length;
+                                                    const allRowsSelected = (totalRows > 0 && checkedRows === totalRows);
+
+                                                    if (reassignSubmitBtn) {
+                                                        reassignSubmitBtn.disabled = (!allRowsSelected || checkedUsers === 0);
+                                                    }
+                                                    if (poolSubmitBtn) {
+                                                        poolSubmitBtn.disabled = !allRowsSelected;
+                                                    }
+
+                                                    if (rejectHintEl) {
+                                                        if (totalRows === 0) {
+                                                            rejectHintEl.textContent = '';
+                                                        } else if (checkedRows < totalRows) {
+                                                            const unselected = totalRows - checkedRows;
+                                                            rejectHintEl.textContent = `(${unselected} unselected - all ${totalRows} must be selected)`;
+                                                            rejectHintEl.className = 'text-warning small ms-1';
+                                                        } else {
+                                                            rejectHintEl.textContent = `(all ${totalRows} selected)`;
+                                                            rejectHintEl.className = 'text-success small ms-1';
+                                                        }
+                                                    }
+                                                }
+
+                                                rejectSelectAll?.addEventListener('change', function() {
+                                                    const checked = this.checked;
+                                                    rejectCheckboxes.forEach(cb => { cb.checked = checked; });
+                                                    updateReassignButtons();
+                                                });
+
+                                                rejectCheckboxes.forEach(cb => {
+                                                    cb.addEventListener('change', function() {
+                                                        if (rejectSelectAll) {
+                                                            rejectSelectAll.checked = rejectCheckboxes.length > 0 && rejectCheckboxes.every(c => c.checked);
+                                                        }
+                                                        updateReassignButtons();
+                                                    });
+                                                });
+
+                                                reassignUserCheckboxes.forEach(cb => {
+                                                    cb.addEventListener('change', updateReassignButtons);
+                                                });
+
+                                                reassignForm?.addEventListener('submit', function(e) {
+                                                    const totalRows = rejectCheckboxes.length;
+                                                    const checkedRows = rejectCheckboxes.filter(cb => cb.checked).length;
+                                                    if (totalRows > 0 && checkedRows < totalRows) {
+                                                        e.preventDefault();
+                                                        alert('All remaining rejected records must be selected to redistribute.');
+                                                    }
+                                                });
+
+                                                updateReassignButtons();
+                                            });
+                                        </script>
                                     @endif
                                 </div>
                             </div>
@@ -390,79 +599,4 @@
     </div>
 </div>
 
-@push('scripts')
-<script nonce="{{ $cspNonce ?? '' }}">
-document.addEventListener('DOMContentLoaded', function () {
-    const selectAll = document.getElementById('rb-select-all-callers');
-    const checkboxes = Array.from(document.querySelectorAll('.rb-caller-check'));
-    const searchInput = document.getElementById('rb-user-search');
-    const distributable = Number(@json((int) ($unassigned ?? 0)));
-    const distributableCountEl = document.getElementById('rb-distributable-count');
-
-    function updateShares() {
-        const selected = checkboxes.filter(function (cb) {
-            return cb.checked;
-        });
-        const count = selected.length;
-        const badges = document.querySelectorAll('.rb-share-badge');
-        if (count === 0 || distributable <= 0) {
-            badges.forEach(function (b) {
-                b.textContent = '0';
-            });
-            return;
-        }
-
-        const base = Math.floor(distributable / count);
-        let rem = distributable % count;
-        checkboxes.forEach(function (cb) {
-            const row = cb.closest('.cc-user-row');
-            const badge = row ? row.querySelector('.rb-share-badge') : null;
-            if (!badge) return;
-            if (!cb.checked) {
-                badge.textContent = '0';
-                return;
-            }
-            const add = rem > 0 ? 1 : 0;
-            badge.textContent = String(base + add);
-            if (rem > 0) rem -= 1;
-        });
-    }
-
-    checkboxes.forEach(function (cb) {
-        cb.addEventListener('change', updateShares);
-    });
-
-    if (selectAll) {
-        selectAll.addEventListener('change', function () {
-            const checked = !!selectAll.checked;
-            checkboxes.forEach(function (cb) {
-                const row = cb.closest('.cc-user-row');
-                if (row && row.style.display === 'none') return;
-                cb.checked = checked;
-            });
-            updateShares();
-        });
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            const q = String(searchInput.value || '').trim().toLowerCase();
-            checkboxes.forEach(function (cb) {
-                const row = cb.closest('.cc-user-row');
-                if (!row) return;
-                const nameEl = row.querySelector('.cc-user-name');
-                const text = (nameEl ? nameEl.textContent : '').toLowerCase();
-                row.style.display = (q === '' || text.includes(q)) ? '' : 'none';
-            });
-        });
-    }
-
-    if (distributableCountEl) {
-        distributableCountEl.textContent = String(distributable);
-    }
-
-    updateShares();
-});
-</script>
-@endpush
 @endsection

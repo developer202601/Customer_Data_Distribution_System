@@ -5,24 +5,18 @@ namespace App\Support;
 use App\Exceptions\ProcessCanceledException;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
-use App\Support\MasterDatasetAssignmentService;
-use App\Support\MasterDatasetProcessStatus;
-use App\Support\MasterDatasetStagingPromoter;
-use App\Support\PythonIngestionService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 use Throwable;
 use ZipArchive;
-use Symfony\Component\Process\Process;
 
 class MasterDatasetImporter
 {
@@ -31,10 +25,15 @@ class MasterDatasetImporter
     private const MAX_ROW_ERRORS = 20;
 
     private const EXPORT_BASE_DIRECTORY = 'exports';
+
     private const MASTER_SOURCE_SUBDIRECTORY = 'source';
+
     private const TEMP_DIRECTORY = 'tmp/master';
+
     private const ASSIGNMENT_EXCLUDED = 'Excluded';
+
     private const ASSIGNMENT_VIP = 'VIP';
+
     private const REQUIRED_COLUMNS = [
         'RUN_DATE',
         'REGION',
@@ -49,15 +48,21 @@ class MasterDatasetImporter
         'LATEST_PRODUCT_STATUS',
         'SLT_BUSINESS_LINE_VALUE',
         'SLT_GL_SUB_SEGMENT',
+        'CALL_REMINDER',
     ];
+
     private const REQUIRED_ROW_COLUMNS = [
         'RUN_DATE',
         'ACCOUNT_NUM',
         'PRODUCT_LABEL',
     ];
+
     private const DUPLICATE_ROW_CONSTRAINT = 'mdr_process_run_product_unique';
+
     private const PROCESS_UPLOAD_CACHE_PREFIX = 'process:upload:';
+
     private const VALIDATION_PROGRESS_UPDATE_EVERY = 200;
+
     private const VALIDATION_REPORT_BASE_DIRECTORY = 'validation-reports/master';
 
     private Filesystem $disk;
@@ -73,6 +78,7 @@ class MasterDatasetImporter
             $messages = collect($exception->errors())->flatten()->filter()->values()->all();
             if (! empty($messages)) {
                 $summary = implode(' | ', array_slice($messages, 0, self::MAX_ROW_ERRORS));
+
                 return substr($summary, 0, 255);
             }
         }
@@ -147,28 +153,28 @@ class MasterDatasetImporter
 
     private function masterSourceDirectory(string $token): string
     {
-        return self::EXPORT_BASE_DIRECTORY . '/' . $token . '/' . self::MASTER_SOURCE_SUBDIRECTORY;
+        return self::EXPORT_BASE_DIRECTORY.'/'.$token.'/'.self::MASTER_SOURCE_SUBDIRECTORY;
     }
 
     private function workbookPlaceholderPath(string $token): string
     {
-        return $this->masterSourceDirectory($token) . '/master.xlsx';
+        return $this->masterSourceDirectory($token).'/master.xlsx';
     }
 
     private function csvPlaceholderPath(string $token): string
     {
-        return $this->masterSourceDirectory($token) . '/master.csv';
+        return $this->masterSourceDirectory($token).'/master.csv';
     }
 
     private function temporaryWorkbookPath(string $token): string
     {
-        $directory = storage_path('app/' . self::TEMP_DIRECTORY);
+        $directory = storage_path('app/'.self::TEMP_DIRECTORY);
 
         if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
             throw new RuntimeException('Unable to prepare a temporary directory for master workbook extraction.');
         }
 
-        return $directory . '/' . $token . '_' . Str::uuid()->toString() . '.xlsx';
+        return $directory.'/'.$token.'_'.Str::uuid()->toString().'.xlsx';
     }
 
     private function isTemporaryWorkbookPath(?string $path): bool
@@ -177,7 +183,7 @@ class MasterDatasetImporter
             return false;
         }
 
-        $prefix = rtrim(storage_path('app/' . self::TEMP_DIRECTORY), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $prefix = rtrim(storage_path('app/'.self::TEMP_DIRECTORY), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
         $resolved = realpath($path) ?: $path;
 
         return str_starts_with($resolved, $prefix);
@@ -348,7 +354,7 @@ class MasterDatasetImporter
         }
 
         $token = (string) ($process->token ?? '');
-        $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
+        $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX.$token : null;
         if ($cacheKey) {
             Cache::put($cacheKey, [
                 'status' => 'processing',
@@ -365,7 +371,7 @@ class MasterDatasetImporter
 
         // Validation now runs inside the Python ingestion script (single XLSX read).
         // We still keep the abort/cancel check here so users can stop quickly.
-        if ($cacheKey && (bool) Cache::get($cacheKey . ':abort', false)) {
+        if ($cacheKey && (bool) Cache::get($cacheKey.':abort', false)) {
             Cache::put($cacheKey, [
                 'status' => 'canceled',
                 'progress' => 0,
@@ -530,7 +536,7 @@ class MasterDatasetImporter
 
         $token = (string) ($process->token ?? '');
         if ($token !== '') {
-            $cacheKey = self::PROCESS_UPLOAD_CACHE_PREFIX . $token;
+            $cacheKey = self::PROCESS_UPLOAD_CACHE_PREFIX.$token;
             $reportRelative = $this->validationReportRelativePath($token);
 
             Cache::put($cacheKey, [
@@ -555,7 +561,7 @@ class MasterDatasetImporter
 
     private function validationReportRelativePath(string $token): string
     {
-        return self::VALIDATION_REPORT_BASE_DIRECTORY . '/' . $token . '/master-validation-errors.csv';
+        return self::VALIDATION_REPORT_BASE_DIRECTORY.'/'.$token.'/master-validation-errors.csv';
     }
 
     private function applyPythonWorkbookMetadata(MasterDatasetProcess $process): void
@@ -615,8 +621,8 @@ class MasterDatasetImporter
             return;
         }
 
-        $cacheKey = self::PROCESS_UPLOAD_CACHE_PREFIX . $token;
-        $abortKey = $cacheKey . ':abort';
+        $cacheKey = self::PROCESS_UPLOAD_CACHE_PREFIX.$token;
+        $abortKey = $cacheKey.':abort';
         $diskName = $process->storage_disk ?: config('filesystems.default', 'local');
         $disk = Storage::disk($diskName);
 
@@ -684,7 +690,7 @@ class MasterDatasetImporter
         $payload = json_decode($stdout, true);
         if (! is_array($payload)) {
             $message = $stderr !== '' ? $stderr : ($stdout !== '' ? $stdout : 'Python validator produced no output.');
-            throw new RuntimeException('Python validator failed: ' . $message);
+            throw new RuntimeException('Python validator failed: '.$message);
         }
 
         $status = (string) ($payload['status'] ?? 'error');
@@ -730,10 +736,10 @@ class MasterDatasetImporter
 
         $message = (string) ($payload['message'] ?? 'Python validator error.');
         if ($stderr !== '') {
-            $message .= ' ' . $stderr;
+            $message .= ' '.$stderr;
         }
 
-        throw new RuntimeException('Python validator error: ' . trim($message));
+        throw new RuntimeException('Python validator error: '.trim($message));
     }
 
     private function importRows(MasterDatasetProcess $process, array $dataRows, array $headers, array $headerMap, string $arrearsLetter, string $arrearsColumnName): array
@@ -804,6 +810,7 @@ class MasterDatasetImporter
                     MasterDatasetRow::insert($batch);
                     $batch = [];
                 }
+
                 continue;
             }
 
@@ -838,7 +845,7 @@ class MasterDatasetImporter
         $maxReportRows = 50000;
 
         $token = (string) ($process->token ?? '');
-        $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX . $token : null;
+        $cacheKey = $token !== '' ? self::PROCESS_UPLOAD_CACHE_PREFIX.$token : null;
 
         $diskName = (string) ($process->storage_disk ?: config('filesystems.default', 'local'));
         $disk = Storage::disk($diskName);
@@ -896,14 +903,14 @@ class MasterDatasetImporter
                         $errors[] = sprintf(
                             'Row %d, column %s: expected numeric value or "-".',
                             (int) $excelRow,
-                            self::NEW_ARREARS_PREFIX . '*'
+                            self::NEW_ARREARS_PREFIX.'*'
                         );
                     }
 
                     if (count($reportRows) < $maxReportRows) {
                         $reportRows[] = [
                             (int) $excelRow,
-                            self::NEW_ARREARS_PREFIX . '*',
+                            self::NEW_ARREARS_PREFIX.'*',
                             'INVALID_NUMBER',
                             $arrearsRaw,
                             '',
@@ -1078,18 +1085,21 @@ class MasterDatasetImporter
         $medium = strtoupper(trim((string) $row['medium']));
         if ($medium === '' || ! in_array($medium, ['COPPER', 'FTTH', 'LTE'], true)) {
             $value = $medium === '' ? 'blank' : $medium;
+
             return sprintf('AUTO: MEDIUM is %s (requires COPPER, FTTH or LTE)', $value);
         }
 
         $status = strtoupper(trim((string) $row['latest_product_status']));
         if ($status !== 'OK') {
             $value = $status === '' ? 'blank' : $status;
+
             return sprintf('AUTO: LATEST_PRODUCT_STATUS is %s (requires OK)', $value);
         }
 
         $arrears = (float) ($row['new_arrears_value'] ?? 0);
         if ($arrears <= 2400) {
             $column = $row['new_arrears_column'] ?? 'NEW_ARREARS';
+
             return sprintf('AUTO: %s <= 2400', $column);
         }
 
@@ -1164,6 +1174,7 @@ class MasterDatasetImporter
         }
 
         $numeric = str_replace([',', ' '], '', $value);
+
         return is_numeric($numeric) ? (float) $numeric : null;
     }
 
@@ -1229,7 +1240,7 @@ class MasterDatasetImporter
 
         if (! empty($missing)) {
             throw ValidationException::withMessages([
-                'upload' => 'Missing required columns: ' . implode(', ', $missing),
+                'upload' => 'Missing required columns: '.implode(', ', $missing),
             ]);
         }
     }
@@ -1249,7 +1260,7 @@ class MasterDatasetImporter
             ]);
         }
 
-        return $directory . '/' . $filename;
+        return $directory.'/'.$filename;
         /*
         $filename = 'master.xlsx';
         $stored = $this->disk->putFileAs($directory, $archive, $filename);
@@ -1271,7 +1282,7 @@ class MasterDatasetImporter
         }
 
         $absoluteZip = $this->disk->path($zipPath);
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
 
         if ($zip->open($absoluteZip) !== true) {
             throw new RuntimeException('Unable to open the uploaded ZIP archive.');

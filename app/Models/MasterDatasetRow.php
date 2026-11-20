@@ -63,6 +63,7 @@ class MasterDatasetRow extends Model
         'phone_number',
         'slt_business_line_value',
         'sales_channel',
+        'call_reminder',
         'excluded',
         'exclusion_reason',
         'assigned_to',

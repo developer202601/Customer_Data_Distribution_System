@@ -420,6 +420,18 @@
                                     @php $renderDownloadButtons('vip', 'vip', $vipCount); @endphp
                                 </td>
                             </tr>
+                            @php $noCallCount = (int) ($noCall['count'] ?? 0); @endphp
+                            <tr>
+                                <th scope="row">
+                                    <div class="fw-semibold mb-0">
+                                        No Call List
+                                        <span class="text-muted">({{ number_format($noCallCount) }})</span>
+                                    </div>
+                                </th>
+                                <td class="text-end align-middle">
+                                    @php $renderDownloadButtons('unassigned', 'no-call', $noCallCount); @endphp
+                                </td>
+                            </tr>
                             @php
                                 $excludedCount = (int) ($exclusions['total_excluded'] ?? 0);
                                 $retailMicroCopperCount = (int) ($exclusions['retail_micro_copper_count'] ?? 0);

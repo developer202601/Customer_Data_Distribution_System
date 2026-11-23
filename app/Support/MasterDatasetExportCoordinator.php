@@ -6,17 +6,17 @@ use App\Jobs\BuildMasterDatasetExports;
 use App\Models\CallCenterReport;
 use App\Models\DatasetExport;
 use App\Models\MasterDatasetProcess;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Database\QueryException;
 use Throwable;
-use App\Support\MasterDatasetProcessStatus;
-use Illuminate\Database\Eloquent\Builder;
 
 class MasterDatasetExportCoordinator
 {
     private const STORAGE_FORMAT = 'csv';
+
     private const EXPORT_BUCKETS = [
         'call-center-staff' => ['group' => 'group-a'],
         'call-center' => ['group' => 'group-a'],
@@ -29,6 +29,7 @@ class MasterDatasetExportCoordinator
         */
         'sme' => ['group' => 'group-b'],
         'vip' => ['group' => 'vip'],
+        'no-call' => ['group' => 'unassigned'],
         'excluded' => ['group' => 'exclusions'],
         'excluded-copper-retail-micro' => ['group' => 'exclusions'],
     ];
@@ -181,6 +182,7 @@ class MasterDatasetExportCoordinator
 
             if (! array_key_exists($bucket, self::EXPORT_BUCKETS)) {
                 $record->update(['status' => 'failed']);
+
                 continue;
             }
 

@@ -185,6 +185,7 @@
                                     <li><strong>SLT_BUSINESS_LINE_VALUE</strong></li>
                                     <li><strong>NEW_ARREARS_YYYYMMDD</strong></li>
                                     <li><strong>SLT_GL_SUB_SEGMENT</strong></li>
+                                    <li><strong>CALL_REMINDER</strong></li>
                                 </ul>
                             </li>
                             

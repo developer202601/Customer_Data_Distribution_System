@@ -2,16 +2,15 @@
 
 namespace App\Support;
 
-use OpenSpout\Writer\XLSX\Writer as SpoutXlsxWriter;
-use OpenSpout\Writer\CSV\Writer as SpoutCsvWriter;
-use OpenSpout\Writer\WriterInterface as SpoutWriterInterface;
-use OpenSpout\Common\Entity\Row as SpoutRow;
-use OpenSpout\Common\Entity\Cell as SpoutCell;
-use OpenSpout\Reader\CSV\Reader as SpoutCsvReader;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\Eloquent\Builder;
+use OpenSpout\Common\Entity\Row as SpoutRow;
+use OpenSpout\Reader\CSV\Reader as SpoutCsvReader;
+use OpenSpout\Writer\CSV\Writer as SpoutCsvWriter;
+use OpenSpout\Writer\WriterInterface as SpoutWriterInterface;
+use OpenSpout\Writer\XLSX\Writer as SpoutXlsxWriter;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use RuntimeException;
@@ -19,15 +18,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MasterDatasetExportService
 {
-        /**
+    /**
      * Store export to disk using Spout for large datasets (XLSX or CSV).
      *
-     * @param MasterDatasetProcess $process
-     * @param string $label
-     * @param Builder $query
-     * @param Filesystem $disk
-     * @param string $path
-     * @param string $format 'xlsx' or 'csv'
+     * @param  string  $format  'xlsx' or 'csv'
      */
     public function storeToDiskWithSpout(
         MasterDatasetProcess $process,
@@ -41,7 +35,7 @@ class MasterDatasetExportService
         $headerRow = array_values($columns);
         $activeColumns = array_keys($columns);
         $selectColumns = array_filter($activeColumns, fn ($column) => $column !== 'dataset_month');
-        if (!in_array('id', $selectColumns, true)) {
+        if (! in_array('id', $selectColumns, true)) {
             $selectColumns[] = 'id';
         }
         $chunkSize = 2000;
@@ -53,15 +47,15 @@ class MasterDatasetExportService
 
         /** @var SpoutWriterInterface $writer */
         if ($format === 'csv') {
-            $writer = new SpoutCsvWriter();
+            $writer = new SpoutCsvWriter;
         } else {
-            $writer = new SpoutXlsxWriter();
+            $writer = new SpoutXlsxWriter;
         }
         $writer->openToFile($tempFile);
         $writer->addRow(SpoutRow::fromValues($headerRow));
 
         $dataQuery = (clone $query);
-        if (!empty($selectColumns)) {
+        if (! empty($selectColumns)) {
             $dataQuery = $dataQuery->select($selectColumns);
         }
 
@@ -97,14 +91,11 @@ class MasterDatasetExportService
             @unlink($tempFile);
         }
     }
+
     /**
      * Stream export using Spout for large datasets (XLSX or CSV).
      *
-     * @param MasterDatasetProcess $process
-     * @param string $filename
-     * @param Builder $query
-     * @param string $format 'xlsx' or 'csv'
-     * @return \Symfony\Component\HttpFoundation\StreamedResponse
+     * @param  string  $format  'xlsx' or 'csv'
      */
     public function streamWithSpout(MasterDatasetProcess $process, string $filename, Builder $query, string $format = 'xlsx'): StreamedResponse
     {
@@ -112,7 +103,7 @@ class MasterDatasetExportService
         $headerRow = array_values($columns);
         $activeColumns = array_keys($columns);
         $selectColumns = array_filter($activeColumns, fn ($column) => $column !== 'dataset_month');
-        if (!in_array('id', $selectColumns, true)) {
+        if (! in_array('id', $selectColumns, true)) {
             $selectColumns[] = 'id';
         }
 
@@ -121,15 +112,15 @@ class MasterDatasetExportService
         return response()->streamDownload(function () use ($process, $query, $selectColumns, $headerRow, $activeColumns, $chunkSize, $format) {
             /** @var SpoutWriterInterface $writer */
             if ($format === 'csv') {
-                $writer = new SpoutCsvWriter();
+                $writer = new SpoutCsvWriter;
             } else {
-                $writer = new SpoutXlsxWriter();
+                $writer = new SpoutXlsxWriter;
             }
             $writer->openToFile('php://output');
             $writer->addRow(SpoutRow::fromValues($headerRow));
 
             $dataQuery = (clone $query);
-            if (!empty($selectColumns)) {
+            if (! empty($selectColumns)) {
                 $dataQuery = $dataQuery->select($selectColumns);
             }
 
@@ -159,8 +150,8 @@ class MasterDatasetExportService
         [$localPath, $cleanup] = $this->resolveLocalCsvPath($disk, $csvPath);
 
         return response()->streamDownload(function () use ($localPath, $cleanup) {
-            $reader = new SpoutCsvReader();
-            $writer = new SpoutXlsxWriter();
+            $reader = new SpoutCsvReader;
+            $writer = new SpoutXlsxWriter;
 
             $reader->open($localPath);
             $writer->openToFile('php://output');
@@ -217,7 +208,7 @@ class MasterDatasetExportService
 
         return [$tempFile, true];
     }
-    
+
     private const EXPORT_COLUMNS = [
         'run_date_raw' => 'RUN_DATE',
         'dataset_month' => 'DATASET_MONTH',
@@ -267,6 +258,7 @@ class MasterDatasetExportService
         'sales_person' => 'SALES_PERSON',
         'medium' => 'MEDIUM',
         'customer_segment' => 'CUSTOMER_SEGMENT',
+        'call_reminder' => 'CALL_REMINDER',
         'exclusion_reason' => 'Exclusion Reason',
     ];
 
@@ -336,7 +328,7 @@ class MasterDatasetExportService
     private function buildSpreadsheet(MasterDatasetProcess $process, string $label, Builder $query): Spreadsheet
     {
         $columns = $this->exportColumnsWithArrearsLabel($query);
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle($this->truncateSheetTitle($label));
 
@@ -368,7 +360,7 @@ class MasterDatasetExportService
             }
 
             if (! empty($batchData)) {
-                $sheet->fromArray($batchData, null, 'A' . $rowPointer);
+                $sheet->fromArray($batchData, null, 'A'.$rowPointer);
                 $rowPointer += count($batchData);
             }
         });
@@ -435,7 +427,7 @@ class MasterDatasetExportService
             'acct_effect_dtm', 'next_bill_dtm', 'payment_due_dat', 'latest_bill_dtm', 'start_dat', 'end_dat', 'latest_effective_dtm' => $this->formatDate($value),
             'latest_bill_mny', 'payments_value', 'new_arrears_value', 'new_arrears_secondary_value' => $value !== null ? number_format((float) $value, 2, '.', '') : null,
             'credit_score' => $value !== null ? number_format((float) $value, 2, '.', '') : null,
-                'exclusion_reason' => $row->excluded ? $value : null,
+            'exclusion_reason' => $row->excluded ? $value : null,
             default => $value,
         };
     }

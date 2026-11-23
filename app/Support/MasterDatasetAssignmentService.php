@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
-use App\Support\MasterDatasetAssignmentConfiguration;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -12,14 +11,27 @@ use Illuminate\Support\Facades\DB;
 class MasterDatasetAssignmentService
 {
     private const RETAIL_SEGMENTS = ['retail', 'micro business', 'microbusiness'];
+
     private const REGION_LABEL = 'regional billing center';
+
     private const CALL_CENTER_STAFF_LABEL = 'call center staff';
+
     private const CALL_CENTER_LABEL = 'call center';
+
     private const STAFF_LABEL = 'staff';
+
     private const ENTERPRISE_LABEL = 'enterprise + wholesale';
+
     private const SME_LABEL = 'sme';
+
     private const VIP_LABEL = 'VIP';
+
     private const EXCLUDED_LABEL = 'Excluded';
+
+    private const NO_CALL_LABEL = 'No Call';
+
+    private const CALL_REMINDER_VALUE = 'CALL';
+
     private const ARREARS_EXPANSION_STEP = 1000;
 
     private MasterDatasetAssignmentConfiguration $configuration;
@@ -33,10 +45,11 @@ class MasterDatasetAssignmentService
     {
         return DB::transaction(function () use ($process, $configOverrides) {
             $this->resetAssignableRows($process);
-            
+            $this->flagNonCallRows($process);
+
             $selectedMediums = $configOverrides['mediums'] ?? ['FTTH', 'COPPER', 'LTE'];
             $this->excludeUnselectedMediums($process, $selectedMediums);
-            
+
             $this->excludeLowBillNonRetail($process);
             $this->assignRetailHighBillToRegion($process);
             $this->assignRetailArrearsBands($process, $configOverrides);
@@ -59,7 +72,7 @@ class MasterDatasetAssignmentService
         $selectedLower = array_map('strtolower', $selectedMediums);
 
         // Normalize fiber/ftth matching
-        if (in_array('ftth', $selectedLower, true) && !in_array('fiber', $selectedLower, true)) {
+        if (in_array('ftth', $selectedLower, true) && ! in_array('fiber', $selectedLower, true)) {
             $selectedLower[] = 'fiber';
         }
 
@@ -71,8 +84,8 @@ class MasterDatasetAssignmentService
         $query = $this->applyRetailOrMicroFilter($query)
             ->where(function ($q) use ($selectedLower) {
                 $q->whereNull('medium')
-                  ->orWhereRaw('TRIM(medium) = ?', [''])
-                  ->orWhereNotIn(DB::raw('LOWER(TRIM(medium))'), $selectedLower);
+                    ->orWhereRaw('TRIM(medium) = ?', [''])
+                    ->orWhereNotIn(DB::raw('LOWER(TRIM(medium))'), $selectedLower);
             });
 
         $query->update([
@@ -108,6 +121,18 @@ class MasterDatasetAssignmentService
             ->where('excluded', false)
             ->whereNotIn('assigned_to', [self::VIP_LABEL, self::EXCLUDED_LABEL])
             ->update(['assigned_to' => null]);
+    }
+
+    private function flagNonCallRows(MasterDatasetProcess $process): void
+    {
+        MasterDatasetRow::query()
+            ->where('process_id', $process->id)
+            ->where('excluded', false)
+            ->where(function (Builder $query) {
+                $query->whereNull('call_reminder')
+                    ->orWhereRaw('UPPER(TRIM(call_reminder)) <> ?', [self::CALL_REMINDER_VALUE]);
+            })
+            ->update(['assigned_to' => self::NO_CALL_LABEL]);
     }
 
     private function assignRetailHighBillToRegion(MasterDatasetProcess $process): void
@@ -159,6 +184,7 @@ class MasterDatasetAssignmentService
 
         $filtered = $candidates->filter(function ($row) use ($upperBound, $retailMin) {
             $value = (float) $row->new_arrears_value;
+
             return $value > $retailMin && $value < $upperBound;
         })->values();
 
@@ -178,7 +204,7 @@ class MasterDatasetAssignmentService
 
         $staffIds = $selection->slice($offset, $staffQuota)->pluck('id')->all();
 
-        if (!empty($callCenterStaffIds)) {
+        if (! empty($callCenterStaffIds)) {
             foreach (array_chunk($callCenterStaffIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -186,7 +212,7 @@ class MasterDatasetAssignmentService
             }
         }
 
-        if (!empty($callCenterIds)) {
+        if (! empty($callCenterIds)) {
             foreach (array_chunk($callCenterIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -194,7 +220,7 @@ class MasterDatasetAssignmentService
             }
         }
 
-        if (!empty($staffIds)) {
+        if (! empty($staffIds)) {
             foreach (array_chunk($staffIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -224,12 +250,12 @@ class MasterDatasetAssignmentService
 
             if (str_contains($segment, 'sme')) {
                 $smeIds[] = $row->id;
-            } elseif (str_contains($segment, 'enterprise') || str_contains($segment, 'wholesale') || !$this->isRetailOrMicroSegment($segment)) {
+            } elseif (str_contains($segment, 'enterprise') || str_contains($segment, 'wholesale') || ! $this->isRetailOrMicroSegment($segment)) {
                 $enterpriseIds[] = $row->id;
             }
         }
 
-        if (!empty($enterpriseIds)) {
+        if (! empty($enterpriseIds)) {
             foreach (array_chunk($enterpriseIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -237,7 +263,7 @@ class MasterDatasetAssignmentService
             }
         }
 
-        if (!empty($smeIds)) {
+        if (! empty($smeIds)) {
             foreach (array_chunk($smeIds, 1000) as $chunk) {
                 MasterDatasetRow::query()
                     ->whereIn('id', $chunk)
@@ -298,6 +324,7 @@ class MasterDatasetAssignmentService
     {
         return $rows->filter(function ($row) {
             $segment = strtolower((string) $row->slt_gl_sub_segment);
+
             return $this->isRetailOrMicroSegment($segment);
         })->values();
     }

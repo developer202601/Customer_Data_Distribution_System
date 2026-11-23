@@ -8,21 +8,21 @@ use App\Models\DatasetExport;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use App\Support\MasterDatasetAssignmentConfiguration;
+use App\Support\MasterDatasetCancellation;
 use App\Support\MasterDatasetExportCoordinator;
 use App\Support\MasterDatasetExportService;
-use App\Support\MasterDatasetCancellation;
 use App\Support\MasterDatasetProcessStatus;
 use App\Support\MasterDatasetViewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Throwable;
 
 class AssignmentController extends Controller
@@ -87,7 +87,7 @@ class AssignmentController extends Controller
 
         if ($searching) {
             $query = $this->viewService->overviewQuery($process);
-            $like = '%' . $search . '%';
+            $like = '%'.$search.'%';
 
             $query->where(function ($builder) use ($like) {
                 $builder->where('account_num', 'like', $like);
@@ -126,6 +126,7 @@ class AssignmentController extends Controller
             'groupB' => $this->viewService->groupBSummary($process),
             'exclusions' => $this->viewService->exclusionSummary($process),
             'vip' => $this->viewService->vipSummary($process),
+            'noCall' => $this->viewService->noCallSummary($process),
             'region' => $this->viewService->regionSummary($process),
             'exports' => $exports,
             'exportsReady' => $exportsReady,
@@ -288,9 +289,9 @@ class AssignmentController extends Controller
                     }
                 }
 
-                Storage::disk($disk)->deleteDirectory('exports/' . $token);
-                Storage::disk($disk)->deleteDirectory('validation-reports/master/' . $token);
-                Storage::disk($disk)->deleteDirectory('exclusions/' . $process->id);
+                Storage::disk($disk)->deleteDirectory('exports/'.$token);
+                Storage::disk($disk)->deleteDirectory('validation-reports/master/'.$token);
+                Storage::disk($disk)->deleteDirectory('exclusions/'.$process->id);
 
                 if ($process->master_archive_path) {
                     Storage::disk($disk)->delete($process->master_archive_path);
@@ -371,7 +372,7 @@ class AssignmentController extends Controller
             'process_ids.*' => ['integer', 'exists:master_dataset_processes,id'],
         ]);
 
-        $processIds = collect($data['process_ids'])->map(static fn($id) => (int) $id)->unique()->values();
+        $processIds = collect($data['process_ids'])->map(static fn ($id) => (int) $id)->unique()->values();
 
         if ($processIds->isEmpty()) {
             throw ValidationException::withMessages([
@@ -399,9 +400,9 @@ class AssignmentController extends Controller
                         }
                     }
 
-                    Storage::disk($disk)->deleteDirectory('exports/' . $token);
-                    Storage::disk($disk)->deleteDirectory('validation-reports/master/' . $token);
-                    Storage::disk($disk)->deleteDirectory('exclusions/' . $process->id);
+                    Storage::disk($disk)->deleteDirectory('exports/'.$token);
+                    Storage::disk($disk)->deleteDirectory('validation-reports/master/'.$token);
+                    Storage::disk($disk)->deleteDirectory('exclusions/'.$process->id);
 
                     if ($process->master_archive_path) {
                         Storage::disk($disk)->delete($process->master_archive_path);
@@ -610,6 +611,7 @@ class AssignmentController extends Controller
         // actual processing time, which would incorrectly push new runs to the bottom.
         $sorted = $items->sortByDesc(function (MasterDatasetProcess $item) {
             $reference = $item->created_at ?? now();
+
             return Carbon::parse($reference)->getTimestamp();
         });
 
@@ -649,6 +651,7 @@ class AssignmentController extends Controller
 
         $sorted = $items->sortByDesc(function (MasterDatasetProcess $item) {
             $reference = $item->created_at ?? now();
+
             return Carbon::parse($reference)->getTimestamp();
         });
 
@@ -691,11 +694,12 @@ class AssignmentController extends Controller
         $diskName = $process->storage_disk ?: config('filesystems.default', 'local');
         $disk = Storage::disk($diskName);
 
-        if (!$process->master_archive_path || !$disk->exists($process->master_archive_path)) {
+        if (! $process->master_archive_path || ! $disk->exists($process->master_archive_path)) {
             return back()->withErrors(['reports' => 'Original master dataset file could not be found in storage.']);
         }
 
         $originalName = basename($process->master_archive_path);
+
         return $disk->download($process->master_archive_path, $originalName);
         /*
         $fileName = 'master_dataset_' . $process->dataset_month . '.' . pathinfo($originalName, PATHINFO_EXTENSION);
@@ -714,6 +718,7 @@ class AssignmentController extends Controller
             */
             'exclusions' => ['excluded', 'excluded-copper-retail-micro'],
             'vip' => ['vip'],
+            'unassigned' => ['no-call'],
             'region' => ['region-billing'],
         ];
 

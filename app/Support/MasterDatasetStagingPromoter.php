@@ -59,7 +59,7 @@ class MasterDatasetStagingPromoter
                                 throw ValidationException::withMessages([
                                     'upload' => [
                                         'Duplicate combination found for RUN_DATE/PRODUCT_LABEL/ACCOUNT_NUM. '
-                                        . 'Please remove duplicates and re-upload the master file.',
+                                        .'Please remove duplicates and re-upload the master file.',
                                     ],
                                 ]);
                             }
@@ -100,6 +100,7 @@ class MasterDatasetStagingPromoter
                             'row_number' => $rowNumber,
                             'staging_id' => (int) $row->id,
                         ];
+
                         continue;
                     }
 
@@ -159,10 +160,10 @@ class MasterDatasetStagingPromoter
     {
         $rowNumber = $entry['row_number'] ?? null;
         if (is_int($rowNumber) && $rowNumber > 0) {
-            return 'row ' . $rowNumber;
+            return 'row '.$rowNumber;
         }
 
-        return 'staging record #' . (int) ($entry['staging_id'] ?? 0);
+        return 'staging record #'.(int) ($entry['staging_id'] ?? 0);
     }
 
     private function isDuplicateCompositeKeyViolation(QueryException $exception): bool
@@ -232,6 +233,7 @@ class MasterDatasetStagingPromoter
             'phone_number',
             'slt_business_line_value',
             'sales_channel',
+            'call_reminder',
             'excluded',
             'exclusion_reason',
             'exclusion_priority',

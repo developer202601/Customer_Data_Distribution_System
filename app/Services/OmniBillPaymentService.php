@@ -47,17 +47,12 @@ class OmniBillPaymentService
             return null;
         }
 
-        // Ensure telephone number has a leading 0 for Sri Lankan numbers
-        if ($telephoneNo !== null && $telephoneNo !== '') {
-            $telephoneNo = (string) $telephoneNo;
-            if (! str_starts_with($telephoneNo, '0') && ctype_digit($telephoneNo)) {
-                $telephoneNo = '0'.$telephoneNo;
-            }
-        }
+        $telephoneNo = self::normalizeIdentifier($telephoneNo);
+        $accountNo = self::normalizeIdentifier($accountNo);
 
         $query = [
-            'telephoneNo' => $telephoneNo ?? '',
-            'accountNo' => $accountNo ?? '',
+            'telephoneNo' => $telephoneNo,
+            'accountNo' => $accountNo,
         ];
 
         try {
@@ -192,6 +187,28 @@ class OmniBillPaymentService
         }
 
         return (float) $cleaned;
+    }
+
+    /**
+     * Normalize an OMNI identifier (telephoneNo / accountNo) to exactly 10 digits.
+     *
+     * The OMNI API expects 10-character numeric identifiers; values shorter than
+     * 10 digits are left-padded with leading zeros. Non-numeric values are
+     * returned unchanged so callers can still surface malformed identifiers.
+     */
+    public static function normalizeIdentifier(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        $value = (string) $value;
+
+        if (ctype_digit($value) && strlen($value) < 10) {
+            return str_pad($value, 10, '0', STR_PAD_LEFT);
+        }
+
+        return $value;
     }
 
     /**

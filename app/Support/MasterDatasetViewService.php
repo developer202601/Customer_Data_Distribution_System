@@ -5,21 +5,32 @@ namespace App\Support;
 use App\Models\MasterDatasetProcess;
 use App\Models\MasterDatasetRow;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 class MasterDatasetViewService
 {
     private const REGION_LABEL = 'regional billing center';
+
     private const CALL_CENTER_STAFF_LABEL = 'call center staff';
+
     private const CALL_CENTER_LABEL = 'call center';
+
     private const STAFF_LABEL = 'staff';
+
     private const RETAIL_CODES = ['11', '35'];
+
     private const ENTERPRISE_CODES = ['41', '44', '47', '76'];
+
     private const SME_CODES = ['31'];
+
     private const VIP_PREFIX = 'VIP%';
+
     private const ENTERPRISE_LABEL = 'enterprise + wholesale';
+
     private const SME_LABEL = 'sme';
+
     private const VIP_LABEL = 'VIP';
+
+    private const NO_CALL_LABEL = 'No Call';
 
     private const GROUP_A_QUOTAS = [
         'call-center-staff' => [
@@ -114,7 +125,7 @@ class MasterDatasetViewService
             ->where('assigned_to', self::ENTERPRISE_LABEL)
             ->where(function (\Illuminate\Database\Eloquent\Builder $q) {
                 $q->where('slt_gl_sub_segment', 'like', '%government%')
-                  ->orWhere('slt_gl_sub_segment', 'like', '%gov%');
+                    ->orWhere('slt_gl_sub_segment', 'like', '%gov%');
             })
             ->count();
 
@@ -124,8 +135,8 @@ class MasterDatasetViewService
             ->where('assigned_to', self::ENTERPRISE_LABEL)
             ->where(function (\Illuminate\Database\Eloquent\Builder $q) {
                 $q->where('slt_gl_sub_segment', 'not like', '%government%')
-                  ->where('slt_gl_sub_segment', 'not like', '%gov%')
-                  ->orWhereNull('slt_gl_sub_segment');
+                    ->where('slt_gl_sub_segment', 'not like', '%gov%')
+                    ->orWhereNull('slt_gl_sub_segment');
             })
             ->count();
 
@@ -246,6 +257,21 @@ class MasterDatasetViewService
             ->where('credit_class_name', 'like', self::VIP_PREFIX);
     }
 
+    public function noCallSummary(MasterDatasetProcess $process): array
+    {
+        return [
+            'count' => $this->noCallQuery($process)->count(),
+        ];
+    }
+
+    public function noCallQuery(MasterDatasetProcess $process): Builder
+    {
+        return MasterDatasetRow::query()
+            ->where('process_id', $process->id)
+            ->where('excluded', false)
+            ->where('assigned_to', self::NO_CALL_LABEL);
+    }
+
     public function regionSummary(MasterDatasetProcess $process): array
     {
         $query = $this->regionQuery($process);
@@ -267,6 +293,7 @@ class MasterDatasetViewService
             self::ENTERPRISE_LABEL => 'Enterprise & Wholesale',
             self::SME_LABEL => 'SME',
             self::VIP_LABEL => 'VIP',
+            self::NO_CALL_LABEL => 'No Call',
         ];
     }
 
@@ -294,7 +321,7 @@ class MasterDatasetViewService
 
         $base = pathinfo($filename, PATHINFO_FILENAME);
 
-        return $base . '.' . $format;
+        return $base.'.'.$format;
     }
 
     public function bucketQuery(MasterDatasetProcess $process, string $bucket): Builder
@@ -316,39 +343,39 @@ class MasterDatasetViewService
                 'label' => 'Call Center Staff',
                 'filename' => 'call_center_staff.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::CALL_CENTER_STAFF_LABEL),
+                    fn (Builder $query) => $query->where('excluded', false)->where('assigned_to', self::CALL_CENTER_STAFF_LABEL),
                 ],
             ],
             'call-center' => [
                 'label' => 'Call Center',
                 'filename' => 'call_center.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::CALL_CENTER_LABEL),
+                    fn (Builder $query) => $query->where('excluded', false)->where('assigned_to', self::CALL_CENTER_LABEL),
                 ],
             ],
             'staff' => [
                 'label' => 'Staff',
                 'filename' => 'staff.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::STAFF_LABEL),
+                    fn (Builder $query) => $query->where('excluded', false)->where('assigned_to', self::STAFF_LABEL),
                 ],
             ],
             'region-billing' => [
                 'label' => 'Region Billing Centre',
                 'filename' => 'region_billing_centre.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::REGION_LABEL),
+                    fn (Builder $query) => $query->where('excluded', false)->where('assigned_to', self::REGION_LABEL),
                 ],
             ],
             'enterprise-government' => [
                 'label' => 'Enterprise - Government',
                 'filename' => 'enterprise_government.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)
+                    fn (Builder $query) => $query->where('excluded', false)
                         ->where('assigned_to', self::ENTERPRISE_LABEL)
                         ->where(function (Builder $q) {
                             $q->where('slt_gl_sub_segment', 'like', '%government%')
-                              ->orWhere('slt_gl_sub_segment', 'like', '%gov%');
+                                ->orWhere('slt_gl_sub_segment', 'like', '%gov%');
                         }),
                 ],
             ],
@@ -356,12 +383,12 @@ class MasterDatasetViewService
                 'label' => 'Enterprise - Large/Medium/Wholesale',
                 'filename' => 'enterprise_large_medium_wholesale.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)
+                    fn (Builder $query) => $query->where('excluded', false)
                         ->where('assigned_to', self::ENTERPRISE_LABEL)
                         ->where(function (Builder $q) {
                             $q->where('slt_gl_sub_segment', 'not like', '%government%')
-                              ->where('slt_gl_sub_segment', 'not like', '%gov%')
-                              ->orWhereNull('slt_gl_sub_segment');
+                                ->where('slt_gl_sub_segment', 'not like', '%gov%')
+                                ->orWhereNull('slt_gl_sub_segment');
                         }),
                 ],
             ],
@@ -378,28 +405,35 @@ class MasterDatasetViewService
                 'label' => 'SME',
                 'filename' => 'sme.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query->where('excluded', false)->where('assigned_to', self::SME_LABEL),
+                    fn (Builder $query) => $query->where('excluded', false)->where('assigned_to', self::SME_LABEL),
+                ],
+            ],
+            'no-call' => [
+                'label' => 'No Call List',
+                'filename' => 'no_call_list.xlsx',
+                'scopes' => [
+                    fn (Builder $query) => $query->where('excluded', false)->where('assigned_to', self::NO_CALL_LABEL),
                 ],
             ],
             'excluded' => [
                 'label' => 'Excluded Records',
                 'filename' => 'excluded.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $this->applyExcludedWithoutRetailMicroCopper($query),
+                    fn (Builder $query) => $this->applyExcludedWithoutRetailMicroCopper($query),
                 ],
             ],
             'excluded-copper-retail-micro' => [
                 'label' => 'Copper - Retail & Micro Business',
                 'filename' => 'copper_retail_micro.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $this->applyRetailMicroCopperScope($query),
+                    fn (Builder $query) => $this->applyRetailMicroCopperScope($query),
                 ],
             ],
             'vip' => [
                 'label' => 'VIP Records',
                 'filename' => 'vip_records.xlsx',
                 'scopes' => [
-                    fn(Builder $query) => $query
+                    fn (Builder $query) => $query
                         ->where('excluded', false)
                         ->where('assigned_to', self::VIP_LABEL)
                         ->whereNotNull('credit_class_name')

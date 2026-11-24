@@ -120,6 +120,7 @@ Route::middleware('session.auth')->group(function () {
 
         Route::get('/assignments', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'index'])->name('assignments.list');
         Route::get('/assignments/manage', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'manage'])->name('assignments.manage');
+        Route::get('/assignments/{assignment}/show', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'showAssignment'])->name('assignments.show');
         Route::post('/assignments/{user}/accept-all', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'acceptAll'])->name('assignments.acceptAll');
         Route::post('/assignments/{user}/reject-all', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'rejectAll'])->name('assignments.rejectAll');
         Route::get('/assignments/{user}/rows', [\App\Http\Controllers\CallCenter\AssignmentController::class, 'userRows'])->name('assignments.userRows');
@@ -188,6 +189,7 @@ Route::middleware('session.auth')->group(function () {
         Route::get('/caller/dashboard', [\App\Http\Controllers\RegionalBilling\DashboardController::class, 'callerDashboard'])->name('caller.dashboard');
         Route::get('/assignments', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'index'])->name('assignments.list');
         Route::get('/assignments/manage', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'manage'])->name('assignments.manage');
+        Route::get('/assignments/{assignment}/show', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'showAssignment'])->name('assignments.show');
         Route::post('/assignments/{user}/accept-all', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'acceptAll'])->name('assignments.acceptAll');
         Route::post('/assignments/{user}/reject-all', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'rejectAll'])->name('assignments.rejectAll');
         Route::get('/assignments/{user}/rows', [\App\Http\Controllers\RegionalBilling\AssignmentController::class, 'userRows'])->name('assignments.userRows');

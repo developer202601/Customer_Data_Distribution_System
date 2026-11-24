@@ -310,81 +310,6 @@
         </div>
     </div>
 </div>
-<div class="modal fade" id="ccAssignmentRowModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content card shadow-sm">
-            <div class="modal-header">
-                <h5 class="modal-title">Assignment details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row gy-4">
-                    <div class="col-lg-6">
-                        <div class="cc-details-tabs mb-2" role="tablist">
-                            <button type="button" class="btn btn-sm btn-outline-primary active" data-cc-details-tab="details">Details</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" data-cc-details-tab="interactions">Interactions</button>
-                        </div>
-                        <div id="ccAssignmentDetailFields" class="cc-details-panel border rounded-3 p-3 bg-light small text-muted">
-                            <div id="ccDetailsPanel">Select an accepted row to view its contact details.</div>
-                            <div id="ccInteractionsPanel" style="display:none"></div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="mb-2">
-                            <div id="ccSelectedName" class="fw-semibold mb-2">&nbsp;</div>
-                            <div id="ccSelectedAmounts" class="small text-muted">&nbsp;</div>
-                        </div>
-                        <div id="ccCallFormWrapperAssign" class="cc-disabled card-body bg-white rounded-3">
-                        <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
-                            <input type="hidden" name="assignment_id" id="ccCallAssignmentId">
-                            <div class="col-12">
-                                <label class="form-label small">Outcome</label>
-                                <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" disabled>
-                                    <option value="" disabled selected>Select outcome category</option>
-                                    <option value="promise_to_pay">Promise to pay</option>
-                                    <option value="temporary_financial_difficulty">Temporary financial difficulty</option>
-                                    <option value="billing_dispute">Billing / Dispute issues</option>
-                                    <option value="service_quality">Service quality issues</option>
-                                    <option value="intention_to_disconnect">Intention to disconnect</option>
-                                    <option value="contact_issue">Contact issue</option>
-                                    <option value="payment_behavior">Payment behavior pattern</option>
-                                    <option value="escalation_risk">Dispute / Escalation risk</option>
-                                </select>
-                            </div>
-                            <div class="col-12" id="ccDependentOutcomeWrap" style="display:none;">
-                                <label class="form-label small">Outcome details</label>
-                                <div id="ccDependentOutcomeContainer"></div>
-                            </div>
-                            <div class="col-12" id="ccPaymentExpectedWrap" style="display:none;">
-                                <label class="form-label small">Select date</label>
-                                <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" min="{{ now()->toDateString() }}" disabled>
-                            </div>
-                            <div class="col-12">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="ccNotRelevantPerson" name="not_relevant_person" value="1" disabled>
-                                    <label class="form-check-label small" for="ccNotRelevantPerson">
-                                        Not the relevant person contacted
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small">Note (optional)</label>
-                                <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" disabled></textarea>
-                            </div>
-                            <div class="col-12 d-flex gap-2">
-                                <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm d-none" disabled>Save</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                            </div>
-                            <div class="col-12">
-                                <div id="ccCallStatus" class="small text-muted"></div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
                 <script nonce="{{ $cspNonce ?? '' }}">
 document.addEventListener('DOMContentLoaded', function () {
     const assignmentRowModal = document.getElementById('ccAssignmentRowModal');
@@ -401,6 +326,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const NOT_RELEVANT_PERSON_OUTCOME = 'not relevant person contacted';
     const outstandingThreshold = @json($outstandingThreshold);
+    const assignmentDetailUrlTemplate = @json(route('rb.assignments.show', 'ASSIGNMENT_ID'));
     let bootstrapModal = null;
     let isFetchingDetails = false;
     if (assignmentRowModal && window.bootstrap) {
@@ -975,8 +901,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if ((r.latest_outcome || '').toLowerCase() === 'not answered') filterCounts.not_answered++;
                 if ((r.latest_outcome || '').toLowerCase() === 'not relevant person contacted') filterCounts.not_relevant_person++;
 
-                const btn = document.createElement('button');
-                btn.type = 'button';
+                const btn = document.createElement('a');
+                btn.href = assignmentDetailUrlTemplate.replace('ASSIGNMENT_ID', encodeURIComponent(r.assignment_id));
                 btn.className = 'list-group-item list-group-item-action accepted-row';
                 btn.dataset.assignmentId = r.assignment_id;
                 // include report id to allow client to mark previous-report rows
@@ -1029,29 +955,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             ${Number(r.call_count || 0) > 0 ? '<span class="badge bg-primary-subtle text-primary">Called</span>' : '<span class="badge bg-primary-subtle text-primary">Not yet called</span>'}
                         </div>
                     </div>`;
-                btn.addEventListener('click', async () => {
-                    if (isFetchingDetails) return;
-                    isFetchingDetails = true;
-                    try {
-                        document.getElementById('ccCallAssignmentId').value = r.assignment_id;
-                        detailPanel.innerHTML = '<div class="text-muted small">Loading...</div>';
-                        interactionsPanel.innerHTML = '';
-                        try {
-                            const details = await fetchDetails(r.assignment_id);
-                            if (!details) {
-                                detailFields.innerHTML = '<div class="text-danger small">Details unavailable.</div>';
-                                return;
-                            }
-                            renderDetails(details);
-                            showModal();
-                        } catch (err) {
-                            console.error('Failed to load details', err);
-                            detailFields.innerHTML = '<div class="text-danger small">Failed to load details. Please try again.</div>';
-                        }
-                    } finally {
-                        isFetchingDetails = false;
-                    }
-                });
                 assignmentList.appendChild(btn);
             });
 

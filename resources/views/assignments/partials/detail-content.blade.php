@@ -5,7 +5,136 @@
     .cc-interactions-table td { vertical-align: top; padding: .5rem .75rem; }
     .cc-interactions-table tbody tr + tr td { border-top: 1px solid rgba(0,0,0,.06); }
     #ccCallFormWrapperAssign.cc-disabled { opacity: .6; pointer-events: none; }
-    .theme-dark #assignmentPage .bg-light, .theme-dark #assignmentPage .bg-white { background-color: #1a3a52 !important; color: #fff !important; }
+    .customer-workspace-panel {
+        height: 100%;
+        padding: clamp(1.25rem, 2.5vw, 2rem);
+        border: 1px solid rgba(55, 110, 180, .14);
+        border-radius: 1.25rem;
+        background: linear-gradient(145deg, #f1f7ff 0%, #f8fbff 48%, #edf4ff 100%);
+        box-shadow: 0 14px 36px rgba(32, 74, 128, .09);
+    }
+    .customer-workspace-heading {
+        display: flex;
+        align-items: flex-start;
+        gap: .85rem;
+        margin-bottom: 1.25rem;
+    }
+    .customer-workspace-icon {
+        display: inline-flex;
+        width: 2.75rem;
+        height: 2.75rem;
+        flex: 0 0 2.75rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: .9rem;
+        color: #fff;
+        background: linear-gradient(145deg, #2875d2, #5b8fe5);
+        box-shadow: 0 6px 14px rgba(40, 117, 210, .22);
+        font-size: 1.2rem;
+    }
+    .customer-workspace-eyebrow {
+        margin: 0 0 .2rem;
+        color: #54708f;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+    }
+    .customer-workspace-title {
+        margin: 0;
+        color: #17365b;
+        font-size: 1.2rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+    .customer-workspace-subtitle { margin: .2rem 0 0; color: #6b7f96; font-size: .82rem; }
+    .customer-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .65rem;
+        margin-bottom: 1.25rem;
+    }
+    .customer-metric {
+        min-width: 0;
+        min-height: 4.4rem;
+        margin: 0;
+        padding: .75rem .85rem;
+        border: 1px solid rgba(55, 110, 180, .1);
+        border-radius: .8rem;
+        background: rgba(255, 255, 255, .76);
+    }
+    .customer-metric-label {
+        display: block;
+        margin-bottom: .25rem;
+        color: #6b7f96;
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .045em;
+        text-transform: uppercase;
+    }
+    .customer-metric-value {
+        display: block;
+        color: #203c5c;
+        font-size: .95rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+    .customer-call-card {
+        padding: clamp(1rem, 2vw, 1.4rem);
+        border: 1px solid rgba(55, 110, 180, .1);
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, .88);
+        box-shadow: 0 5px 16px rgba(32, 74, 128, .05);
+    }
+    .customer-call-card .form-label {
+        color: #38536f;
+        font-weight: 600;
+    }
+    .customer-call-card .form-select,
+    .customer-call-card .form-control {
+        min-height: 2.65rem;
+        border-color: #d7e2ef;
+        border-radius: .65rem;
+        background-color: #fff;
+    }
+    .customer-call-card textarea.form-control { min-height: auto; }
+    .customer-call-card .form-select:focus,
+    .customer-call-card .form-control:focus {
+        border-color: #78a8e8;
+        box-shadow: 0 0 0 .2rem rgba(55, 125, 220, .13);
+    }
+    @media (max-width: 575.98px) {
+        .customer-summary-grid { gap: .5rem; }
+        .customer-metric { padding: .65rem; }
+        .customer-metric-value { font-size: .85rem; }
+    }
+    .theme-dark #assignmentPage .customer-workspace-panel {
+        border-color: rgba(160, 195, 230, .13);
+        background: linear-gradient(145deg, #142d45 0%, #193851 52%, #152f48 100%);
+        box-shadow: 0 14px 36px rgba(0, 0, 0, .18);
+    }
+    .theme-dark #assignmentPage .customer-workspace-title,
+    .theme-dark #assignmentPage .customer-metric-value { color: #edf5ff; }
+    .theme-dark #assignmentPage .customer-workspace-eyebrow,
+    .theme-dark #assignmentPage .customer-workspace-subtitle,
+    .theme-dark #assignmentPage .customer-metric-label { color: #adc2d8; }
+    .theme-dark #assignmentPage .customer-metric {
+        border-color: rgba(160, 195, 230, .12);
+        background: rgba(255, 255, 255, .055);
+    }
+    .theme-dark #assignmentPage .customer-call-card {
+        border-color: rgba(160, 195, 230, .12);
+        background: rgba(7, 23, 38, .32);
+    }
+    .theme-dark #assignmentPage .customer-call-card .form-label { color: #d4e4f5; }
+    .theme-dark #assignmentPage .customer-call-card .form-select,
+    .theme-dark #assignmentPage .customer-call-card .form-control {
+        border-color: #39556f;
+        color: #eaf3fc;
+        background-color: #173149;
+    }
+    .theme-dark #assignmentPage .customer-call-card .form-select:focus,
+    .theme-dark #assignmentPage .customer-call-card .form-control:focus { border-color: #78a8e8; }
 </style>
 @endpush
 
@@ -21,79 +150,92 @@
         </div>
     </div>
     <div class="col-lg-6">
-        <div class="mb-2">
-            <div id="ccSelectedName" class="fw-semibold mb-2"></div>
-            <div id="ccSelectedAmounts" class="small text-muted"></div>
-        </div>
-        @unless($interactionEnabled)
-            <div class="alert alert-info py-2 small">This assignment is from an earlier report and is read-only.</div>
-        @endunless
-        <div id="ccCallFormWrapperAssign" class="card-body bg-white rounded-3 {{ $interactionEnabled ? '' : 'cc-disabled' }}">
-            <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
-                @csrf
-                <input type="hidden" name="assignment_id" id="ccCallAssignmentId" value="{{ $assignment->id }}">
-                @if($system === 'cc')
-                    <div class="col-12">
-                        <label class="form-label small" for="ccCallOutcome">Outcome</label>
-                        <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
-                            <option value="" selected>Select outcome</option>
-                            <option value="paid">Paid</option>
-                            <option value="number invalid">number invalid</option>
-                            <option value="user not authorized">user not authorized</option>
-                            <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
-                            <option value="agreed to pay within 7 days">agreed to pay within 7 days</option>
-                            <option value="Not answered">Not answered</option>
-                        </select>
-                    </div>
-                @else
-                    <div class="col-12">
-                        <label class="form-label small" for="ccCallOutcome">Outcome</label>
-                        <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
-                            <option value="" selected>Select outcome category</option>
-                            <option value="promise_to_pay">Promise to pay</option>
-                            <option value="temporary_financial_difficulty">Temporary financial difficulty</option>
-                            <option value="billing_dispute">Billing / Dispute issues</option>
-                            <option value="service_quality">Service quality issues</option>
-                            <option value="intention_to_disconnect">Intention to disconnect</option>
-                            <option value="contact_issue">Contact issue</option>
-                            <option value="payment_behavior">Payment behavior pattern</option>
-                            <option value="escalation_risk">Dispute / Escalation risk</option>
-                        </select>
-                    </div>
-                    <div class="col-12" id="ccDependentOutcomeWrap" style="display:none">
-                        <label class="form-label small" for="ccOutcomeDetail">Outcome details</label>
-                        <div id="ccDependentOutcomeContainer"></div>
-                    </div>
-                @endif
-                <div class="col-12">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="ccNotRelevantPerson" name="not_relevant_person" value="1" {{ $interactionEnabled ? '' : 'disabled' }}>
-                        <label class="form-check-label small" for="ccNotRelevantPerson">Not the relevant person contacted</label>
-                    </div>
+        <section class="customer-workspace-panel">
+            <div class="customer-workspace-heading">
+                <span class="customer-workspace-icon" aria-hidden="true">◎</span>
+                <div class="min-w-0">
+                    <p class="customer-workspace-eyebrow">Customer account</p>
+                    <h2 id="ccSelectedName" class="customer-workspace-title">Loading customer…</h2>
+                    <p class="customer-workspace-subtitle">Account summary and call outcome</p>
                 </div>
-                <div class="col-12" id="ccPaymentExpectedWrap" style="display:none">
-                    <label class="form-label small" for="ccPaymentExpected">{{ $system === 'cc' ? 'Payment expected at' : 'Select date' }}</label>
-                    <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" min="{{ now()->toDateString() }}" {{ $interactionEnabled ? '' : 'disabled' }}>
+            </div>
+            <div id="ccSelectedAmounts" class="customer-summary-grid" aria-live="polite"></div>
+            <div class="customer-call-card">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="badge rounded-pill text-bg-primary">Call log</span>
+                    <span class="small text-muted">Record the customer interaction</span>
                 </div>
-                @if($system === 'cc')
-                    <div class="col-12" id="ccPaymentDateWrap" style="display:none">
-                        <label class="form-label small" for="ccPaymentDate">Payment date</label>
-                        <input type="date" name="payment_date" id="ccPaymentDate" class="form-control form-control-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
-                    </div>
-                    <div class="col-12" id="ccPaidAmountWrap" style="display:none">
-                        <label class="form-label small" for="ccPaidAmount">Paid amount (Rs.)</label>
-                        <input type="number" step="0.01" name="paid_amount" id="ccPaidAmount" class="form-control form-control-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
-                    </div>
-                @endif
-                <div class="col-12">
-                    <label class="form-label small" for="ccCallNote">Note (optional)</label>
-                    <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" {{ $interactionEnabled ? '' : 'disabled' }}></textarea>
+                @unless($interactionEnabled)
+                    <div class="alert alert-info py-2 small">This assignment is from an earlier report and is read-only.</div>
+                @endunless
+                <div id="ccCallFormWrapperAssign" class="{{ $interactionEnabled ? '' : 'cc-disabled' }}">
+                    <form id="ccAssignmentCallForm" class="row g-3" data-loader-off="1">
+                        @csrf
+                        <input type="hidden" name="assignment_id" id="ccCallAssignmentId" value="{{ $assignment->id }}">
+                        @if($system === 'cc')
+                            <div class="col-12">
+                                <label class="form-label small" for="ccCallOutcome">Outcome</label>
+                                <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
+                                    <option value="" selected>Select outcome</option>
+                                    <option value="paid">Paid</option>
+                                    <option value="number invalid">number invalid</option>
+                                    <option value="user not authorized">user not authorized</option>
+                                    <option value="agreed to pay within 3 days">agreed to pay within 3 days</option>
+                                    <option value="agreed to pay within 7 days">agreed to pay within 7 days</option>
+                                    <option value="Not answered">Not answered</option>
+                                </select>
+                            </div>
+                        @else
+                            <div class="col-12">
+                                <label class="form-label small" for="ccCallOutcome">Outcome</label>
+                                <select name="outcome" id="ccCallOutcome" class="form-select form-select-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
+                                    <option value="" selected>Select outcome category</option>
+                                    <option value="promise_to_pay">Promise to pay</option>
+                                    <option value="temporary_financial_difficulty">Temporary financial difficulty</option>
+                                    <option value="billing_dispute">Billing / Dispute issues</option>
+                                    <option value="service_quality">Service quality issues</option>
+                                    <option value="intention_to_disconnect">Intention to disconnect</option>
+                                    <option value="contact_issue">Contact issue</option>
+                                    <option value="payment_behavior">Payment behavior pattern</option>
+                                    <option value="escalation_risk">Dispute / Escalation risk</option>
+                                </select>
+                            </div>
+                            <div class="col-12" id="ccDependentOutcomeWrap" style="display:none">
+                                <label class="form-label small" for="ccOutcomeDetail">Outcome details</label>
+                                <div id="ccDependentOutcomeContainer"></div>
+                            </div>
+                        @endif
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="ccNotRelevantPerson" name="not_relevant_person" value="1" {{ $interactionEnabled ? '' : 'disabled' }}>
+                                <label class="form-check-label small" for="ccNotRelevantPerson">Not the relevant person contacted</label>
+                            </div>
+                        </div>
+                        <div class="col-12" id="ccPaymentExpectedWrap" style="display:none">
+                            <label class="form-label small" for="ccPaymentExpected">{{ $system === 'cc' ? 'Payment expected at' : 'Select date' }}</label>
+                            <input type="date" name="payment_expected_at" id="ccPaymentExpected" class="form-control form-control-sm" min="{{ now()->toDateString() }}" {{ $interactionEnabled ? '' : 'disabled' }}>
+                        </div>
+                        @if($system === 'cc')
+                            <div class="col-12" id="ccPaymentDateWrap" style="display:none">
+                                <label class="form-label small" for="ccPaymentDate">Payment date</label>
+                                <input type="date" name="payment_date" id="ccPaymentDate" class="form-control form-control-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
+                            </div>
+                            <div class="col-12" id="ccPaidAmountWrap" style="display:none">
+                                <label class="form-label small" for="ccPaidAmount">Paid amount (Rs.)</label>
+                                <input type="number" step="0.01" name="paid_amount" id="ccPaidAmount" class="form-control form-control-sm" {{ $interactionEnabled ? '' : 'disabled' }}>
+                            </div>
+                        @endif
+                        <div class="col-12">
+                            <label class="form-label small" for="ccCallNote">Note (optional)</label>
+                            <textarea name="note" id="ccCallNote" class="form-control form-control-sm" rows="3" {{ $interactionEnabled ? '' : 'disabled' }}></textarea>
+                        </div>
+                        <div class="col-12 d-flex align-items-center gap-3">
+                            <button type="submit" id="ccSaveCallBtn" class="btn btn-primary px-4" {{ $interactionEnabled ? '' : 'disabled' }}>Save interaction</button>
+                            <div id="ccCallStatus" class="small text-muted" role="status" aria-live="polite"></div>
+                        </div>
+                    </form>
                 </div>
-                <div class="col-12 d-flex gap-2">
-                    <button type="submit" id="ccSaveCallBtn" class="btn btn-primary btn-sm" {{ $interactionEnabled ? '' : 'disabled' }}>Save</button>
-                </div>
-                <div class="col-12"><div id="ccCallStatus" class="small text-muted" role="status" aria-live="polite"></div></div>
-            </form>
+            </div>
         </div>
     </div>
 </div>
@@ -191,10 +333,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setField(container, label, value) {
         const line = document.createElement('div');
-        line.className = 'mb-2';
+        line.className = container.id === 'ccSelectedAmounts' ? 'customer-metric' : 'mb-2';
         const strong = document.createElement('strong');
         strong.textContent = `${label}: `;
-        line.append(strong, document.createTextNode(value == null || value === '' ? '—' : String(value)));
+        if (container.id === 'ccSelectedAmounts') {
+            strong.className = 'customer-metric-label';
+            const content = document.createElement('span');
+            content.className = 'customer-metric-value';
+            content.textContent = value == null || value === '' ? '—' : String(value);
+            line.append(strong, content);
+        } else {
+            line.append(strong, document.createTextNode(value == null || value === '' ? '—' : String(value)));
+        }
         container.append(line);
     }
 

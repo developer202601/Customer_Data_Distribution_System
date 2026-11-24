@@ -266,6 +266,37 @@ class AssignmentController extends Controller
         ]);
     }
 
+    public function showAssignment(Request $request, $assignmentId)
+    {
+        $sessionUser = $request->session()->get('user');
+        if (! $sessionUser || ($sessionUser['system'] ?? null) !== 'cc') {
+            return Redirect::route('login');
+        }
+
+        if (($sessionUser['assignment'] ?? null) === 'super') {
+            abort(403);
+        }
+
+        $userId = $sessionUser['id'] ?? null;
+        abort_unless($userId, 403);
+
+        $assignment = CallCenterAssignment::callCenter()
+            ->where('assigned_user_id', $userId)
+            ->where('accepted', true)
+            ->findOrFail($assignmentId);
+
+        $latestReportId = CallCenterAssignment::callCenter()
+            ->where('assigned_user_id', $userId)
+            ->max('call_center_report_id');
+
+        return view('assignments.detail', [
+            'system' => 'cc',
+            'assignment' => $assignment,
+            'interactionEnabled' => $assignment->call_center_report_id !== null
+                && (int) $assignment->call_center_report_id === (int) $latestReportId,
+        ]);
+    }
+
     public function acceptAll(Request $request, $userId)
     {
         $reportId = $request->query('report');
@@ -672,14 +703,26 @@ class AssignmentController extends Controller
             'paid_amount' => 'nullable|numeric',
         ]);
 
-        $assignment = CallCenterAssignment::callCenter()->with('row')->find($assignmentId);
+        $assignment = CallCenterAssignment::callCenter()
+            ->where('assigned_user_id', $userId)
+            ->where('accepted', true)
+            ->with('row')
+            ->findOrFail($assignmentId);
+        $latestReportId = CallCenterAssignment::callCenter()
+            ->where('assigned_user_id', $userId)
+            ->max('call_center_report_id');
+        abort_unless(
+            $assignment->call_center_report_id !== null
+                && (int) $assignment->call_center_report_id === (int) $latestReportId,
+            403
+        );
         $accountNumber = null;
-        if ($assignment && $assignment->row) {
+        if ($assignment->row) {
             $accountNumber = $assignment->row->account_num ?? $assignment->row->customer_ref ?? null;
         }
 
         $interaction = CallCenterInteraction::create(array_merge($payload, [
-            'assignment_id' => $assignmentId,
+            'assignment_id' => $assignment->id,
             'agent_id' => $userId,
             'account_number' => $accountNumber,
         ]));
